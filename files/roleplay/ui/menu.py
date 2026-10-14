@@ -1,6 +1,6 @@
 """
 Menu principal: barra lateral + una pagina por modulo (Resumen,
-Temporada, Entrevistas, Instagram), sobre el fondo de estadio. Cada pagina va dentro
+Temporada, Entrevistas, Instagram, Vida), sobre el fondo de estadio. Cada pagina va dentro
 de un scroll.
 """
 
@@ -65,6 +65,7 @@ from roleplay.ui.entrevista import InterviewWindow
 from roleplay.ui.estilos import fuente_titulo
 from roleplay.ui.instagram import InstagramWindow
 from roleplay.ui.temporada import PaginaTemporada
+from roleplay.ui.vida import PaginaVida
 from roleplay.ui.ajustes import DialogoAjustes, abrir_juego_o_preguntar
 from roleplay.ui.personaje import CharacterWizard
 from roleplay.ui.atajo import ATAJO_TEXTO, AtajoGlobal
@@ -458,7 +459,7 @@ class PaginaResumen(QWidget):
 
 
 class MainMenuWindow(QMainWindow):
-    PAGINA_RESUMEN, PAGINA_TEMPORADA, PAGINA_ENTREVISTAS, PAGINA_INSTAGRAM = range(4)
+    PAGINA_RESUMEN, PAGINA_TEMPORADA, PAGINA_ENTREVISTAS, PAGINA_INSTAGRAM, PAGINA_VIDA = range(5)
 
     def __init__(self, pagina_inicial: int = 0):
         super().__init__()
@@ -488,11 +489,14 @@ class MainMenuWindow(QMainWindow):
         self.pagina_temporada = PaginaTemporada()
         self.pagina_entrevistas = InterviewWindow()
         self.pagina_instagram = InstagramWindow()
+        self.pagina_vida = PaginaVida()
+        self.pagina_vida.compra_hecha.connect(self._refrescar_jugador)
         self._paginas = [
             ("Resumen", "inicio", self.pagina_resumen),
             ("Temporada", "trofeo", self.pagina_temporada),
             ("Entrevistas", "microfono", self.pagina_entrevistas),
             ("Instagram", "camara", self.pagina_instagram),
+            ("Vida", "billetera", self.pagina_vida),
         ]
 
         self.stack = QStackedWidget()
@@ -655,7 +659,8 @@ class MainMenuWindow(QMainWindow):
         principal = next((n for n in noticias if n.categoria == "jugador"), noticias[0])
         self.bandeja.showMessage("Prensa", principal.titular, QSystemTrayIcon.MessageIcon.Information, 8000)
 
-    def _on_partida_actualizada(self, _lectura):
+    def _on_partida_actualizada(self, lectura):
+        self.pagina_vida.acreditar_con(lectura.carrera)  # el sueldo se cobra con los dias del juego
         if self.stack.currentIndex() == self.PAGINA_RESUMEN:
             self.pagina_resumen.actualizar()
         elif self.stack.currentIndex() == self.PAGINA_TEMPORADA:

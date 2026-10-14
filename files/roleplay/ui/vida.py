@@ -1,0 +1,331 @@
+"""
+Pagina Vida: la plata del jugador -su sueldo real de la partida de FC 26,
+que se cobra a medida que pasan las semanas del juego- y en que la gasta:
+casas, autos, relojes, moda, un yate, un jet, o donaciones.
+
+Cada compra mueve seguidores y reputacion (lo decide servicios/economia.py)
+al instante; despues, en un hilo, la prensa escribe la noticia (si es
+noticia) y los hinchas la comentan en Instagram.
+"""
+
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QButtonGroup, QHBoxLayout, QLabel, QMessageBox, QVBoxLayout, QWidget
+
+from roleplay.database import (
+    get_economia,
+    get_reputacion_actual,
+    get_seguidores,
+    load_latest_profile,
+    save_actividad_instagram,
+    save_noticia_prensa,
+    set_economia,
+    sumar_reputacion_y_seguidores,
+)
+from roleplay.servicios import economia
+from roleplay.servicios.economia import CATALOGO, CATEGORIAS, POR_ID, dinero
+from roleplay.servicios.partida_real import contexto_temporada
+from roleplay.ui import estilos
+from roleplay.ui.comun import ejecutar_en_hilo, esc
+from roleplay.ui.componentes import (
+    Mosaico,
+    Tarjeta,
+    boton,
+    chip,
+    chip_alternable,
+    fila,
+    limpiar_layout,
+    subtitulo,
+    texto_suave,
+    titulo_pagina,
+)
+
+MOVIMIENTOS_VISIBLES = 12
+
+
+def _con_signo(numero: int) -> str:
+    return f"{'+' if numero >= 0 else ''}{numero:,}".replace(",", ".")
+
+
+class PaginaVida(QWidget):
+    compra_hecha = Signal()  # la reputacion cambio: el menu refresca la barra lateral
+
+    def __init__(self):
+        super().__init__()
+        self.perfil = None
+        self._carrera = None
+        self._leyendo = False
+        self._categoria = "casa"
+        self._ultima_compra = None  # la repercusion que llega tarde de otra compra no pisa la tarjeta
+        self._botones_categoria = {}
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(40, 34, 40, 34)
+        layout.setSpacing(18)
+
+        textos = QVBoxLayout()
+        textos.setSpacing(2)
+        textos.addWidget(titulo_pagina("Vida"))
+        self.subtitulo_label = subtitulo("Leyendo tu partida de FC 26...")
+        textos.addWidget(self.subtitulo_label)
+        layout.addLayout(textos)
+
+        self.vacio = Tarjeta("Tu plata sale de tu partida", destacada=True)
+        self.vacio_label = texto_suave(
+            "Tu sueldo es el de tu contrato en la Carrera Jugador de FC 26 y se cobra a medida que pasan "
+            "las semanas del juego. Juega y guarda (o deja el autoguardado), y vuelve aca."
+        )
+        self.vacio.cuerpo.addWidget(self.vacio_label)
+        self.vacio.hide()
+        layout.addWidget(self.vacio)
+
+        self.contenido = QWidget()
+        contenido = QVBoxLayout(self.contenido)
+        contenido.setContentsMargins(0, 0, 0, 0)
+        contenido.setSpacing(18)
+
+        mosaicos = QHBoxLayout()
+        mosaicos.setSpacing(10)
+        self.mosaico_saldo = Mosaico("Saldo")
+        self.mosaico_sueldo = Mosaico("Sueldo neto por semana")
+        self.mosaico_gastos = Mosaico("Gastos fijos por semana")
+        self.mosaico_patrimonio = Mosaico("Patrimonio")
+        for mosaico in (self.mosaico_saldo, self.mosaico_sueldo, self.mosaico_gastos, self.mosaico_patrimonio):
+            mosaicos.addWidget(mosaico)
+        contenido.addLayout(mosaicos)
+
+        self.resultado = Tarjeta("Repercusion", destacada=True)
+        self.resultado_label = QLabel()
+        self.resultado_label.setWordWrap(True)
+        self.resultado.cuerpo.addWidget(self.resultado_label)
+        self.resultado.hide()
+        contenido.addWidget(self.resultado)
+
+        tienda = Tarjeta("Tienda")
+        self._grupo = QButtonGroup(self)
+        self._grupo.setExclusive(True)
+        chips = QHBoxLayout()
+        chips.setSpacing(8)
+        for categoria, rotulo in CATEGORIAS.items():
+            boton_categoria = chip_alternable(rotulo)
+            boton_categoria.setChecked(categoria == self._categoria)
+            boton_categoria.clicked.connect(lambda _=False, c=categoria: self._elegir_categoria(c))
+            self._grupo.addButton(boton_categoria)
+            self._botones_categoria[categoria] = boton_categoria
+            chips.addWidget(boton_categoria)
+        chips.addStretch()
+        tienda.cuerpo.addLayout(chips)
+        self.tienda_layout = QVBoxLayout()
+        self.tienda_layout.setSpacing(8)
+        tienda.cuerpo.addLayout(self.tienda_layout)
+        contenido.addWidget(tienda)
+
+        self.posesiones = Tarjeta("Lo que tenes")
+        self.posesiones_layout = QVBoxLayout()
+        self.posesiones_layout.setSpacing(8)
+        self.posesiones.cuerpo.addLayout(self.posesiones_layout)
+        contenido.addWidget(self.posesiones)
+
+        filantropia = Tarjeta("Filantropia")
+        filantropia.cuerpo.addWidget(texto_suave("Donar sube tu reputacion y la prensa lo cuenta."))
+        self.donaciones_layout = QVBoxLayout()
+        self.donaciones_layout.setSpacing(8)
+        filantropia.cuerpo.addLayout(self.donaciones_layout)
+        contenido.addWidget(filantropia)
+
+        movimientos = Tarjeta("Movimientos")
+        self.movimientos_layout = QVBoxLayout()
+        self.movimientos_layout.setSpacing(4)
+        movimientos.cuerpo.addLayout(self.movimientos_layout)
+        contenido.addWidget(movimientos)
+
+        self.contenido.hide()
+        layout.addWidget(self.contenido)
+        layout.addStretch()
+
+    # ---- el sueldo ----
+
+    def actualizar(self):
+        self.perfil = load_latest_profile()
+        if self._leyendo:
+            return
+        self._leyendo = True
+        ejecutar_en_hilo(economia.leer_partida_para_economia, al_completar=self._on_partida, al_fallar=self._on_error)
+
+    def _on_partida(self, carrera):
+        self._leyendo = False
+        self.acreditar_con(carrera)
+
+    def _on_error(self, _mensaje: str):
+        self._leyendo = False
+        self.acreditar_con(None)
+
+    def acreditar_con(self, carrera):
+        """Cobra lo que corresponde hasta el dia del juego de `carrera` y
+        redibuja. El modo en vivo la llama con cada autoguardado."""
+        self.perfil = load_latest_profile()
+        self._carrera = carrera
+        hoy = carrera.fecha_actual() if carrera is not None else None
+        if self.perfil is not None and hoy is not None and carrera.sueldo_usuario:
+            set_economia(self.perfil.id, economia.acreditar(get_economia(self.perfil.id), hoy, carrera.sueldo_usuario))
+        self._mostrar()
+
+    # ---- dibujo ----
+
+    def _moneda(self) -> str:
+        return economia.moneda_de(self._carrera)
+
+    def _mostrar(self):
+        e = get_economia(self.perfil.id) if self.perfil is not None else {}
+        if self.perfil is None or not e:
+            self.vacio_label.setText(
+                "Crea un personaje primero, desde el Resumen." if self.perfil is None else
+                "Tu sueldo es el de tu contrato en la Carrera Jugador de FC 26 y se cobra a medida que pasan "
+                "las semanas del juego. No encontre tu partida: juega y guarda (o deja el autoguardado), y vuelve aca."
+            )
+            self.subtitulo_label.setText("Sin partida de Carrera Jugador.")
+            self.vacio.show()
+            self.contenido.hide()
+            return
+        self.vacio.hide()
+        self.contenido.show()
+        moneda = self._moneda()
+        club = self._carrera.equipo(self._carrera.equipo_usuario()) if self._carrera is not None else ""
+        self.subtitulo_label.setText(
+            f"Contrato con <b>{esc(club or 'tu club')}</b>: {dinero(e['sueldo'], moneda)} por semana (bruto). "
+            f"Se cobra con los dias del juego; al dia {e['hasta'][8:10]}/{e['hasta'][5:7]}/{e['hasta'][:4]}."
+        )
+        self.mosaico_saldo.poner(dinero(e["saldo"], moneda))
+        self.mosaico_saldo.numero.setStyleSheet(f"color: {estilos.NEGATIVO};" if e["saldo"] < 0 else "")
+        self.mosaico_sueldo.poner(dinero(e["sueldo"] * economia.NETO, moneda))
+        self.mosaico_gastos.poner(dinero(economia.mantenimiento_semanal(e), moneda))
+        self.mosaico_patrimonio.poner(dinero(economia.patrimonio(e), moneda))
+        self._mostrar_tienda(e)
+        self._mostrar_posesiones(e)
+        self._mostrar_donaciones(e)
+        self._mostrar_movimientos(e)
+
+    def _elegir_categoria(self, categoria: str):
+        self._categoria = categoria
+        self._botones_categoria[categoria].setChecked(True)
+        if self.perfil is not None:
+            self._mostrar_tienda(get_economia(self.perfil.id))
+
+    def _linea_articulo(self, articulo, e: dict, texto_boton: str) -> QHBoxLayout:
+        moneda = self._moneda()
+        detalle = dinero(articulo.precio, moneda)
+        if articulo.mantenimiento:
+            detalle += f" · mantenimiento {dinero(articulo.mantenimiento, moneda)}/semana"
+        textos = QLabel(f"<b>{esc(articulo.nombre)}</b><br><span style='color:{estilos.TEXTO_SUAVE}'>{esc(detalle)}</span>")
+        ya = economia.tiene(e, articulo.id) and not articulo.es_donacion
+        accion = boton("Ya lo tenes" if ya else texto_boton, primario=not ya)
+        accion.setProperty("articulo", articulo.id)  # (el objectName es el del estilo: "primario")
+        accion.setEnabled(not ya and e.get("saldo", 0) >= articulo.precio)
+        if not ya and e.get("saldo", 0) < articulo.precio:
+            accion.setToolTip(f"Te faltan {dinero(articulo.precio - e.get('saldo', 0), moneda)}")
+        accion.clicked.connect(lambda _=False, i=articulo.id: self._on_comprar(i))
+        return fila(textos, None, accion)
+
+    def _mostrar_tienda(self, e: dict):
+        limpiar_layout(self.tienda_layout)
+        for articulo in CATALOGO:
+            if articulo.categoria == self._categoria:
+                self.tienda_layout.addLayout(self._linea_articulo(articulo, e, "Comprar"))
+
+    def _mostrar_donaciones(self, e: dict):
+        limpiar_layout(self.donaciones_layout)
+        for articulo in CATALOGO:
+            if articulo.es_donacion:
+                self.donaciones_layout.addLayout(self._linea_articulo(articulo, e, "Donar"))
+
+    def _mostrar_posesiones(self, e: dict):
+        limpiar_layout(self.posesiones_layout)
+        moneda = self._moneda()
+        posesiones = e.get("posesiones", [])
+        for posesion in posesiones:
+            articulo = POR_ID.get(posesion["articulo"])
+            nombre = articulo.nombre if articulo else posesion["articulo"]
+            vender_btn = boton(f"Vender por {dinero(posesion['precio'] * economia.VENTA, moneda)}")
+            vender_btn.clicked.connect(lambda _=False, i=posesion["id"]: self._on_vender(i))
+            desde = posesion.get("desde", "")
+            texto = QLabel(f"<b>{esc(nombre)}</b><br><span style='color:{estilos.TEXTO_SUAVE}'>desde el "
+                           f"{desde[8:10]}/{desde[5:7]}/{desde[:4]}</span>")
+            self.posesiones_layout.addLayout(fila(texto, None, vender_btn))
+        if not posesiones:
+            self.posesiones_layout.addWidget(texto_suave("Todavia no te compraste nada."))
+
+    def _mostrar_movimientos(self, e: dict):
+        limpiar_layout(self.movimientos_layout)
+        moneda = self._moneda()
+        for movimiento in e.get("movimientos", [])[:MOVIMIENTOS_VISIBLES]:
+            dia = movimiento["fecha"]
+            monto = movimiento["monto"]
+            color = estilos.POSITIVO if monto > 0 else estilos.NEGATIVO if monto < 0 else estilos.TEXTO_SUAVE
+            cifra = QLabel(("+" if monto > 0 else "") + dinero(monto, moneda) if monto else "")
+            cifra.setStyleSheet(f"color: {color}; font-weight: 600;")
+            fecha = texto_suave(f"{dia[8:10]}/{dia[5:7]}", ajustar=False)
+            fecha.setFixedWidth(46)
+            self.movimientos_layout.addLayout(fila(fecha, QLabel(esc(movimiento["concepto"])), None, cifra))
+
+    # ---- comprar y vender ----
+
+    def _on_comprar(self, articulo_id: str):
+        perfil, carrera = self.perfil, self._carrera
+        if perfil is None or carrera is None or carrera.fecha_actual() is None:
+            return
+        articulo = POR_ID[articulo_id]
+        hoy = carrera.fecha_actual()
+        try:
+            nueva = economia.comprar(get_economia(perfil.id), articulo, hoy)
+        except economia.SinPlata as exc:
+            QMessageBox.information(self, "No te alcanza", str(exc))
+            return
+        set_economia(perfil.id, nueva)
+        efecto = economia.efecto(
+            articulo, perfil, get_seguidores(perfil.id), get_reputacion_actual(perfil.id), nueva["sueldo"],
+            economia.mala_racha(carrera),
+        )
+        tipo = "Donacion" if articulo.es_donacion else "Compra"
+        sumar_reputacion_y_seguidores(perfil.id, efecto.reputacion, efecto.seguidores, motivo=f"{tipo}: {articulo.nombre}")
+
+        partes = [f"<b>{'Donaste' if articulo.es_donacion else 'Compraste'}: {esc(articulo.nombre)}</b>",
+                  f"{_con_signo(efecto.seguidores)} seguidores"]
+        if efecto.reputacion:
+            partes.append(f"reputacion {_con_signo(efecto.reputacion)}")
+        texto = " · ".join(partes)
+        if efecto.motivo:
+            texto += f"<br><span style='color:{estilos.TEXTO_SUAVE}'>{esc(efecto.motivo[0].upper() + efecto.motivo[1:])}.</span>"
+        texto += f"<br><span style='color:{estilos.TEXTO_SUAVE}'>Los hinchas estan comentando"
+        texto += " y la prensa ya se entero...</span>" if efecto.es_noticia else "...</span>"
+        self.resultado_label.setText(texto)
+        self.resultado.show()
+        self._ultima_compra = articulo.nombre
+        self._mostrar()
+        self.compra_hecha.emit()
+        ejecutar_en_hilo(
+            economia.repercusion, perfil, articulo, efecto, self._moneda(), hoy.isoformat(), contexto_temporada(carrera),
+            al_completar=self._on_repercusion, al_fallar=self._on_repercusion_error,
+        )
+
+    def _on_repercusion(self, resultado):
+        noticia, actividad = resultado
+        if noticia is not None:
+            save_noticia_prensa(noticia)
+        save_actividad_instagram(actividad)  # los seguidores ya se sumaron al comprar
+        if noticia is not None and not self.resultado.isHidden() and actividad.titulo == self._ultima_compra:
+            self.resultado_label.setText(
+                self.resultado_label.text().rsplit("<br>", 1)[0]
+                + f"<br><span style='color:{estilos.ACENTO}'>En la prensa:</span> {esc(noticia.titular)}"
+            )
+
+    def _on_repercusion_error(self, _mensaje: str):
+        pass  # los numeros ya se aplicaron; la nota de color no vale un cartel de error
+
+    def _on_vender(self, posesion_id: str):
+        if self.perfil is None or self._carrera is None or self._carrera.fecha_actual() is None:
+            return
+        nueva, recuperado = economia.vender(get_economia(self.perfil.id), posesion_id, self._carrera.fecha_actual())
+        set_economia(self.perfil.id, nueva)
+        self._ultima_compra = None
+        self.resultado_label.setText(f"<b>Vendido</b> · recuperaste {dinero(recuperado, self._moneda())}")
+        self.resultado.show()
+        self._mostrar()

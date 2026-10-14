@@ -72,6 +72,12 @@ toca) y todo se vuelve real:
   (vos incluido), tus resultados y lo que viene, y la ultima fecha. Una pestana por cada
   competicion que juega tu club (liga, Champions, copas).
 
+**Vida**: tu sueldo es el de tu contrato real en la partida (lo cobras a medida que pasan las
+semanas del juego). Con eso compras casas, autos, relojes, ropa, un yate o un jet, o donas a
+un hospital, una escuela de futbol o tu propia fundacion. Lo que hagas mueve tus seguidores
+y tu reputacion: donar suma; presumir un jet en plena mala racha resta (mas si sos humilde).
+Si es noticia, sale en la prensa, y los hinchas lo comentan en tu Instagram.
+
 **Metas de la temporada**: en el Resumen te propones metas (goles, goles en liga, asistencias,
 terminar entre los N primeros de la liga). Se siguen solas con tu partida, la prensa te
 pregunta por ellas en las entrevistas, y cumplirlas o fallarlas es noticia y mueve tu

@@ -73,6 +73,7 @@ JUGADORES = {
     SUPLENTE_CITY: (date(2004, 5, 5), [(CITY, 28)]),
     JUGADORA: (date(1998, 2, 2), [(ARSENAL_FEM, 25)]),
 }
+SUELDO = 145_000  # por semana, el del usuario
 MEDIAS = {USUARIO: 79, BRUNO: 86, HAALAND: 92, DELANTERO_ARSENAL: 76, SUPLENTE_CITY: 64, JUGADORA: 88}
 POSICION_PREFERIDA = {SUPLENTE_CITY: 3}  # suplente (28) en el plantel; lateral derecho de preferencia
 
@@ -165,8 +166,8 @@ def construir_bytes(
                        [{"HdeP": "Andres", "xnfZ": "A. Iniesta", "rREd": "Iniesta", "ykFq": 41},
                         {"HdeP": "Simon", "xnfZ": "", "rREd": "Canales", "ykFq": USUARIO}]),
     })
-    carrera = _base({"mPrV": _tabla([("HdeP", 0, 240), ("rREd", 0, 240), ("XGBd", 3, 12)],
-                                    [{"HdeP": "Simon", "rREd": "Canales", "XGBd": LIGA}])})
+    carrera = _base({"mPrV": _tabla([("HdeP", 0, 240), ("rREd", 0, 240), ("XGBd", 3, 12), ("cmGX", 3, 31)],
+                                    [{"HdeP": "Simon", "rREd": "Canales", "XGBd": LIGA, "cmGX": SUELDO}])})
 
     # tablas de posiciones: una fila por equipo y competicion (indices desde 1)
     filas, indice_de = b"", {}

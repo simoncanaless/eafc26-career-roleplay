@@ -372,6 +372,25 @@ def actualizar_metas(player_id: int, cambios: dict) -> None:
             meta.update(cambios.get(meta.get("id"), {}))
 
 
+def get_economia(player_id: int) -> dict:
+    """Saldo, sueldo, posesiones y movimientos (servicios/economia.py): estado_json.economia."""
+    leido = _leer_estado(player_id)
+    return dict(leido[0].get("economia", {})) if leido else {}
+
+
+def set_economia(player_id: int, economia: dict) -> None:
+    with _editar_estado(player_id) as (estado, _):
+        estado["economia"] = economia
+
+
+def sumar_reputacion_y_seguidores(player_id: int, reputacion: int, seguidores: int, motivo: str) -> None:
+    """Lo que provoca una compra o una donacion, en una sola llamada."""
+    if reputacion:
+        aplicar_delta_reputacion(player_id, reputacion, motivo)
+    if seguidores:
+        sumar_seguidores(player_id, seguidores)
+
+
 def get_seguidores(player_id: int) -> int:
     leido = _leer_estado(player_id)
     return _seguidores(*leido) if leido else 0

@@ -25,6 +25,9 @@ T_VINCULOS, C_VINCULO_EQUIPO, C_VINCULO_POSICION = "RrqT", "mCXg", "vjla"  # equ
 T_LIGAS, C_LIGA_ID, C_LIGA_NOMBRE = "onMQ", "aQrQ", "HEQX"  # id + 1
 T_NOMBRES_EDITADOS, C_NOMBRE, C_APODO, C_APELLIDO = "nQVU", "HdeP", "xnfZ", "rREd"
 T_USUARIO = "mPrV"  # el jugador de la carrera: mismos campos de nombre
+# su sueldo por semana (el mismo campo en los contratos del plantel, DvsP:
+# correlaciona 0,89 con la media; Bruno Fernandes 87 -> 220.000)
+C_SUELDO = "cmGX"
 TABLAS_MUNDO = {T_EQUIPOS, T_JUGADORES, T_VINCULOS, T_LIGAS, T_NOMBRES_EDITADOS}
 # la liga de cada equipo (opcional: sin ella no se detectan traspasos)
 T_LIGA_EQUIPO, C_LE_LIGA, C_LE_EQUIPO = "qdZF", "aQrQ", "mCXg"  # liga + 1, equipo + 1
@@ -156,6 +159,7 @@ class Carrera:
     nombres_editados: dict[int, str]
     usuario_id: Optional[int]
     clubes: set[int] = field(default_factory=set)  # los que juegan ligas en la partida
+    sueldo_usuario: Optional[int] = None  # por semana, en la moneda de su club
     ligas_de_equipo: dict[int, int] = field(default_factory=dict)  # equipo -> liga (id + 1)
     medias: dict[int, int] = field(default_factory=dict)
     mujeres: set[int] = field(default_factory=set)
@@ -431,6 +435,7 @@ def construir(datos: bytes, archivo: str = "", guardada_en: Optional[datetime] =
         nombres_editados=nombres_editados,
         usuario_id=usuario_id,
         clubes=clubes,
+        sueldo_usuario=(usuario[0].get(C_SUELDO) or None) if usuario else None,
         ligas_de_equipo=ligas_de_equipo,
         medias=medias,
         mujeres=mujeres,
