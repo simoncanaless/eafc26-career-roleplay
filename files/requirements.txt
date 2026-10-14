@@ -2,8 +2,8 @@ PySide6>=6.6
 google-genai>=1.0
 pydantic>=2.0
 python-dotenv>=1.0
-# captura de pantalla (solo Windows); dxcam usa OpenCV para convertir colores
+# captura de pantalla (solo Windows). Se pide la imagen en BGRA y Qt arma el
+# PNG, asi que no hace falta OpenCV.
 dxcam>=0.0.5; sys_platform == "win32"
-opencv-python>=4.9
 # respuestas por voz (microfono)
 sounddevice>=0.4.6

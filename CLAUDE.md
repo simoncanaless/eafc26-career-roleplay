@@ -1,7 +1,8 @@
 # EAFC 26 Career Roleplay
 
 App de escritorio (Python + PySide6) que agrega una capa de roleplay narrativo al
-Modo Carrera Jugador de EAFC 26: creacion de personaje con backstory, entrevistas
+Modo Carrera Jugador de EAFC 26 **sin modificar el juego** (corre al lado, como
+Discord/OBS: lee la pantalla, nunca archivos ni memoria del juego): creacion de personaje con backstory, entrevistas
 post-partido (escritas o por voz), prensa espontanea, Instagram ficticio y reputacion
 que evoluciona. Proyecto personal de Simon (estudiante de Ing. Informatica, Chile).
 Corre en Windows, desde `C:\Users\canal\Desktop\Proyecto Fifa\files`, con un venv en
@@ -17,7 +18,21 @@ configurada solo en este repo).
 .venv\Scripts\python.exe -m unittest discover -s tests
 .venv\Scripts\python.exe scripts\seed_test_matches.py [--borrar]   # 5 partidos de prueba
 .venv\Scripts\python.exe scripts\crear_acceso_directo.py [--sin-escritorio]
+.venv\Scripts\python.exe app.py --jugar          # abre EA FC 26 (Steam) + la app en la sala de prensa
+.venv\Scripts\python.exe app.py --diagnostico    # revisa todo y sale (diagnostico.txt)
+.venv\Scripts\python.exe scripts\empaquetar.py   # paquete para amigos (requirements-dev.txt)
 ```
+
+**Iconos del escritorio** (`servicios/accesos.py`, tambien desde Ajustes en la app):
+"EA FC 26.url" (`steam://rungameid/3405690`, el juego normal) y "EA FC 26 + Roleplay.lnk"
+(la app con `--jugar`: abre el MISMO juego por su plataforma y la app). El FC 26 de Simon
+esta en Steam, biblioteca `F:\SteamLibrary` (EA app instalada, la usa Steam).
+
+**Paquete para amigos**: `dist\EAFC Roleplay (amigos).zip` (~71 MB; carpeta 170 MB) con
+`EAFC Roleplay.exe` (PyInstaller onedir, no necesita Python) y `LEEME.txt`. Sin datos
+personales (el script lo verifica). Empaquetada, los datos van a
+`%APPDATA%\EAFC26 Roleplay` y la primera vez pide la clave de Gemini de CADA amigo
+(nunca repartir la de Simon). `build/` y `dist/` estan en `.gitignore`.
 
 Doble click: `files\EAFC Roleplay.exe` o el acceso "EAFC 26 Roleplay" del escritorio.
 El .exe es un lanzador de 39 KB (`scripts/lanzador/Lanzador.cs`, compilado con el
@@ -36,7 +51,9 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 | Archivo | Rol |
 |---|---|
 | `app.py` | Unico entry point; argumento opcional para abrir un modulo suelto. Icono de ventana, AppUserModelID (barra de tareas) y `sys.excepthook` -> `errores.log` + QMessageBox (con pythonw no hay consola) |
-| `roleplay/config.py` | Rutas: `DB_PATH` y `.env` salen de la raiz del proyecto, no del cwd |
+| `roleplay/config.py` | Rutas. Recursos desde la carpeta del codigo; DATOS (`DB_PATH`, `.env`, `ajustes.json`, `errores.log`) en `CARPETA_DATOS`: raiz del proyecto corriendo desde codigo, `%APPDATA%\EAFC26 Roleplay` empaquetada, o `EAFC_ROLEPLAY_DATOS` si esta en el entorno |
+| `roleplay/ajustes.py` | `ajustes.json` de cada persona (`juego` elegido a mano, `sin_ia`); leer nunca falla |
+| `roleplay/diagnostico.py` | `revisar()`: modo, clave, base, juego, microfonos, una captura de prueba (solo el tamano) |
 | `roleplay/models.py` | Dataclasses `PlayerProfile`, `MatchInterviewRecord`, `NoticiaPrensa`, `InstagramPost` + catalogos del quiz |
 | `roleplay/database.py` | SQLite. Mapeo GENERICO dataclass <-> fila (`TABLAS`, `_insertar`, `_desde_fila`); `_editar_estado` para leer-modificar-escribir `estado_json` en una transaccion |
 | `roleplay/gemini.py` | **Unico punto de llamada a Gemini**: `generar_json(prompt, Esquema, que_hacer, adjunto=(bytes, mime))` sobre `generate_content_with_fallback` |
@@ -46,22 +63,29 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 | `roleplay/servicios/prensa.py` | Hitos deterministas (rachas, goles, rating ultimos 5) + noticias; `calcular_estadisticas_acumuladas` tambien alimenta la carta del Resumen |
 | `roleplay/servicios/instagram.py` | Comentarios, likes, seguidores de un post |
 | `roleplay/servicios/vision.py` | `MatchStats` + lectura de la captura con Gemini Vision |
-| `roleplay/servicios/captura.py` | Captura con dxcam (Windows only), import perezoso |
+| `roleplay/servicios/captura.py` | Captura con dxcam en BGRA + PNG con Qt: **sin OpenCV** (se saco el 2026-10-14) |
+| `roleplay/servicios/juego.py` | Encontrar FC 26 (elegido a mano > Steam > EA app > Epic; registro inyectable) y abrirlo con `os.startfile` por su plataforma |
+| `roleplay/servicios/accesos.py` | Los dos iconos del escritorio (.url para URLs, .lnk via WScript.Shell por PowerShell) |
 | `roleplay/servicios/audio.py` | Voz: `listar_microfonos` (solo la API de audio por defecto), `GrabadorMicrofono` (WAV mono 16 kHz, tope 120 s, `crear_stream` inyectable), `transcribir(wav, pregunta)` |
 | `roleplay/ui/comun.py` | `ejecutar_en_hilo`, `esc` (escape HTML), `miles`, `fecha_corta`, `con_scroll` (pagina transparente) |
 | `roleplay/ui/estilos.py` | Tema oscuro estilo EA FC: colores (unico lugar), `fuente_titulo()`, QSS, paleta forzada |
 | `roleplay/ui/componentes.py` | `icono()` (SVG propios coloreados), `titulo_pagina`, `titulo_seccion`, `Tarjeta`, `Mosaico`, `chip`/`chip_tono`, `chip_alternable`, `fila` (None = estirable), `CartaJugador` (carta FUT pintada; nivel por reputacion: bronce <45, plata, oro >=70, elite >=85), `Avatar`, `FondoEstadio`, `agregar_noticia`, `limpiar_layout` |
-| `roleplay/ui/menu.py` | `MainMenuWindow` (lateral + `FondoEstadio`) + `PaginaResumen` (carta, mosaicos, historia, tramas, central de noticias) |
+| `roleplay/ui/menu.py` | `MainMenuWindow(pagina_inicial)` (lateral con JUGAR FC 26 y AJUSTES + `FondoEstadio`) + `PaginaResumen` (carta, mosaicos, historia, tramas, central de noticias) |
+| `roleplay/ui/ajustes.py` | `DialogoClave` (bienvenida: clave de Gemini, la prueba con `models.list` y la guarda), `DialogoAjustes` (clave, juego, iconos, diagnostico), `abrir_juego_o_preguntar` |
 | `roleplay/ui/personaje.py` | `CharacterWizard` (ClassicStyle; titulos en rich text con "PASO n/8"; backstory editable o escrito a mano) |
 | `roleplay/ui/entrevista.py` | `InterviewWindow` "Sala de prensa": marcador -> preguntas (cada una con boton de voz) -> reaccion -> prensa |
 | `roleplay/ui/instagram.py` | `InstagramWindow`: perfil (avatar + mosaicos), nuevo post, resultado, feed en tarjetas |
 | `roleplay/ui/iconos/` | Flechas/check de la QSS (SVG) y `app.ico` (lo genera el script del acceso directo) |
 | `scripts/seed_test_matches.py` | Siembra/borra partidos "Rival de prueba N" en el ultimo personaje (base REAL) |
-| `scripts/crear_acceso_directo.py` + `scripts/lanzador/Lanzador.cs` | Icono, .exe y acceso directo del escritorio |
+| `scripts/crear_acceso_directo.py` + `scripts/lanzador/Lanzador.cs` | Icono, .exe lanzador (dev) y los dos iconos del escritorio |
+| `scripts/empaquetar.py` + `scripts/LEEME_AMIGOS.txt` | Paquete PyInstaller + zip para amigos |
 | `tests/` | `ayuda.py` (base temporal, Gemini bloqueado, dialogos mudos) + `test_*.py` |
 
 ## Convenciones (respetarlas)
 
+- **El juego nunca se toca**: ni archivos, ni memoria, ni inyeccion. Se abre por su
+  plataforma (`os.startfile` de la URL/acceso) y la app solo lee la pantalla. Por eso no
+  lo rompe, las actualizaciones del juego no la rompen y se puede jugar online.
 - **Toda llamada a Gemini pasa por `gemini.generar_json`**, que pide
   `response_mime_type="application/json"` + `response_schema=<modelo pydantic>` y
   valida. `que_hacer` es la frase final del error ("apreta X de nuevo"). No
@@ -107,7 +131,9 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 
 ## Testing
 
-`.venv\Scripts\python.exe -m unittest discover -s tests` (58 pruebas, ~5 s). `tests/ayuda.py`:
+`.venv\Scripts\python.exe -m unittest discover -s tests` (77 pruebas, ~6 s). `tests/ayuda.py`:
+- Fija `EAFC_ROLEPLAY_DATOS` a una carpeta temporal ANTES de importar `roleplay`: ni las
+  pruebas ni sus subprocesos escriben en la carpeta del proyecto.
 - `PruebaConBase`: base temporal por prueba (`config.DB_PATH` parcheado).
 - `PruebaDeInterfaz`: + QApplication offscreen + `QMessageBox.information/warning` mudos (en `self.avisos`).
 - Gemini queda bloqueado: si algo llama a `_cliente` de verdad, la prueba falla.
@@ -122,7 +148,10 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
   varias vueltas de `processEvents()` + `sendPostedEvents(None, QEvent.DeferredDelete)`
   y `grab().save(...)`. Hacerlo sobre una COPIA de la base. (Con `QT_QPA_PLATFORM=offscreen`
   no hay fuentes de Windows salvo con `QT_QPA_FONTDIR=C:/Windows/Fonts`.)
-- No probado automaticamente: captura real con dxcam, microfono real y respuestas reales de Gemini.
+- Paquete: probarlo como amigo nuevo con `EAFC_ROLEPLAY_DATOS=<carpeta vacia>` y
+  `"dist\EAFC Roleplay\EAFC Roleplay.exe" --diagnostico` (sale 1 solo por falta de clave).
+- No probado automaticamente: microfono real, respuestas reales de Gemini y abrir el juego
+  de verdad (`os.startfile` va mockeado; no lanzar FC 26 en el PC de Simon sin preguntar).
 
 ## Gotchas conocidos
 
@@ -130,7 +159,12 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 - `.env` en Windows suele quedar como `.env.txt`; crearlo desde VS Code.
 - Paths en PowerShell: `.venv\Scripts\python.exe`, no `/c:/...`.
 - Tier gratis de Gemini: 503 por demanda y 429 por cuota son frecuentes; el fallback lo maneja.
-- dxcam usa OpenCV por dentro para convertir colores: `opencv-python` no se puede sacar.
+- dxcam convierte colores con OpenCV SALVO que se pida `output_color="BGRA"` con
+  `processor_backend="numpy"`: asi se saco OpenCV (110 MB). PyInstaller necesita
+  `--collect-submodules dxcam` (carga sus procesadores con `import_module`).
+- Si la pantalla esta apagada, dxcam y Qt devuelven imagenes negras (no es un bug).
+- `Path.write_text("a\r\n")` en Windows escribe `\r\r\n`: usar `newline="\r\n"`.
+- PowerShell 5 lee UTF-8 sin BOM como ANSI ("Â·" en pantalla): el archivo esta bien.
 - Microfono: Windows lista cada mic una vez por API de audio (32 entradas en el PC de
   Simon, 4 en MME); `listar_microfonos` deja solo la API por defecto. Si falla al abrir:
   Configuracion > Privacidad y seguridad > Microfono > apps de escritorio. MME corta
@@ -154,6 +188,9 @@ Hecho:
 5. Interfaz estilo EA FC (tema oscuro, carta FUT por nivel de reputacion, scroll por pagina)
 6. Lanzador .exe + icono + acceso directo; pruebas automaticas (unittest)
 
+Hecho tambien: iconos "EA FC 26" / "EA FC 26 + Roleplay", boton JUGAR, Ajustes con
+diagnostico, y el paquete para amigos (cada uno con su clave y sus datos en APPDATA).
+
 Siguiente (decidido con Simon el 2026-10-14):
 - **Overlay mientras se juega**: ventana sin marco, siempre encima y semitransparente,
   con atajo de teclado global para mostrar/esconder. Requiere el juego en "ventana sin
@@ -165,6 +202,8 @@ Siguiente (decidido con Simon el 2026-10-14):
   lee. Solo carrera offline: el Live Editor funciona desactivando el anticheat de EA
   (riesgo de cuenta si se entra online con el inyectado; contra los terminos de EA).
   No ayudar a evadir el anticheat; solo el script de lectura y el lado de la app.
+  **Nunca** meterlo en los iconos ni en el paquete de los amigos (se le dijo a Simon:
+  un icono "con Live Editor" seria repartir el juego con el anticheat apagado).
   Ojo: hay repos "FC26 Mod Manager" en GitHub que piden desactivar el antivirus: no usar.
 
 Pendiente (ideas del usuario):

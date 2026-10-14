@@ -177,3 +177,45 @@ def generar_json(
         raise RuntimeError(
             f"Gemini respondio algo que no tiene el formato esperado. {que_hacer}\n\n{texto[:500]}"
         ) from exc
+
+
+# ---- la clave de cada persona (pantalla de bienvenida y Ajustes) ----
+
+
+def usa_lista_de_claves() -> bool:
+    """Con GEMINI_API_KEYS (varias claves) la clave se edita en el .env,
+    no desde la app: guardar una sola la taparia sin que se note."""
+    return bool(os.environ.get("GEMINI_API_KEYS"))
+
+
+def guardar_clave(clave: str) -> None:
+    """Guarda GEMINI_API_KEY en el .env de la carpeta de datos (sin tocar
+    el resto del archivo) y la deja activa de inmediato."""
+    clave = clave.strip()
+    if not clave:
+        raise ValueError("La clave esta vacia.")
+    lineas = []
+    if config.ARCHIVO_ENV.exists():
+        lineas = [
+            linea
+            for linea in config.ARCHIVO_ENV.read_text(encoding="utf-8").splitlines()
+            if not linea.strip().startswith("GEMINI_API_KEY=")
+        ]
+    lineas.append(f"GEMINI_API_KEY={clave}")
+    config.ARCHIVO_ENV.write_text("\n".join(lineas) + "\n", encoding="utf-8")
+    os.environ["GEMINI_API_KEY"] = clave
+
+
+def probar_clave(clave: str) -> None:
+    """Pide la lista de modelos (no gasta cuota). Si la clave no sirve,
+    RuntimeError con un mensaje para la persona."""
+    from google.genai import errors
+
+    try:
+        next(iter(_cliente(clave.strip()).models.list(config={"page_size": 1})), None)
+    except errors.ClientError as exc:
+        raise RuntimeError(
+            "Google rechazo esa clave. Revisa que la hayas copiado completa desde AI Studio."
+        ) from exc
+    except Exception as exc:  # noqa: BLE001 - red caida, etc.
+        raise RuntimeError(f"No pude comprobar la clave ({exc}). Revisa tu conexion a internet.") from exc

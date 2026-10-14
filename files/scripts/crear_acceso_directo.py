@@ -5,7 +5,8 @@ Crea lo necesario para abrir la app con doble click:
                                 dibujado con Qt en varios tamanos.
 2. EAFC Roleplay.exe            lanzador chiquito (scripts/lanzador/Lanzador.cs)
                                 compilado con el csc.exe que trae Windows.
-3. Un acceso directo en el escritorio que apunta al .exe.
+3. Los dos iconos del escritorio: "EA FC 26" (el juego normal) y
+   "EA FC 26 + Roleplay" (el juego igual + la app). Ver servicios/accesos.py.
 
     .venv\\Scripts\\python.exe scripts\\crear_acceso_directo.py
     .venv\\Scripts\\python.exe scripts\\crear_acceso_directo.py --sin-escritorio
@@ -26,7 +27,6 @@ sys.path.insert(0, str(RAIZ))
 ICONO = RAIZ / "roleplay" / "ui" / "iconos" / "app.ico"
 FUENTE_CS = RAIZ / "scripts" / "lanzador" / "Lanzador.cs"
 EXE = RAIZ / "EAFC Roleplay.exe"
-NOMBRE_ACCESO = "EAFC 26 Roleplay.lnk"
 TAMANOS = (16, 24, 32, 48, 64, 128, 256)
 
 
@@ -127,25 +127,15 @@ def compilar_lanzador() -> None:
     print(f"Lanzador: {EXE.name} ({EXE.stat().st_size // 1024} KB)")
 
 
-def crear_acceso_en_escritorio() -> None:
-    script = f"""
-$escritorio = [Environment]::GetFolderPath('Desktop')
-$acceso = (New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path $escritorio '{NOMBRE_ACCESO}'))
-$acceso.TargetPath = '{EXE}'
-$acceso.WorkingDirectory = '{RAIZ}'
-$acceso.IconLocation = '{ICONO},0'
-$acceso.Description = 'EAFC 26 Career Roleplay'
-$acceso.Save()
-Write-Output (Join-Path $escritorio '{NOMBRE_ACCESO}')
-"""
-    resultado = subprocess.run(
-        ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
-        capture_output=True,
-        text=True,
-    )
-    if resultado.returncode != 0:
-        raise SystemExit(f"No se pudo crear el acceso directo:\n{resultado.stderr}")
-    print(f"Acceso directo: {resultado.stdout.strip()}")
+def crear_iconos_del_escritorio() -> None:
+    from roleplay.servicios.accesos import crear_accesos
+    from roleplay.servicios.juego import juego_configurado
+
+    juego = juego_configurado()
+    if juego is None:
+        print("No encontre EA FC 26: solo se crea el icono de roleplay (al abrirlo pide elegir el juego).")
+    for ruta in crear_accesos(juego):
+        print(f"Icono: {ruta}")
 
 
 def main() -> None:
@@ -156,7 +146,7 @@ def main() -> None:
     crear_icono()
     compilar_lanzador()
     if not args.sin_escritorio:
-        crear_acceso_en_escritorio()
+        crear_iconos_del_escritorio()
 
 
 if __name__ == "__main__":

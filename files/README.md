@@ -1,5 +1,8 @@
 # EAFC 26 Career Roleplay
 
+**No modifica el juego**: corre al lado, como Discord u OBS. Lee la pantalla, nunca
+los archivos ni la memoria de FC 26, asi que no lo puede romper y se puede jugar online.
+
 Capa de roleplay narrativo para el Modo Carrera Jugador de EAFC 26: creas un
 personaje con backstory, das entrevistas despues de cada partido, la prensa
 reacciona a tus rachas y tu Instagram gana (o pierde) seguidores. La IA
@@ -21,9 +24,27 @@ carpeta) o el acceso **EAFC 26 Roleplay** del escritorio. Si no estan, se crean 
 .venv\Scripts\python.exe scripts\crear_acceso_directo.py
 ```
 
-El .exe es solo un lanzador: abre `app.py` con el Python del `.venv`, asi que
-siempre corre el codigo actual. Si algo falla al abrir, el detalle queda en
-`errores.log`.
+Eso deja dos iconos en el escritorio:
+
+- **EA FC 26**: el juego normal (por Steam, EA app o Epic, segun donde este).
+- **EA FC 26 + Roleplay**: el mismo juego, y ademas la app abierta en la sala de prensa.
+
+El .exe de esta carpeta es solo un lanzador: abre `app.py` con el Python del `.venv`,
+asi que siempre corre el codigo actual. Si algo falla al abrir, el detalle queda en
+`errores.log`; y `app.py --diagnostico` revisa clave, juego, microfono y captura.
+
+## Para los amigos
+
+```powershell
+.venv\Scripts\python.exe -m pip install -r requirements-dev.txt   # una vez
+.venv\Scripts\python.exe scripts\empaquetar.py
+```
+
+Deja `dist\EAFC Roleplay (amigos).zip` (~71 MB): descomprimir y abrir
+`EAFC Roleplay.exe`, sin instalar Python. La primera vez pide la clave gratis de
+Gemini de cada uno, y en Ajustes se crean los dos iconos. Sus datos quedan en
+`%APPDATA%\EAFC26 Roleplay`. Instrucciones para ellos: `scripts\LEEME_AMIGOS.txt`
+(va dentro del zip como `LEEME.txt`).
 
 Para abrir un modulo suelto:
 
@@ -67,13 +88,16 @@ roleplay/
     vision.py               lee las stats de la captura
     captura.py              captura de pantalla con dxcam (Windows)
     audio.py                grabar el microfono y transcribir
+    juego.py                encontrar FC 26 (Steam/EA app/Epic) y abrirlo por su plataforma
+    accesos.py              los dos iconos del escritorio
   ui/                       pantallas (PySide6), estilo EA FC
     estilos.py              colores, tipografias y hoja de estilos (unico lugar)
     componentes.py          carta FUT, tarjetas, mosaicos, chips, iconos, fondo
     comun.py                hilos para la IA, formato de numeros/textos, scroll
-    menu.py  personaje.py  entrevista.py  instagram.py
+    menu.py  personaje.py  entrevista.py  instagram.py  ajustes.py
 scripts/seed_test_matches.py       siembra (o borra) 5 partidos de prueba
-scripts/crear_acceso_directo.py    icono, EAFC Roleplay.exe y acceso del escritorio
+scripts/crear_acceso_directo.py    icono, EAFC Roleplay.exe y los dos iconos del escritorio
+scripts/empaquetar.py              el paquete para los amigos
 tests/                      pruebas automaticas
 ```
 

@@ -1,0 +1,2 @@
+# solo para armar el paquete de los amigos (scripts/empaquetar.py)
+pyinstaller>=6.10

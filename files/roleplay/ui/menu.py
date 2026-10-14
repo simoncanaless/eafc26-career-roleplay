@@ -46,6 +46,7 @@ from roleplay.ui.componentes import (
 from roleplay.ui.entrevista import InterviewWindow
 from roleplay.ui.estilos import fuente_titulo
 from roleplay.ui.instagram import InstagramWindow
+from roleplay.ui.ajustes import DialogoAjustes, abrir_juego_o_preguntar
 from roleplay.ui.personaje import CharacterWizard
 
 NOTICIAS_EN_RESUMEN = 5
@@ -213,7 +214,9 @@ class PaginaResumen(QWidget):
 
 
 class MainMenuWindow(QMainWindow):
-    def __init__(self):
+    PAGINA_RESUMEN, PAGINA_ENTREVISTAS, PAGINA_INSTAGRAM = range(3)
+
+    def __init__(self, pagina_inicial: int = 0):
         super().__init__()
         self.setWindowTitle("EAFC 26 Roleplay")
         self.setMinimumSize(1100, 720)
@@ -261,6 +264,23 @@ class MainMenuWindow(QMainWindow):
             self._botones_nav.append(boton_nav)
 
         lateral_layout.addStretch()
+
+        self.jugar_btn = boton("Jugar FC 26", primario=True, icono_nombre="jugar")
+        self.jugar_btn.setToolTip("Abre EA FC 26 por su plataforma (Steam, EA app o Epic), sin modificarlo")
+        self.jugar_btn.clicked.connect(lambda: abrir_juego_o_preguntar(self))
+        self.ajustes_btn = QPushButton("  AJUSTES")
+        self.ajustes_btn.setObjectName("navBtn")
+        self.ajustes_btn.setIcon(icono("engranaje", estilos.TEXTO_SUAVE))
+        self.ajustes_btn.setIconSize(QSize(20, 20))
+        self.ajustes_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.ajustes_btn.clicked.connect(self._abrir_ajustes)
+        envoltura_jugar = QHBoxLayout()
+        envoltura_jugar.setContentsMargins(18, 0, 18, 6)
+        envoltura_jugar.addWidget(self.jugar_btn)
+        lateral_layout.addLayout(envoltura_jugar)
+        lateral_layout.addWidget(self.ajustes_btn)
+        lateral_layout.addSpacing(14)
+
         self.jugador_label = QLabel()
         self.jugador_label.setWordWrap(True)
         self.jugador_label.setStyleSheet(f"color: {estilos.TEXTO_SUAVE}; padding: 0px 24px;")
@@ -279,7 +299,7 @@ class MainMenuWindow(QMainWindow):
         layout_principal.addWidget(fondo, 1)
         self.setCentralWidget(contenedor)
 
-        self._ir_a(0)
+        self._ir_a(pagina_inicial)
 
     def _ir_a(self, indice: int):
         self.stack.setCurrentIndex(indice)
@@ -298,6 +318,11 @@ class MainMenuWindow(QMainWindow):
             f"<span style='color:{estilos.TEXTO}'><b>{esc(perfil.nombre_jugador)}</b></span><br>"
             f"{esc(perfil.club_actual or 'Sin club')} · REP {reputacion} · {nivel_carta(reputacion).nombre}"
         )
+
+    def _abrir_ajustes(self):
+        dialogo = DialogoAjustes(self)
+        dialogo.exec()
+        dialogo.deleteLater()
 
     def _abrir_wizard_personaje(self):
         wizard = CharacterWizard(self)

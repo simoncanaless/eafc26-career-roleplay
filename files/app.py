@@ -5,21 +5,21 @@ Punto de entrada unico de EAFC 26 Career Roleplay.
     .venv\\Scripts\\python.exe app.py personaje     solo el asistente de personaje
     .venv\\Scripts\\python.exe app.py entrevistas   solo la sala de prensa
     .venv\\Scripts\\python.exe app.py instagram     solo Instagram
+    .venv\\Scripts\\python.exe app.py --jugar       abre EA FC 26 y la app en la sala de prensa
+    .venv\\Scripts\\python.exe app.py --diagnostico revisa que todo este en su lugar y sale
 
-Con doble click se abre desde "EAFC Roleplay.exe" (o el acceso directo del
-escritorio), que corre esto mismo sin ventana de consola.
+Con doble click se abre desde "EAFC Roleplay.exe" o los iconos del
+escritorio ("EA FC 26 + Roleplay" es esta app con --jugar).
 """
 
 import argparse
 import sys
 import traceback
 from datetime import datetime
-from pathlib import Path
+
+from roleplay import config
 
 MODULOS = ["menu", "personaje", "entrevistas", "instagram"]
-RAIZ = Path(__file__).resolve().parent
-ICONO_APP = RAIZ / "roleplay" / "ui" / "iconos" / "app.ico"
-REGISTRO_ERRORES = RAIZ / "errores.log"
 
 
 def _avisar_error(tipo, valor, rastro) -> None:
@@ -27,11 +27,12 @@ def _avisar_error(tipo, valor, rastro) -> None:
     veria en ningun lado. Se anota en errores.log y se muestra."""
     detalle = "".join(traceback.format_exception(tipo, valor, rastro))
     try:
-        with REGISTRO_ERRORES.open("a", encoding="utf-8") as registro:
+        with config.REGISTRO_ERRORES.open("a", encoding="utf-8") as registro:
             registro.write(f"\n--- {datetime.now().isoformat(timespec='seconds')} ---\n{detalle}")
     except OSError:
         pass
-    sys.__excepthook__(tipo, valor, rastro)
+    if sys.stderr is not None:
+        sys.__excepthook__(tipo, valor, rastro)
 
     from PySide6.QtWidgets import QApplication, QMessageBox
 
@@ -39,7 +40,7 @@ def _avisar_error(tipo, valor, rastro) -> None:
         QMessageBox.critical(
             None,
             "Algo fallo",
-            f"{valor}\n\nEl detalle quedo en {REGISTRO_ERRORES.name}, en la carpeta del proyecto.",
+            f"{valor}\n\nEl detalle quedo en {config.REGISTRO_ERRORES}.",
         )
 
 
@@ -52,13 +53,15 @@ def _identificar_en_windows() -> None:
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("EAFC26.CareerRoleplay")
 
 
-def _crear_ventana(modulo: str):
+def _crear_ventana(modulo: str, jugar: bool = False):
     if modulo == "personaje":
         from roleplay.ui.personaje import CharacterWizard
 
         return CharacterWizard()
 
     if modulo in ("entrevistas", "instagram"):
+        from PySide6.QtWidgets import QVBoxLayout
+
         from roleplay.ui.comun import con_scroll
         from roleplay.ui.componentes import FondoEstadio
 
@@ -68,8 +71,6 @@ def _crear_ventana(modulo: str):
             from roleplay.ui.instagram import InstagramWindow as Pagina
         pagina = Pagina()
         ventana = FondoEstadio()
-        from PySide6.QtWidgets import QVBoxLayout
-
         layout = QVBoxLayout(ventana)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(con_scroll(pagina))
@@ -79,30 +80,52 @@ def _crear_ventana(modulo: str):
 
     from roleplay.ui.menu import MainMenuWindow
 
-    return MainMenuWindow()
+    # jugando, lo que se usa es la sala de prensa al terminar cada partido
+    return MainMenuWindow(MainMenuWindow.PAGINA_ENTREVISTAS if jugar else MainMenuWindow.PAGINA_RESUMEN)
+
+
+def _diagnostico() -> int:
+    from roleplay.diagnostico import como_texto, revisar
+
+    resultados = revisar()
+    texto = como_texto(resultados)
+    (config.CARPETA_DATOS / "diagnostico.txt").write_text(texto + "\n", encoding="utf-8")
+    if sys.stdout is not None:
+        print(texto)
+    return 0 if all(ok for ok, _ in resultados) else 1
 
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="EAFC 26 Career Roleplay")
     parser.add_argument("modulo", nargs="?", default="menu", choices=MODULOS)
+    parser.add_argument("--jugar", action="store_true", help="abre EA FC 26 (sin modificarlo) y la app")
+    parser.add_argument("--diagnostico", action="store_true", help="revisa la instalacion y sale")
     args = parser.parse_args(argv)
 
     sys.excepthook = _avisar_error
+    if args.diagnostico:
+        return _diagnostico()
     _identificar_en_windows()
 
     from PySide6.QtGui import QIcon
     from PySide6.QtWidgets import QApplication
 
     from roleplay.database import init_db
+    from roleplay.ui.ajustes import abrir_juego_o_preguntar, pedir_clave_si_falta
     from roleplay.ui.estilos import aplicar_estilo
 
     init_db()
     app = QApplication(sys.argv[:1])
     app.setApplicationName("EAFC 26 Roleplay")
-    if ICONO_APP.exists():
-        app.setWindowIcon(QIcon(str(ICONO_APP)))
+    if config.ICONO_APP.exists():
+        app.setWindowIcon(QIcon(str(config.ICONO_APP)))
     aplicar_estilo(app)
-    ventana = _crear_ventana(args.modulo)
+
+    if args.jugar:
+        abrir_juego_o_preguntar(None)  # primero el juego: Steam tarda en levantarlo
+    pedir_clave_si_falta()
+
+    ventana = _crear_ventana(args.modulo, jugar=args.jugar)
     ventana.show()
     return app.exec()
 

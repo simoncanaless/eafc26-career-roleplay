@@ -2,7 +2,8 @@
 Lo comun a todas las pruebas:
 
 - Qt sin ventana (QT_QPA_PLATFORM=offscreen).
-- Una base SQLite temporal por prueba: nunca se toca career_roleplay.db.
+- Una base SQLite temporal por prueba, dentro de una carpeta de datos
+  temporal: nunca se toca career_roleplay.db ni nada del proyecto.
 - Gemini bloqueado: si una prueba llega a llamar a la API de verdad, falla.
 - Dialogos modales mudos (si no, cuelgan la prueba).
 """
@@ -17,6 +18,9 @@ from pathlib import Path
 from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# Toda la bateria (y los procesos que lanza) usa una carpeta de datos propia:
+# nada de lo que se pruebe escribe en la carpeta del proyecto.
+os.environ["EAFC_ROLEPLAY_DATOS"] = tempfile.mkdtemp(prefix="eafc_pruebas_")
 RAIZ = Path(__file__).resolve().parent.parent
 if str(RAIZ) not in sys.path:
     sys.path.insert(0, str(RAIZ))

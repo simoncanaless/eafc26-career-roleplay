@@ -1,9 +1,11 @@
 """
 Captura de pantalla de fin de partido, con dxcam (Windows, Desktop
-Duplication API). Despues se manda a Gemini Vision (servicios/vision.py).
+Duplication API: la misma que usan OBS o Discord para compartir pantalla;
+no toca el juego). Despues se manda a Gemini Vision (servicios/vision.py).
 
-dxcam y OpenCV se importan recien al capturar: cargarlos al abrir la app
-la demoraba ~0,4 s para algo que se usa una vez por partido.
+Se pide la imagen en BGRA, el formato nativo de Windows: asi dxcam no
+convierte colores y no necesita OpenCV (~110 MB menos en el paquete para
+los amigos). El PNG lo arma Qt. dxcam se importa recien al capturar.
 """
 
 from typing import Optional, Tuple
@@ -23,8 +25,23 @@ def _obtener_camara():
                 f"(error original: {exc})"
             ) from exc
         # Monitor principal. Si jugas en otro, pasar output_idx=1, 2...
-        _camara = dxcam.create(output_color="BGR")
+        _camara = dxcam.create(output_color="BGRA", processor_backend="numpy")
     return _camara
+
+
+def a_png(frame) -> bytes:
+    """Cuadro BGRA de dxcam (alto x ancho x 4) -> PNG. RGB32 ignora el
+    canal alfa, que en la captura de escritorio puede venir en 0."""
+    from PySide6.QtCore import QBuffer, QIODevice
+    from PySide6.QtGui import QImage
+
+    alto, ancho = frame.shape[:2]
+    imagen = QImage(frame.data, ancho, alto, frame.strides[0], QImage.Format.Format_RGB32).copy()
+    buffer = QBuffer()
+    buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+    if not imagen.save(buffer, "PNG"):
+        raise RuntimeError("No se pudo codificar la captura como PNG.")
+    return bytes(buffer.data())
 
 
 def capturar_pantalla(region: Optional[Tuple[int, int, int, int]] = None) -> bytes:
@@ -34,16 +51,10 @@ def capturar_pantalla(region: Optional[Tuple[int, int, int, int]] = None) -> byt
     Pasarle solo el recuadro de stats ahorra tokens y tiempo, pero depende
     de la resolucion; por eso por defecto va la pantalla completa.
     """
-    import cv2
-
     frame = _obtener_camara().grab(region=region, new_frame_only=False)
     if frame is None:
         raise RuntimeError(
             "dxcam no pudo capturar la pantalla (frame vacio). Proba de nuevo con "
             "el juego en primer plano, o escribi las stats a mano."
         )
-
-    ok, buffer = cv2.imencode(".png", frame)
-    if not ok:
-        raise RuntimeError("No se pudo codificar la captura como PNG.")
-    return buffer.tobytes()
+    return a_png(frame)

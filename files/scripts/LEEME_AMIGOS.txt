@@ -1,0 +1,48 @@
+EAFC 26 ROLEPLAY
+================
+
+Una capa de roleplay para el Modo Carrera Jugador de EA FC 26: tu jugador
+con historia, entrevistas despues de cada partido (escritas o por voz),
+prensa que reacciona a tus rachas e Instagram con seguidores.
+
+NO MODIFICA EL JUEGO. Corre al lado, como Discord u OBS: lee la pantalla,
+no toca archivos ni memoria de FC 26. Podes seguir jugando online igual.
+
+
+INSTALAR
+--------
+1. Descomprimi esta carpeta donde quieras (por ejemplo en Documentos).
+   No la abras desde adentro del .zip.
+2. Abri "EAFC Roleplay.exe".
+   Windows puede decir "Windows protegio su PC" porque el programa no esta
+   firmado: "Mas informacion" > "Ejecutar de todas formas". Algunos antivirus
+   desconfian de los programas hechos en Python; si te lo borra, agregalo
+   como excepcion (o pregunta).
+3. La primera vez te pide tu clave de Gemini (la IA que escribe las
+   entrevistas y la prensa). Es gratis: aistudio.google.com/apikey
+   > Create API key > copiala y pegala. Cada uno usa la suya.
+4. En AJUSTES > "Crear los dos iconos" te aparecen en el escritorio:
+     - EA FC 26              el juego normal
+     - EA FC 26 + Roleplay   el mismo juego, y ademas esta app
+
+
+JUGAR
+-----
+- Abri "EA FC 26 + Roleplay". La app se queda en la Sala de prensa.
+- Al terminar un partido, en la pantalla de estadisticas: "Capturar
+  pantalla" (o escribi los numeros a mano), "Generar entrevista" y responde.
+- Para que la captura funcione con el juego abierto, usa el juego en
+  "Ventana sin bordes" (Ajustes de pantalla del FC 26).
+
+
+TUS DATOS
+---------
+Tu carrera, tu clave y tus ajustes quedan en %APPDATA%\EAFC26 Roleplay
+(no en esta carpeta): si te llega una version nueva, borras esta carpeta,
+descomprimis la nueva y no pierdes nada.
+
+
+SI ALGO FALLA
+-------------
+AJUSTES > Diagnostico > Revisar > Copiar, y mandale el texto a Simon.
+Los errores tambien quedan en %APPDATA%\EAFC26 Roleplay\errores.log
