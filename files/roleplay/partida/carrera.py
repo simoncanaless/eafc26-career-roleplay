@@ -17,11 +17,20 @@ from roleplay.partida.formato import FormatoDesconocido
 # nombres "de verdad" estan en el fifa_ng_db-meta.xml de EA, que no se usa.
 T_EQUIPOS, C_EQUIPO_ID, C_EQUIPO_NOMBRE = "lyxL", "mCXg", "AUsv"  # id + 1
 T_JUGADORES, C_JUGADOR_ID, C_NACIMIENTO = "CZUM", "ykFq", "WVIU"  # dias desde 1582-10-14
+# media y potencial (el potencial nunca es menor: se cumple en los 21.507
+# jugadores de la partida real) y genero (1 = jugadora)
+C_MEDIA, C_POTENCIAL, C_MUJER = "UERs", "mpuH", "EveZ"
+C_POSICION_PREFERIDA = "wZQU"  # mismos numeros que POSICIONES (Haaland 25, Vinicius 27, Bellingham 18)
 T_VINCULOS, C_VINCULO_EQUIPO, C_VINCULO_POSICION = "RrqT", "mCXg", "vjla"  # equipo + 1
 T_LIGAS, C_LIGA_ID, C_LIGA_NOMBRE = "onMQ", "aQrQ", "HEQX"  # id + 1
 T_NOMBRES_EDITADOS, C_NOMBRE, C_APODO, C_APELLIDO = "nQVU", "HdeP", "xnfZ", "rREd"
 T_USUARIO = "mPrV"  # el jugador de la carrera: mismos campos de nombre
 TABLAS_MUNDO = {T_EQUIPOS, T_JUGADORES, T_VINCULOS, T_LIGAS, T_NOMBRES_EDITADOS}
+# la liga de cada equipo (opcional: sin ella no se detectan traspasos)
+T_LIGA_EQUIPO, C_LE_LIGA, C_LE_EQUIPO = "qdZF", "aQrQ", "mCXg"  # liga + 1, equipo + 1
+# ligas especiales (id + 1, como en la base de EA): selecciones de hombres y
+# de mujeres, y el "equipo" de los agentes libres
+LIGA_SELECCIONES, LIGA_SELECCIONES_FEMENINAS, LIGA_AGENTES_LIBRES = 78, 2136, 382
 
 ORIGEN_FECHAS = date(1582, 10, 14)
 
@@ -146,7 +155,11 @@ class Carrera:
     vinculos: dict[int, list[tuple[int, int]]]  # jugador -> [(equipo, posicion)]
     nombres_editados: dict[int, str]
     usuario_id: Optional[int]
-    clubes: set[int] = field(default_factory=set)
+    clubes: set[int] = field(default_factory=set)  # los que juegan ligas en la partida
+    ligas_de_equipo: dict[int, int] = field(default_factory=dict)  # equipo -> liga (id + 1)
+    medias: dict[int, int] = field(default_factory=dict)
+    mujeres: set[int] = field(default_factory=set)
+    posiciones: dict[int, int] = field(default_factory=dict)  # posicion preferida
 
     # ---- tiempo ----
 
@@ -179,6 +192,24 @@ class Carrera:
             return max(suyas, key=lambda a: a.fecha).equipo
         for equipo, _ in self.vinculos.get(self.usuario_id, []):
             if equipo in self.clubes:
+                return equipo
+        return None
+
+    def es_seleccion(self, equipo: int) -> bool:
+        return self.ligas_de_equipo.get(equipo) in (LIGA_SELECCIONES, LIGA_SELECCIONES_FEMENINAS)
+
+    def es_agentes_libres(self, equipo: Optional[int]) -> bool:
+        return equipo is not None and self.ligas_de_equipo.get(equipo) == LIGA_AGENTES_LIBRES
+
+    def club_de(self, jugador: int) -> Optional[int]:
+        """El club del jugador hoy (no su seleccion). Con los agentes libres
+        devuelve ese "equipo". Sin la tabla de ligas, solo reconoce los clubes
+        que juegan ligas en la partida."""
+        for equipo, _ in self.vinculos.get(jugador, []):
+            if self.ligas_de_equipo:
+                if equipo in self.ligas_de_equipo and not self.es_seleccion(equipo):
+                    return equipo
+            elif equipo in self.clubes:
                 return equipo
         return None
 
@@ -251,9 +282,14 @@ class Carrera:
     def ficha(self, jugador: int) -> dict:
         """Lo que la partida sabe de un jugador, para que la IA lo reconozca."""
         ficha = {"id": jugador}
-        club = next((e for e, _ in self.vinculos.get(jugador, []) if e in self.clubes), None)
+        club = self.club_de(jugador)
         posicion = next((p for e, p in self.vinculos.get(jugador, []) if e == club), None)
-        seleccion = next((e for e, _ in self.vinculos.get(jugador, []) if e not in self.clubes), None)
+        if posicion is None or posicion >= 28:  # suplente o reserva en el plantel: la que prefiere
+            posicion = self.posiciones.get(jugador, posicion)
+        if self.ligas_de_equipo:
+            seleccion = next((e for e, _ in self.vinculos.get(jugador, []) if self.es_seleccion(e)), None)
+        else:
+            seleccion = next((e for e, _ in self.vinculos.get(jugador, []) if e not in self.clubes), None)
         if club is None:
             club = next((a.equipo for a in self.actuaciones if a.jugador == jugador), None)
         if club is not None:
@@ -262,6 +298,8 @@ class Carrera:
             ficha["posicion"] = POSICIONES[posicion]
         if seleccion is not None:
             ficha["seleccion"] = self.equipo(seleccion)
+        if jugador in self.medias:
+            ficha["media"] = self.medias[jugador]
         nacimiento = self.nacimientos.get(jugador)
         hoy = self.fecha_actual()
         if nacimiento:
@@ -286,7 +324,7 @@ def _nombre_completo(fila: dict) -> str:
 
 def construir(datos: bytes, archivo: str = "", guardada_en: Optional[datetime] = None) -> Carrera:
     partida = formato.nombre_partida(datos)
-    mundo = formato.leer_tablas(datos, formato.base_con_tabla(datos, T_EQUIPOS), TABLAS_MUNDO)
+    mundo = formato.leer_tablas(datos, formato.base_con_tabla(datos, T_EQUIPOS), TABLAS_MUNDO | {T_LIGA_EQUIPO})
     faltan = TABLAS_MUNDO - set(mundo)
     if faltan:
         raise FormatoDesconocido(f"Faltan tablas en el guardado: {sorted(faltan)}")
@@ -295,11 +333,20 @@ def construir(datos: bytes, archivo: str = "", guardada_en: Optional[datetime] =
 
     equipos = {f[C_EQUIPO_ID] + 1: f[C_EQUIPO_NOMBRE] for f in mundo[T_EQUIPOS].registros}
     nombres_ligas = {f[C_LIGA_ID] + 1: f[C_LIGA_NOMBRE] for f in mundo[T_LIGAS].registros}
-    nacimientos = {}
+    nacimientos, medias, mujeres, posiciones = {}, {}, set(), {}
     for f in mundo[T_JUGADORES].registros:
         dias = f.get(C_NACIMIENTO)
         if dias:
             nacimientos[f[C_JUGADOR_ID]] = ORIGEN_FECHAS + timedelta(days=dias)
+        if f.get(C_MEDIA):
+            medias[f[C_JUGADOR_ID]] = f[C_MEDIA]
+        if f.get(C_MUJER):
+            mujeres.add(f[C_JUGADOR_ID])
+        if f.get(C_POSICION_PREFERIDA) is not None:
+            posiciones[f[C_JUGADOR_ID]] = f[C_POSICION_PREFERIDA]
+    ligas_de_equipo = {}
+    if T_LIGA_EQUIPO in mundo:
+        ligas_de_equipo = {f[C_LE_EQUIPO] + 1: f[C_LE_LIGA] + 1 for f in mundo[T_LIGA_EQUIPO].registros}
     vinculos: dict[int, list] = defaultdict(list)
     for f in mundo[T_VINCULOS].registros:
         vinculos[f[C_JUGADOR_ID]].append((f[C_VINCULO_EQUIPO] + 1, f[C_VINCULO_POSICION]))
@@ -384,4 +431,8 @@ def construir(datos: bytes, archivo: str = "", guardada_en: Optional[datetime] =
         nombres_editados=nombres_editados,
         usuario_id=usuario_id,
         clubes=clubes,
+        ligas_de_equipo=ligas_de_equipo,
+        medias=medias,
+        mujeres=mujeres,
+        posiciones=posiciones,
     )

@@ -28,6 +28,7 @@ CHECKPOINTS_RATING_BAJO = [6.0, 5.5, 5.0]  # promedio ultimos 5, de menos a mas 
 PARTIDOS_PARA_RATING = 5
 
 PROBABILIDAD_NOTICIA_GENERAL = 0.5  # chance de que tambien salga una de ambiente
+MAXIMO_NOTICIAS_MUNDO = 2  # con la partida: noticias del mundo sobre hechos reales por revision
 
 DESCRIPCIONES_HITOS = {
     "hito_goles_totales": "llego a {valor} goles en su carrera con este personaje",
@@ -44,6 +45,7 @@ DESCRIPCIONES_HITOS = {
     "campeon": "su equipo salio campeon de la {valor}",
     "maximo_goleador": "termino la temporada como maximo goleador de la {valor}",
     "jugador_del_mes": "fue elegido jugador del mes: {valor}",
+    "nuevo_club": "fue transferido {valor} (dato real de su partida: es su nuevo club)",
 }
 
 # Los premios y logros reales tambien mueven la reputacion (la sala de
@@ -266,8 +268,9 @@ def revisar_prensa(
     general de ambiente.
 
     Con la partida de FC 26 (servicios/partida_real.py): `contexto_real` va
-    a la noticia sobre el jugador, y si hay `hechos_reales` la noticia del
-    mundo es sobre el primero (siempre), en vez de una inventada al azar.
+    a la noticia sobre el jugador, y si hay `hechos_reales` las noticias del
+    mundo son sobre los primeros (hasta MAXIMO_NOTICIAS_MUNDO, siempre), en
+    vez de una inventada al azar.
     `hitos_reales` (los de la partida) se suman a los del historial.
 
     Devuelve {"noticias": list[NoticiaPrensa] (sin guardar),
@@ -297,18 +300,21 @@ def revisar_prensa(
         )
 
     if hechos_reales:
-        prompt_general = _build_prompt_noticia_real(perfil, hechos_reales[0], contexto_real)
+        prompts_mundo = [
+            _build_prompt_noticia_real(perfil, hecho, contexto_real) for hecho in hechos_reales[:MAXIMO_NOTICIAS_MUNDO]
+        ]
     elif incluir_general and random.random() < PROBABILIDAD_NOTICIA_GENERAL:
-        prompt_general = _build_prompt_noticia_general(perfil)
+        prompts_mundo = [_build_prompt_noticia_general(perfil)]
     else:
-        prompt_general = None
+        prompts_mundo = []
 
-    if prompt_general:
+    for prompt_general in prompts_mundo:
         try:
             redactada = _redactar(prompt_general, api_key)
         except RuntimeError:
             if not noticias:
                 raise
+            break
         else:
             noticias.append(
                 NoticiaPrensa(

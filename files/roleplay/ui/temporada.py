@@ -1,7 +1,8 @@
 """
 Pagina Temporada: la competicion vista desde tu partida de FC 26. Tabla de
 posiciones (en las ligas), goleadores, tus resultados y proximos partidos,
-y la ultima fecha. Arriba se elige la competicion.
+y la ultima fecha. Arriba se elige la competicion. Abajo, los ultimos
+traspasos que detecto la prensa (servicios/mercado.py).
 
 Todo sale de la partida (servicios/temporada.py), que se lee en un hilo.
 """
@@ -9,6 +10,7 @@ Todo sale de la partida (servicios/temporada.py), que se lee en un hilo.
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
+from roleplay.database import get_estado_prensa, load_latest_profile
 from roleplay.servicios.temporada import leer_temporada
 from roleplay.ui import estilos
 from roleplay.ui.comun import ejecutar_en_hilo, esc
@@ -114,6 +116,13 @@ class PaginaTemporada(QWidget):
         self.goleadores_grilla.setVerticalSpacing(6)
         self.goleadores_tarjeta.cuerpo.addLayout(self.goleadores_grilla)
         izquierda.addWidget(self.goleadores_tarjeta)
+
+        self.mercado_tarjeta = Tarjeta("Mercado de fichajes")
+        self.mercado_layout = QVBoxLayout()
+        self.mercado_layout.setSpacing(6)
+        self.mercado_tarjeta.cuerpo.addLayout(self.mercado_layout)
+        self.mercado_tarjeta.hide()
+        izquierda.addWidget(self.mercado_tarjeta)
         izquierda.addStretch()
 
         self.club_tarjeta = Tarjeta("Tus partidos", destacada=True)
@@ -193,6 +202,7 @@ class PaginaTemporada(QWidget):
         self._mostrar_tabla(vista)
         self._mostrar_goleadores(vista)
         self._mostrar_partidos(vista)
+        self._mostrar_mercado()
 
     # ---- dibujo ----
 
@@ -263,6 +273,22 @@ class PaginaTemporada(QWidget):
             self.goleadores_grilla.addWidget(goles, n, 2)
         self.goleadores_grilla.setColumnStretch(1, 1)
         self.goleadores_grilla.setColumnMinimumWidth(0, 22)
+
+    def _mostrar_mercado(self):
+        limpiar_layout(self.mercado_layout)
+        perfil = load_latest_profile()
+        movimientos = get_estado_prensa(perfil.id).get("mercado", []) if perfil is not None else []
+        for movimiento in movimientos:
+            texto = QLabel(esc(movimiento["texto"][:1].upper() + movimiento["texto"][1:]))
+            texto.setWordWrap(True)
+            partes = [texto, None]
+            if movimiento.get("club"):
+                partes.append(chip("Tu club", estilos.ACENTO))
+            fecha = movimiento.get("fecha", "")
+            dia = texto_suave(f"{fecha[8:10]}/{fecha[5:7]}" if len(fecha) >= 10 else "", ajustar=False)
+            dia.setFixedWidth(46)
+            self.mercado_layout.addLayout(fila(dia, *partes, espaciado=10))
+        self.mercado_tarjeta.setVisible(bool(movimientos))
 
     def _linea_partido(self, p, con_resultado: bool) -> QHBoxLayout:
         fecha = texto_suave(p.fecha, ajustar=False)

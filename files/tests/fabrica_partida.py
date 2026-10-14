@@ -26,6 +26,15 @@ NOMBRES_EQUIPOS = {
     MAN_UTD: "Man Utd", CITY: "Manchester City", ARSENAL: "Arsenal", LIVERPOOL: "Liverpool",
     SUNDERLAND: "Sunderland", NAPOLI: "SSC Napoli", NORUEGA: "Noruega",
 }
+# equipos que no juegan nada en la partida (no tienen fila en las tablas)
+AGENTES_LIBRES, ARSENAL_FEM, CHELSEA_FEM = 111592, 115000, 115001
+EQUIPOS_SIN_PARTIDOS = {AGENTES_LIBRES: "Agentes libres", ARSENAL_FEM: "Arsenal", CHELSEA_FEM: "Chelsea"}
+# liga de cada equipo, como la guarda EA (id - 1): Premier 12, Serie A 30,
+# selecciones 77, agentes libres 381, WSL 2214
+LIGA_DE_EQUIPO = {
+    MAN_UTD: 12, CITY: 12, ARSENAL: 12, LIVERPOOL: 12, SUNDERLAND: 12, NAPOLI: 30, NORUEGA: 77,
+    AGENTES_LIBRES: 381, ARSENAL_FEM: 2214, CHELSEA_FEM: 2214,
+}
 
 # (fecha, competicion, local, visita, goles_local, goles_visita, jugado)
 PARTIDOS = [
@@ -53,13 +62,19 @@ ESTADISTICAS = [
      [(20270102, 90, 7.0, 1, 25), (20270109, 90, 7.4, 1, 25), (20270116, 90, 6.0, 0, 25)]),
 ]
 
+JUGADORA = 300001
+SUPLENTE_CITY = 250002
 # jugador -> (fecha de nacimiento, [(equipo, posicion)])
 JUGADORES = {
     USUARIO: (date(2003, 4, 4), [(MAN_UTD, 25)]),
     BRUNO: (date(1994, 9, 8), [(MAN_UTD, 18)]),
     HAALAND: (date(2000, 7, 21), [(CITY, 25), (NORUEGA, 25)]),
     DELANTERO_ARSENAL: (date(2001, 1, 1), [(ARSENAL, 25)]),
+    SUPLENTE_CITY: (date(2004, 5, 5), [(CITY, 28)]),
+    JUGADORA: (date(1998, 2, 2), [(ARSENAL_FEM, 25)]),
 }
+MEDIAS = {USUARIO: 79, BRUNO: 86, HAALAND: 92, DELANTERO_ARSENAL: 76, SUPLENTE_CITY: 64, JUGADORA: 88}
+POSICION_PREFERIDA = {SUPLENTE_CITY: 3}  # suplente (28) en el plantel; lateral derecho de preferencia
 
 
 # ---- base de datos de EA ----
@@ -115,9 +130,14 @@ PARTIDO_NUEVO = (20270123, LIGA, MAN_UTD, ARSENAL, 2, 1, True)
 ACTUACION_NUEVA = (20270123, 90, 8.8, 2, 25)
 
 
-def construir_bytes(nombre_partida: str = "Carrera - Prog. de Futbolista 1", partido_nuevo: bool = False) -> bytes:
+def construir_bytes(
+    nombre_partida: str = "Carrera - Prog. de Futbolista 1", partido_nuevo: bool = False,
+    fichajes: dict | None = None,
+) -> bytes:
     """`partido_nuevo`: la misma partida despues de que el usuario jugo el
-    Man Utd 2-1 Arsenal del 23-01-2027 (2 goles suyos, 1 asistencia)."""
+    Man Utd 2-1 Arsenal del 23-01-2027 (2 goles suyos, 1 asistencia).
+    `fichajes`: {jugador: club nuevo} (el resto de sus vinculos queda igual)."""
+    fichajes = fichajes or {}
     partidos_lista = list(PARTIDOS)
     estadisticas_lista = list(ESTADISTICAS)
     if partido_nuevo:
@@ -127,11 +147,17 @@ def construir_bytes(nombre_partida: str = "Carrera - Prog. de Futbolista 1", par
                                  ast + 1, fig, ultimos + [ACTUACION_NUEVA])
     mundo = _base({
         "lyxL": _tabla([("mCXg", 3, 18), ("AUsv", 0, 240)],
-                       [{"mCXg": i - 1, "AUsv": n} for i, n in NOMBRES_EQUIPOS.items()]),
-        "CZUM": _tabla([("ykFq", 3, 19), ("WVIU", 3, 18)],
-                       [{"ykFq": j, "WVIU": (nac - ORIGEN_FECHAS).days} for j, (nac, _) in JUGADORES.items()]),
+                       [{"mCXg": i - 1, "AUsv": n} for i, n in {**NOMBRES_EQUIPOS, **EQUIPOS_SIN_PARTIDOS}.items()]),
+        "CZUM": _tabla([("ykFq", 3, 19), ("WVIU", 3, 18), ("UERs", 3, 7), ("mpuH", 3, 7), ("EveZ", 3, 1),
+                        ("wZQU", 3, 5)],
+                       [{"ykFq": j, "WVIU": (nac - ORIGEN_FECHAS).days, "UERs": MEDIAS[j], "mpuH": MEDIAS[j] + 3,
+                         "EveZ": int(j == JUGADORA), "wZQU": POSICION_PREFERIDA.get(j, vs[0][1])}
+                        for j, (nac, vs) in JUGADORES.items()]),
         "RrqT": _tabla([("ykFq", 3, 19), ("mCXg", 3, 18), ("vjla", 3, 6)],
-                       [{"ykFq": j, "mCXg": e - 1, "vjla": pos} for j, (_, vs) in JUGADORES.items() for e, pos in vs]),
+                       [{"ykFq": j, "mCXg": (fichajes[j] if j in fichajes and n == 0 else e) - 1, "vjla": pos}
+                        for j, (_, vs) in JUGADORES.items() for n, (e, pos) in enumerate(vs)]),
+        "qdZF": _tabla([("aQrQ", 3, 12), ("mCXg", 3, 18)],
+                       [{"aQrQ": liga, "mCXg": e - 1} for e, liga in LIGA_DE_EQUIPO.items()]),
         "onMQ": _tabla([("aQrQ", 3, 12), ("HEQX", 0, 240)], [{"aQrQ": 12, "HEQX": "Premier League"}]),
         "nQVU": _tabla([("HdeP", 0, 240), ("xnfZ", 0, 240), ("rREd", 0, 240), ("ykFq", 3, 19)],
                        [{"HdeP": "Andres", "xnfZ": "A. Iniesta", "rREd": "Iniesta", "ykFq": 41},

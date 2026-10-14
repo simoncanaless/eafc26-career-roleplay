@@ -75,6 +75,9 @@ mismos de siempre de EA / sofifa). Competiciones vistas: 808 (liga), 122
 | **Copas** | la partida no trae su nombre: la IA lo reconoce por sus equipos (Champions League, FA Cup, Carabao Cup) y queda guardado |
 | **Ficha de un jugador** | tabla `CZUM` (id `ykFq`, nacimiento `WVIU` = dias desde 1582-10-14); tabla `RrqT` (vinculos: jugador `ykFq`, equipo `mCXg` + 1, posicion `vjla` 0-29: 25 = DC, 18 = MCO, 28 = suplente). Club + posicion + seleccion + nacimiento alcanzan para que la IA reconozca a los conocidos (Haaland, Isak, Gibbs-White, Grealish) |
 | **Tabla de posiciones** | se calcula con los partidos jugados (la de `stagadv` viene en cero) |
+| **Liga de cada equipo** (2026-10-14) | tabla `qdZF` del mundo (una fila por equipo, 817): liga `aQrQ` + 1, equipo `mCXg` + 1. Ligas especiales: 78 = selecciones de hombres ("Selecc. masc."), 2136 = selecciones de mujeres, 382 = "Agentes libres" (un equipo), 76 = Resto del mundo. Las ligas femeninas (WSL, Liga F...) tienen equipos propios |
+| **Media, potencial, genero y posicion** (2026-10-14) | tabla `CZUM`: media `UERs`, potencial `mpuH` (en los 21.507 jugadores el potencial nunca es menor que la media; los de media mas alta son Haaland 92, Mbappe/Vinicius/Bellingham 91), genero `EveZ` (1 = jugadora: 2.149, todas las de selecciones femeninas), posicion preferida `wZQU` (mismos numeros que `vjla`: Haaland 25, Vinicius 27, Bellingham 18, De Bruyne 14). Simon (30999): media 79, potencial 94 |
+| **Traspasos** (2026-10-14) | la partida no guarda un historial legible, pero `RrqT` dice el club de hoy: comparando dos lecturas de la MISMA partida salen los traspasos (`servicios/mercado.py`, foto en la tabla `club_visto` de la app). Verificado entre la partida 1 (feb-2025) y la 2 (ene-2027): 4.927 jugadores cambiaron de equipo, ej. un central del Bayern al Paris SG o un lateral derecho del Spurs al RB Leipzig |
 
 ## Pistas sin confirmar
 

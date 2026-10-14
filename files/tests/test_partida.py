@@ -62,8 +62,18 @@ class TestFormatoYCarrera(unittest.TestCase):
         self.assertEqual(
             self.c.ficha(f.HAALAND),
             {"id": f.HAALAND, "club": "Manchester City", "posicion": "delantero centro", "seleccion": "Noruega",
-             "nacimiento": "2000-07-21", "edad": 26, "goles_en_la_temporada": 5},
+             "media": 92, "nacimiento": "2000-07-21", "edad": 26, "goles_en_la_temporada": 5},
         )
+
+    def test_club_seleccion_y_agentes_libres(self):
+        self.assertEqual(self.c.club_de(f.HAALAND), f.CITY)  # no Noruega
+        self.assertTrue(self.c.es_seleccion(f.NORUEGA))
+        self.assertTrue(self.c.es_agentes_libres(f.AGENTES_LIBRES))
+        self.assertEqual(self.c.club_de(f.JUGADORA), f.ARSENAL_FEM)
+        self.assertEqual(self.c.mujeres, {f.JUGADORA})
+        self.assertEqual(self.c.medias[f.USUARIO], 79)
+        # suplente en el plantel: la ficha usa la posicion que prefiere
+        self.assertEqual(self.c.ficha(f.SUPLENTE_CITY)["posicion"], "lateral derecho")
 
     def test_un_archivo_que_no_es_una_partida(self):
         with self.assertRaises(FormatoDesconocido):

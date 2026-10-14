@@ -145,6 +145,25 @@ class TestPaginaTemporada(ayuda.PruebaDeInterfaz):
         ayuda.esperar_tareas()
         self.assertEqual(self.pagina.vista.competicion, f.CHAMPIONS)
 
+    def test_el_mercado_de_fichajes(self):
+        from roleplay.models import PlayerProfile
+
+        pid = database.save_profile(PlayerProfile(nombre_jugador="Simon Canales"))
+        database.set_estado_prensa(pid, {"mercado": [
+            {"fecha": "2027-01-16", "texto": "un lateral derecho (media 80) paso de Spurs a Man Utd", "club": True},
+            {"fecha": "2027-01-15", "texto": "Erling Haaland (media 92) paso de Manchester City a SSC Napoli", "club": False},
+        ]})
+        self._con_partida()
+        self.pagina.actualizar()
+        ayuda.esperar_tareas()
+        self.assertTrue(self.pagina.mercado_tarjeta.isVisibleTo(self.pagina))
+        self.assertEqual(self.pagina.mercado_layout.count(), 2)
+        primera = self.pagina.mercado_layout.itemAt(0).layout()
+        textos = [primera.itemAt(i).widget().text() for i in range(primera.count()) if primera.itemAt(i).widget()]
+        self.assertEqual(textos[0], "16/01")
+        self.assertIn("Un lateral derecho (media 80) paso de Spurs a Man Utd", textos)
+        self.assertIn("TU CLUB", textos)
+
     def test_esta_en_el_menu(self):
         from roleplay.ui.menu import MainMenuWindow
 

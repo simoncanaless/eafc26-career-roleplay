@@ -75,6 +75,15 @@ CREATE TABLE IF NOT EXISTS nombre_conocido (
     PRIMARY KEY (tipo, id)
 );
 
+-- En que club estaba cada jugador la ultima vez que se leyo cada partida:
+-- comparando contra la lectura nueva salen los traspasos (servicios/mercado.py).
+CREATE TABLE IF NOT EXISTS club_visto (
+    partida TEXT NOT NULL,   -- nombre de la partida de FC 26
+    jugador INTEGER NOT NULL,
+    equipo INTEGER NOT NULL,
+    PRIMARY KEY (partida, jugador)
+);
+
 CREATE TABLE IF NOT EXISTS noticia_prensa (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     player_id INTEGER NOT NULL,
@@ -387,6 +396,23 @@ def guardar_nombres_conocidos(tipo: str, nombres: dict) -> None:
         conn.executemany(
             "INSERT OR REPLACE INTO nombre_conocido (tipo, id, nombre, seguro) VALUES (?, ?, ?, ?)",
             [(tipo, ident, nombre, int(seguro)) for ident, (nombre, seguro) in nombres.items()],
+        )
+
+
+def get_clubes_vistos(partida: str) -> dict[int, int]:
+    """{jugador: club} de la ultima lectura de esa partida ({} si nunca)."""
+    with conectar() as conn:
+        filas = conn.execute("SELECT jugador, equipo FROM club_visto WHERE partida = ?", (partida,)).fetchall()
+    return {fila["jugador"]: fila["equipo"] for fila in filas}
+
+
+def guardar_clubes_vistos(partida: str, clubes: dict[int, int]) -> None:
+    """Reemplaza la foto de esa partida (los que ya no estan se borran)."""
+    with conectar() as conn:
+        conn.execute("DELETE FROM club_visto WHERE partida = ?", (partida,))
+        conn.executemany(
+            "INSERT INTO club_visto (partida, jugador, equipo) VALUES (?, ?, ?)",
+            [(partida, jugador, equipo) for jugador, equipo in clubes.items()],
         )
 
 

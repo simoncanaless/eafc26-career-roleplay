@@ -72,6 +72,11 @@ toca) y todo se vuelve real:
   (vos incluido), tus resultados y lo que viene, y la ultima fecha. Una pestana por cada
   competicion que juega tu club (liga, Champions, copas).
 
+**Mercado de fichajes**: la app guarda en que club esta cada jugador de tu partida y, cuando
+alguien cambia de club, es un traspaso: si toca a tu club, si es una estrella (media 82+) o
+de tu liga, la prensa lo cuenta y aparece en TEMPORADA > Mercado de fichajes. Si el que
+cambia de club sos vos, es la noticia del dia.
+
 **Premios**: al pasar de mes en el juego, la prensa elige al jugador del mes de tu liga
 (el que mas goles hizo en el mes, con datos reales). Si sos vos, es noticia y sube tu
 reputacion; si no, es la noticia del mundo. Salir campeon o terminar como maximo goleador

@@ -21,7 +21,8 @@ from roleplay import database
 from roleplay.models import MatchInterviewRecord, PlayerProfile
 from roleplay.partida.carrera import Carrera, Partido
 from roleplay.servicios.identificar import identificar_competiciones, identificar_jugadores
-from roleplay.servicios.prensa import revisar_prensa
+from roleplay.servicios import mercado
+from roleplay.servicios.prensa import MAXIMO_NOTICIAS_MUNDO, revisar_prensa
 from roleplay.servicios.vision import MatchStats
 
 CAMPOS_TOTALES = ("partidos", "goles", "asistencias", "amarillas", "rojas", "figura")
@@ -343,17 +344,31 @@ def revisar_prensa_con_partida(
     ][:1]
 
     premio, estado_mes = premio_del_mes(carrera, estado_prensa.get("mes"))
-    ids = {h.figura for h in hechos} | ({premio.jugador} if premio else set())
+    anteriores = database.get_clubes_vistos(carrera.partida)
+    traspasos = mercado.detectar_traspasos(carrera, anteriores)[: mercado.TRASPASOS_EN_LA_NOTICIA]
+    propio = mercado.traspaso_del_usuario(carrera, anteriores)
+    ids = {h.figura for h in hechos} | ({premio.jugador} if premio else set()) | {t.jugador for t in traspasos}
     for c in competiciones_del_usuario(carrera):
         if carrera.competiciones[c].es_liga:
             ids |= {e.jugador for e in carrera.goleadores(c, 3)}
     nombres = nombres_de_jugadores(carrera, ids)
     hitos_reales, estado_reales = detectar_hitos_reales(carrera, estado_prensa.get("reales"))
-    hechos_texto = [describir_hecho(carrera, h, nombres) for h in hechos]
+    if propio is not None:
+        hitos_reales.append({
+            "tipo": "nuevo_club", "valor": f"del {carrera.equipo(propio[0])} al {carrera.equipo(propio[1])}",
+        })
+    # las noticias del mundo, por importancia: el premio que gano otro, el
+    # mercado y el partido destacado (solo las primeras salen)
+    hechos_texto = []
     if premio is not None and premio.es_usuario:
         hitos_reales.append({"tipo": "jugador_del_mes", "valor": premio.detalle})
     elif premio is not None:
-        hechos_texto.insert(0, describir_premio(carrera, premio, nombres))  # la noticia del mundo
+        hechos_texto.append(describir_premio(carrera, premio, nombres))
+    if traspasos:
+        hechos_texto.append(mercado.texto_mercado(carrera, traspasos, nombres))
+    usados_partidos = MAXIMO_NOTICIAS_MUNDO - len(hechos_texto)
+    hechos = hechos[: max(usados_partidos, 0)]
+    hechos_texto += [describir_hecho(carrera, h, nombres) for h in hechos]
 
     resultado = revisar_prensa(
         perfil,
@@ -372,6 +387,17 @@ def revisar_prensa_con_partida(
             vitrina.append({"premio": PREMIOS_DE_VITRINA[hito["tipo"]], "detalle": hito["valor"],
                             "temporada": temporada_de(carrera.fecha_actual())})
     resultado["estado_prensa"]["vitrina"] = vitrina
+    if traspasos:
+        hoy = carrera.fecha_actual()
+        nuevos = [
+            {"fecha": hoy.isoformat() if hoy else "", "texto": mercado.describir_traspaso(carrera, t, nombres, para_la_ia=False),
+             "club": t.toca_al_club}
+            for t in traspasos
+        ]
+        resultado["estado_prensa"]["mercado"] = (nuevos + list(estado_prensa.get("mercado", [])))[: mercado.MERCADO_GUARDADO]
+    # la foto de los planteles para la proxima vez (recien ahora: si la IA
+    # fallo, estos traspasos se vuelven a detectar en la proxima revision)
+    database.guardar_clubes_vistos(carrera.partida, mercado.clubes_de_jugadores(carrera))
     hoy = carrera.fecha_actual()
     if hoy:
         resultado["estado_prensa"]["partida_hasta"] = hoy.isoformat()
