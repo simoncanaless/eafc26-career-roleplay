@@ -46,6 +46,6 @@ def extraer_stats_partido(imagen_png: bytes, api_key: Optional[str] = None) -> M
         PROMPT_EXTRACCION,
         MatchStats,
         "Esperate un poco y volve a capturar la pantalla (o escribi las stats a mano).",
-        imagen_png=imagen_png,
+        adjunto=(imagen_png, "image/png"),
         api_key=api_key,
     )

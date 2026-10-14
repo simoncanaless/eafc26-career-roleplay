@@ -1,10 +1,13 @@
 """
 Menu principal: barra lateral + una pagina por modulo (Resumen,
-Entrevistas, Instagram). Cada pagina va dentro de un scroll.
+Entrevistas, Instagram), sobre el fondo de estadio. Cada pagina va dentro
+de un scroll.
 """
 
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QMainWindow,
@@ -22,156 +25,279 @@ from roleplay.database import (
     load_noticias_prensa,
 )
 from roleplay.servicios.prensa import calcular_estadisticas_acumuladas
+from roleplay.ui import estilos
 from roleplay.ui.comun import con_scroll, esc, miles
+from roleplay.ui.componentes import (
+    CartaJugador,
+    FondoEstadio,
+    Mosaico,
+    Tarjeta,
+    agregar_noticia,
+    boton,
+    compacto,
+    icono,
+    limpiar_layout,
+    nivel_carta,
+    separador,
+    subtitulo,
+    texto_suave,
+    titulo_pagina,
+)
 from roleplay.ui.entrevista import InterviewWindow
-from roleplay.ui.estilos import marcar_subtitulo, marcar_titulo
+from roleplay.ui.estilos import fuente_titulo
 from roleplay.ui.instagram import InstagramWindow
 from roleplay.ui.personaje import CharacterWizard
 
+NOTICIAS_EN_RESUMEN = 5
+
 
 class PaginaResumen(QWidget):
-    """Vistazo rapido del personaje actual: club, reputacion, seguidores,
-    numeros de la carrera y ultimas noticias."""
+    """Vistazo del personaje: su carta, los numeros de la carrera, la
+    historia, las tramas abiertas y las ultimas noticias."""
 
     def __init__(self, on_crear_personaje):
         super().__init__()
+        self._on_crear_personaje = on_crear_personaje
 
-        layout = QVBoxLayout()
-        layout.setContentsMargins(28, 28, 28, 28)
-        layout.setSpacing(10)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(40, 34, 40, 34)
+        layout.setSpacing(18)
 
-        self.titulo_label = QLabel()
-        self.titulo_label.setWordWrap(True)
-        marcar_titulo(self.titulo_label)
-        layout.addWidget(self.titulo_label)
+        # ---- cabecera ----
+        cabecera = QHBoxLayout()
+        textos = QVBoxLayout()
+        textos.setSpacing(2)
+        self.titulo_label = titulo_pagina()
+        self.stats_label = subtitulo()
+        textos.addWidget(self.titulo_label)
+        textos.addWidget(self.stats_label)
+        cabecera.addLayout(textos, 1)
+        self.crear_btn = boton("Nuevo personaje", icono_nombre="nuevo")
+        self.crear_btn.clicked.connect(self._on_crear_personaje)
+        cabecera.addWidget(self.crear_btn, 0, Qt.AlignmentFlag.AlignTop)
+        layout.addLayout(cabecera)
 
-        self.stats_label = QLabel()
-        self.stats_label.setWordWrap(True)
-        layout.addWidget(self.stats_label)
+        # ---- sin personaje ----
+        self.vacio = Tarjeta("Arranca tu carrera", destacada=True)
+        self.vacio.cuerpo.addWidget(
+            texto_suave(
+                "Crea tu jugador: de donde viene, como es frente a la prensa y que lo mueve. "
+                "Con eso se escribe su historia y empiezan las entrevistas, la prensa y su Instagram."
+            )
+        )
+        crear_grande = boton("Crear personaje", primario=True, icono_nombre="nuevo")
+        crear_grande.clicked.connect(self._on_crear_personaje)
+        self.vacio.cuerpo.addWidget(crear_grande, 0, Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(self.vacio)
 
-        self.carrera_label = QLabel()
-        self.carrera_label.setWordWrap(True)
-        layout.addWidget(self.carrera_label)
+        # ---- carta + numeros ----
+        self.contenido = QWidget()
+        contenido = QVBoxLayout(self.contenido)
+        contenido.setContentsMargins(0, 0, 0, 0)
+        contenido.setSpacing(18)
 
-        self.backstory_label = QLabel()
-        self.backstory_label.setWordWrap(True)
-        layout.addWidget(self.backstory_label)
+        arriba = QHBoxLayout()
+        arriba.setSpacing(22)
+        self.carta = CartaJugador()
+        arriba.addWidget(self.carta, 0, Qt.AlignmentFlag.AlignTop)
 
-        self.crear_btn = QPushButton("Crear nuevo personaje")
-        self.crear_btn.clicked.connect(on_crear_personaje)
-        layout.addWidget(self.crear_btn)
+        derecha = QVBoxLayout()
+        derecha.setSpacing(14)
+        grilla = QGridLayout()
+        grilla.setSpacing(10)
+        self.mosaicos = {}
+        for i, (clave, rotulo) in enumerate(
+            (
+                ("partidos", "Partidos"),
+                ("goles", "Goles"),
+                ("asistencias", "Asistencias"),
+                ("rating", "Rating prom."),
+                ("figuras", "Figura del partido"),
+                ("seguidores", "Seguidores"),
+            )
+        ):
+            self.mosaicos[clave] = Mosaico(rotulo)
+            grilla.addWidget(self.mosaicos[clave], i // 3, i % 3)
+        derecha.addLayout(grilla)
 
-        noticias_titulo = QLabel("Ultimas noticias")
-        marcar_subtitulo(noticias_titulo)
-        layout.addSpacing(12)
-        layout.addWidget(noticias_titulo)
+        historia = Tarjeta("Su historia")
+        self.backstory_label = texto_suave()
+        historia.cuerpo.addWidget(self.backstory_label)
+        derecha.addWidget(historia)
+        derecha.addStretch()
+        arriba.addLayout(derecha, 1)
+        contenido.addLayout(arriba)
 
-        self.noticias_label = QLabel()
-        self.noticias_label.setWordWrap(True)
-        layout.addWidget(self.noticias_label)
+        self.tramas = Tarjeta("Tramas abiertas")
+        self.tramas_layout = QVBoxLayout()
+        self.tramas_layout.setSpacing(6)
+        self.tramas.cuerpo.addLayout(self.tramas_layout)
+        contenido.addWidget(self.tramas)
 
+        noticias = Tarjeta("Central de noticias", espaciado=8)
+        self.noticias_layout = QVBoxLayout()
+        self.noticias_layout.setSpacing(8)
+        noticias.cuerpo.addLayout(self.noticias_layout)
+        contenido.addWidget(noticias)
+
+        layout.addWidget(self.contenido)
         layout.addStretch()
-        self.setLayout(layout)
 
     def actualizar(self):
         perfil = load_latest_profile()
+        self.vacio.setVisible(perfil is None)
+        self.contenido.setVisible(perfil is not None)
+        self.crear_btn.setVisible(perfil is not None)
 
         if perfil is None:
-            self.titulo_label.setText("Todavia no creaste ningun personaje")
-            for label in (self.stats_label, self.carrera_label, self.backstory_label, self.noticias_label):
-                label.setText("")
+            self.titulo_label.setText("BIENVENIDO")
+            self.stats_label.setText("Todavia no creaste ningun personaje.")
             return
 
-        self.titulo_label.setText(esc(perfil.nombre_jugador))
-
+        reputacion = get_reputacion_actual(perfil.id)
+        seguidores = get_seguidores(perfil.id)
         club = perfil.club_actual or "sin club definido"
-        self.stats_label.setText(
-            f"<b>{esc(club)}</b> · Reputacion {get_reputacion_actual(perfil.id)}/100 · "
-            f"{miles(get_seguidores(perfil.id))} seguidores en Instagram"
-        )
-
         carrera = calcular_estadisticas_acumuladas(load_match_interviews(perfil.id))
-        if carrera["partidos_jugados"]:
-            self.carrera_label.setText(
-                f"{carrera['partidos_jugados']} partidos · {carrera['goles_totales']} goles · "
-                f"{carrera['asistencias_totales']} asistencias · "
-                f"rating promedio {carrera['rating_promedio']:.1f}"
-            )
-        else:
-            self.carrera_label.setText("Todavia no registraste ningun partido.")
 
-        self.backstory_label.setText(
-            esc(perfil.backstory_generado) if perfil.backstory_generado else "(sin backstory todavia)"
+        self.titulo_label.setText(esc(perfil.nombre_jugador.upper()))
+        self.stats_label.setText(
+            f"<b>{esc(club)}</b> · Reputacion {reputacion}/100 · {miles(seguidores)} seguidores en Instagram"
         )
 
-        noticias = load_noticias_prensa(perfil.id, limite=3)
-        if noticias:
-            self.noticias_label.setText(
-                "<br><br>".join(f"<b>{esc(n.titular)}</b><br>{esc(n.cuerpo)}" for n in noticias)
+        rating = f"{carrera['rating_promedio']:.1f}" if carrera["partidos_jugados"] else "-"
+        self.carta.mostrar(
+            perfil.nombre_jugador,
+            perfil.club_actual,
+            reputacion,
+            [
+                ("PJ", str(carrera["partidos_jugados"])),
+                ("GOL", str(carrera["goles_totales"])),
+                ("AST", str(carrera["asistencias_totales"])),
+                ("RAT", rating),
+                ("FIG", str(carrera["figuras"])),
+                ("SEG", compacto(seguidores)),
+            ],
+        )
+        self.carta.setToolTip(
+            f"Carta {nivel_carta(reputacion).nombre.lower()}: el color sube con la reputacion "
+            "(bronce, plata desde 45, oro desde 70, elite desde 85)."
+        )
+        self.mosaicos["partidos"].poner(carrera["partidos_jugados"])
+        self.mosaicos["goles"].poner(carrera["goles_totales"])
+        self.mosaicos["asistencias"].poner(carrera["asistencias_totales"])
+        self.mosaicos["rating"].poner(rating)
+        self.mosaicos["figuras"].poner(carrera["figuras"])
+        self.mosaicos["seguidores"].poner(miles(seguidores))
+
+        self.backstory_label.setText(esc(perfil.backstory_generado) or "(sin historia todavia)")
+
+        limpiar_layout(self.tramas_layout)
+        for gancho in perfil.ganchos_narrativos:
+            trama = QLabel(f"<span style='color:{estilos.ACENTO}'>▸</span>&nbsp; {esc(gancho)}")
+            trama.setWordWrap(True)
+            self.tramas_layout.addWidget(trama)
+        self.tramas.setVisible(bool(perfil.ganchos_narrativos))
+
+        limpiar_layout(self.noticias_layout)
+        noticias = load_noticias_prensa(perfil.id, limite=NOTICIAS_EN_RESUMEN)
+        if not noticias:
+            self.noticias_layout.addWidget(
+                texto_suave("Todavia no hay noticias. Salen solas despues de las entrevistas.")
             )
-        else:
-            self.noticias_label.setText("Todavia no hay noticias.")
+        for i, noticia in enumerate(noticias):
+            if i:
+                self.noticias_layout.addSpacing(6)
+                self.noticias_layout.addWidget(separador())
+                self.noticias_layout.addSpacing(6)
+            agregar_noticia(self.noticias_layout, noticia)
 
 
 class MainMenuWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("EAFC 26 Roleplay")
-        self.setMinimumSize(900, 680)
+        self.setMinimumSize(1100, 720)
 
         # ---- barra lateral ----
-        sidebar = QFrame()
-        sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(210)
-        sidebar_layout = QVBoxLayout()
-        sidebar_layout.setContentsMargins(14, 24, 14, 24)
-        sidebar_layout.setSpacing(6)
+        lateral = QFrame()
+        lateral.setObjectName("lateral")
+        lateral.setFixedWidth(230)
+        lateral_layout = QVBoxLayout(lateral)
+        lateral_layout.setContentsMargins(0, 30, 0, 24)
+        lateral_layout.setSpacing(4)
 
-        titulo = QLabel("EAFC 26\nRoleplay")
-        marcar_titulo(titulo)
-        sidebar_layout.addWidget(titulo)
-        sidebar_layout.addSpacing(20)
+        marca = QLabel("EAFC 26")
+        marca.setFont(fuente_titulo(15, 4))
+        marca.setStyleSheet(f"color: {estilos.ACENTO}; padding-left: 24px;")
+        lateral_layout.addWidget(marca)
+        nombre_app = QLabel("ROLEPLAY")
+        nombre_app.setFont(fuente_titulo(36, 1.5))
+        nombre_app.setStyleSheet("padding-left: 22px;")
+        lateral_layout.addWidget(nombre_app)
+        lateral_layout.addSpacing(28)
 
-        # ---- paginas: (texto del boton, pagina) ----
+        # ---- paginas: (texto, icono, pagina) ----
         self.pagina_resumen = PaginaResumen(self._abrir_wizard_personaje)
         self.pagina_entrevistas = InterviewWindow()
         self.pagina_instagram = InstagramWindow()
         self._paginas = [
-            ("🏠  Resumen", self.pagina_resumen),
-            ("🎙️  Entrevistas", self.pagina_entrevistas),
-            ("📸  Instagram", self.pagina_instagram),
+            ("Resumen", "inicio", self.pagina_resumen),
+            ("Entrevistas", "microfono", self.pagina_entrevistas),
+            ("Instagram", "camara", self.pagina_instagram),
         ]
 
         self.stack = QStackedWidget()
-        self._botones_nav = []
-        for indice, (texto, pagina) in enumerate(self._paginas):
+        self._botones_nav: list[QPushButton] = []
+        for indice, (texto, nombre_icono, pagina) in enumerate(self._paginas):
             self.stack.addWidget(con_scroll(pagina))
-            boton = QPushButton(texto)
-            boton.setObjectName("navBtn")
-            boton.setCheckable(True)
-            boton.clicked.connect(lambda _=False, i=indice: self._ir_a(i))
-            sidebar_layout.addWidget(boton)
-            self._botones_nav.append(boton)
+            boton_nav = QPushButton(f"  {texto.upper()}")
+            boton_nav.setObjectName("navBtn")
+            boton_nav.setCheckable(True)
+            boton_nav.setIcon(icono(nombre_icono, estilos.TEXTO_SUAVE, estilos.TEXTO))
+            boton_nav.setIconSize(QSize(20, 20))
+            boton_nav.setCursor(Qt.CursorShape.PointingHandCursor)
+            boton_nav.clicked.connect(lambda _=False, i=indice: self._ir_a(i))
+            lateral_layout.addWidget(boton_nav)
+            self._botones_nav.append(boton_nav)
 
-        sidebar_layout.addStretch()
-        sidebar.setLayout(sidebar_layout)
+        lateral_layout.addStretch()
+        self.jugador_label = QLabel()
+        self.jugador_label.setWordWrap(True)
+        self.jugador_label.setStyleSheet(f"color: {estilos.TEXTO_SUAVE}; padding: 0px 24px;")
+        lateral_layout.addWidget(self.jugador_label)
+
+        fondo = FondoEstadio()
+        fondo_layout = QVBoxLayout(fondo)
+        fondo_layout.setContentsMargins(0, 0, 0, 0)
+        fondo_layout.addWidget(self.stack)
 
         contenedor = QWidget()
-        layout_principal = QHBoxLayout()
+        layout_principal = QHBoxLayout(contenedor)
         layout_principal.setContentsMargins(0, 0, 0, 0)
         layout_principal.setSpacing(0)
-        layout_principal.addWidget(sidebar)
-        layout_principal.addWidget(self.stack, 1)
-        contenedor.setLayout(layout_principal)
+        layout_principal.addWidget(lateral)
+        layout_principal.addWidget(fondo, 1)
         self.setCentralWidget(contenedor)
 
         self._ir_a(0)
 
     def _ir_a(self, indice: int):
         self.stack.setCurrentIndex(indice)
-        for i, boton in enumerate(self._botones_nav):
-            boton.setChecked(i == indice)
-        self._paginas[indice][1].actualizar()
+        for i, boton_nav in enumerate(self._botones_nav):
+            boton_nav.setChecked(i == indice)
+        self._paginas[indice][2].actualizar()
+        self._refrescar_jugador()
+
+    def _refrescar_jugador(self):
+        perfil = load_latest_profile()
+        if perfil is None:
+            self.jugador_label.setText("Sin personaje")
+            return
+        reputacion = get_reputacion_actual(perfil.id)
+        self.jugador_label.setText(
+            f"<span style='color:{estilos.TEXTO}'><b>{esc(perfil.nombre_jugador)}</b></span><br>"
+            f"{esc(perfil.club_actual or 'Sin club')} · REP {reputacion} · {nivel_carta(reputacion).nombre}"
+        )
 
     def _abrir_wizard_personaje(self):
         wizard = CharacterWizard(self)

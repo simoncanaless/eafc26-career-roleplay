@@ -5,14 +5,13 @@ Guia por unas paginas de preguntas, arma un PlayerProfile, genera el
 backstory con IA (editable antes de guardar) y lo guarda en SQLite.
 """
 
-from PySide6.QtCore import QDate
+from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
     QButtonGroup,
     QDateEdit,
     QLabel,
     QLineEdit,
     QMessageBox,
-    QPushButton,
     QRadioButton,
     QTextEdit,
     QVBoxLayout,
@@ -29,7 +28,9 @@ from roleplay.models import (
     PlayerProfile,
 )
 from roleplay.servicios.backstory import generar_backstory
+from roleplay.ui import estilos
 from roleplay.ui.comun import ejecutar_en_hilo, esc
+from roleplay.ui.componentes import boton
 
 
 class PaginaDatosBasicos(QWizardPage):
@@ -152,7 +153,7 @@ class PaginaBackstory(QWizardPage):
         self.resumen_label.setWordWrap(True)
         layout.addWidget(self.resumen_label)
 
-        self.generar_btn = QPushButton("Generar backstory con IA")
+        self.generar_btn = boton("Generar backstory con IA", primario=True, icono_nombre="chispa")
         self.generar_btn.clicked.connect(self._on_generar_clicked)
         layout.addWidget(self.generar_btn)
 
@@ -184,7 +185,7 @@ class PaginaBackstory(QWizardPage):
 
     def _on_generar_clicked(self):
         self.generar_btn.setEnabled(False)
-        self.generar_btn.setText("Generando...")
+        self.generar_btn.setText("GENERANDO...")
         ejecutar_en_hilo(
             generar_backstory,
             self.wizard().construir_perfil(),
@@ -196,12 +197,12 @@ class PaginaBackstory(QWizardPage):
         self.resultado_edit.setPlainText(resultado.backstory)
         self.ganchos_edit.setPlainText("\n".join(f"- {g}" for g in resultado.ganchos_narrativos))
         self.generar_btn.setEnabled(True)
-        self.generar_btn.setText("Regenerar backstory")
+        self.generar_btn.setText("REGENERAR BACKSTORY")
 
     def _on_error(self, mensaje: str):
         QMessageBox.warning(self, "Error al generar backstory", mensaje)
         self.generar_btn.setEnabled(True)
-        self.generar_btn.setText("Generar backstory con IA")
+        self.generar_btn.setText("GENERAR BACKSTORY CON IA")
 
     def isComplete(self) -> bool:
         # Basta con que haya un backstory, generado o escrito a mano: asi
@@ -220,7 +221,17 @@ class CharacterWizard(QWizard):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("EAFC 26 Roleplay - Creacion de personaje")
-        self.setMinimumSize(560, 520)
+        self.setMinimumSize(680, 600)
+        # Classic: el estilo por defecto en Windows (Aero) pinta zonas
+        # blancas que no respetan la paleta oscura.
+        self.setWizardStyle(QWizard.WizardStyle.ClassicStyle)
+        for tipo, texto in (
+            (QWizard.WizardButton.BackButton, "ATRAS"),
+            (QWizard.WizardButton.NextButton, "SIGUIENTE"),
+            (QWizard.WizardButton.FinishButton, "CREAR JUGADOR"),
+            (QWizard.WizardButton.CancelButton, "CANCELAR"),
+        ):
+            self.setButtonText(tipo, texto)
 
         self.pagina_basicos = PaginaDatosBasicos()
         self.pagina_origen = PaginaOrigen()
@@ -235,7 +246,7 @@ class CharacterWizard(QWizard):
         self.pagina_anecdota = PaginaAnecdota()
         self.pagina_backstory = PaginaBackstory()
 
-        for pagina in (
+        paginas = (
             self.pagina_basicos,
             self.pagina_origen,
             self.pagina_contexto,
@@ -244,7 +255,19 @@ class CharacterWizard(QWizard):
             self.pagina_relacion,
             self.pagina_anecdota,
             self.pagina_backstory,
-        ):
+        )
+        self.setTitleFormat(Qt.TextFormat.RichText)
+        self.setSubTitleFormat(Qt.TextFormat.RichText)
+        for numero, pagina in enumerate(paginas, start=1):
+            pagina.setTitle(
+                f"<span style=\"font-family:'{estilos.FUENTE_TITULOS}'; font-size:30px\">"
+                f"{esc(pagina.title().upper())}</span>"
+            )
+            pagina.setSubTitle(
+                f"<span style=\"color:{estilos.ACENTO}; font-family:'{estilos.FUENTE_TITULOS}'; "
+                f"font-size:15px\">PASO {numero}/{len(paginas)}</span>&nbsp;&nbsp;"
+                f"<span style=\"color:{estilos.TEXTO_SUAVE}\">{esc(pagina.subTitle())}</span>"
+            )
             self.addPage(pagina)
 
         self.profile_id = None  # queda con el id guardado si se acepta

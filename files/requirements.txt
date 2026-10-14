@@ -5,3 +5,5 @@ python-dotenv>=1.0
 # captura de pantalla (solo Windows); dxcam usa OpenCV para convertir colores
 dxcam>=0.0.5; sys_platform == "win32"
 opencv-python>=4.9
+# respuestas por voz (microfono)
+sounddevice>=0.4.6

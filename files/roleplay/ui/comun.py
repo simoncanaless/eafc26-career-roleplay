@@ -6,7 +6,7 @@ formato a numeros y textos, y envolver una pagina en un scroll.
 import html
 from typing import Any, Callable
 
-from PySide6.QtCore import QObject, QThread, Signal, Slot
+from PySide6.QtCore import QObject, Qt, QThread, Signal, Slot
 from PySide6.QtWidgets import QFrame, QScrollArea, QWidget
 
 
@@ -112,9 +112,16 @@ def fecha_corta(fecha_iso: str) -> str:
 
 def con_scroll(pagina: QWidget) -> QScrollArea:
     """Envuelve una pagina en un scroll vertical, para que crezca (ej. con
-    las preguntas de la entrevista) sin cortarse ni agrandar la ventana."""
+    las preguntas de la entrevista) sin cortarse ni agrandar la ventana.
+    Todo queda transparente: el fondo lo pinta quien la contiene."""
     area = QScrollArea()
     area.setWidgetResizable(True)
     area.setFrameShape(QFrame.Shape.NoFrame)
+    area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
     area.setWidget(pagina)
+    # setWidget le activa el relleno a la pagina: se apaga para que se vea
+    # el fondo de estadio de atras
+    pagina.setObjectName("pagina")
+    pagina.setAutoFillBackground(False)
+    area.viewport().setAutoFillBackground(False)
     return area

@@ -56,6 +56,7 @@ def calcular_estadisticas_acumuladas(historial: list[MatchInterviewRecord]) -> d
         "partidos_jugados": jugados,
         "goles_totales": sum(p.goles_jugador for p in historial),
         "asistencias_totales": sum(p.asistencias_jugador for p in historial),
+        "figuras": sum(p.hombre_del_partido for p in historial),
         "rating_promedio": sum(p.rating_jugador for p in historial) / jugados if jugados else 0.0,
         "racha_goleadora": _racha(historial, lambda p: p.goles_jugador > 0),
         "racha_sin_gol": _racha(historial, lambda p: p.goles_jugador == 0),

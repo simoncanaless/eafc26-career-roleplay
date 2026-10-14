@@ -121,14 +121,15 @@ class TestGenerarJson(unittest.TestCase):
             self._generar(gemini.FaltaApiKey("Falta GEMINI_API_KEY."))
         self.assertNotIn(self.QUE_HACER, str(ctx.exception))
 
-    def test_la_imagen_viaja_junto_al_prompt(self):
-        with mock.patch.object(
-            gemini, "generate_content_with_fallback", return_value=Respuesta('{"titular": "x"}')
-        ) as llamada:
-            gemini.generar_json("prompt", Esquema, self.QUE_HACER, imagen_png=b"\x89PNG")
-        contenido = llamada.call_args.args[0]
-        self.assertEqual(contenido[0], "prompt")
-        self.assertEqual(contenido[1].inline_data.mime_type, "image/png")
+    def test_el_adjunto_viaja_junto_al_prompt(self):
+        for datos, tipo in ((b"\x89PNG", "image/png"), (b"RIFF", "audio/wav")):
+            with mock.patch.object(
+                gemini, "generate_content_with_fallback", return_value=Respuesta('{"titular": "x"}')
+            ) as llamada:
+                gemini.generar_json("prompt", Esquema, self.QUE_HACER, adjunto=(datos, tipo))
+            contenido = llamada.call_args.args[0]
+            self.assertEqual(contenido[0], "prompt")
+            self.assertEqual((contenido[1].inline_data.mime_type, contenido[1].inline_data.data), (tipo, datos))
 
 
 if __name__ == "__main__":

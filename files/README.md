@@ -14,7 +14,18 @@ copy .env.example .env      # y pone tu GEMINI_API_KEY (gratis en https://aistud
 .venv\Scripts\python.exe app.py
 ```
 
-`app.py` abre el menu con todo. Para abrir un modulo suelto:
+`app.py` abre el menu con todo. Con doble click: **`EAFC Roleplay.exe`** (en esta
+carpeta) o el acceso **EAFC 26 Roleplay** del escritorio. Si no estan, se crean con:
+
+```powershell
+.venv\Scripts\python.exe scripts\crear_acceso_directo.py
+```
+
+El .exe es solo un lanzador: abre `app.py` con el Python del `.venv`, asi que
+siempre corre el codigo actual. Si algo falla al abrir, el detalle queda en
+`errores.log`.
+
+Para abrir un modulo suelto:
 
 ```powershell
 .venv\Scripts\python.exe app.py personaje      # asistente de creacion de personaje
@@ -29,10 +40,11 @@ copy .env.example .env      # y pone tu GEMINI_API_KEY (gratis en https://aistud
    Gemini escribe el backstory y 3-5 *ganchos narrativos* (semillas de tramas).
    Todo queda editable antes de guardar, y si Gemini esta caido podes escribir
    el backstory a mano.
-2. **Entrevistas.** Capturas la pantalla de fin de partido (o escribis las
-   stats a mano), Gemini arma 2-4 preguntas con tu perfil, respondes con tus
-   palabras y la prensa reacciona: cambia tu reputacion (hasta ±15 por
-   entrevista) y a veces nace un gancho nuevo.
+2. **Sala de prensa.** Capturas la pantalla de fin de partido (o escribis las
+   stats a mano), Gemini arma 2-4 preguntas con tu perfil, respondes escribiendo
+   o **por voz** (apretas "Responder por voz", hablas, lo apretas de nuevo y
+   Gemini lo transcribe) y la prensa reacciona: cambia tu reputacion (hasta ±15
+   por entrevista) y a veces nace un gancho nuevo.
 3. **Prensa.** Despues de cada entrevista se revisa el historial: goles
    totales, rachas con y sin gol, y el rating promedio de los ultimos 5
    partidos disparan noticias sobre vos. A veces sale tambien una noticia de
@@ -54,10 +66,14 @@ roleplay/
     backstory.py  entrevista.py  prensa.py  instagram.py
     vision.py               lee las stats de la captura
     captura.py              captura de pantalla con dxcam (Windows)
-  ui/                       pantallas (PySide6)
+    audio.py                grabar el microfono y transcribir
+  ui/                       pantallas (PySide6), estilo EA FC
+    estilos.py              colores, tipografias y hoja de estilos (unico lugar)
+    componentes.py          carta FUT, tarjetas, mosaicos, chips, iconos, fondo
     comun.py                hilos para la IA, formato de numeros/textos, scroll
-    estilos.py  menu.py  personaje.py  entrevista.py  instagram.py
-scripts/seed_test_matches.py   siembra (o borra) 5 partidos de prueba
+    menu.py  personaje.py  entrevista.py  instagram.py
+scripts/seed_test_matches.py       siembra (o borra) 5 partidos de prueba
+scripts/crear_acceso_directo.py    icono, EAFC Roleplay.exe y acceso del escritorio
 tests/                      pruebas automaticas
 ```
 
@@ -67,9 +83,9 @@ tests/                      pruebas automaticas
 .venv\Scripts\python.exe -m unittest discover -s tests
 ```
 
-Corren sin ventana, con una base temporal (nunca tocan `career_roleplay.db`) y
-sin llamar a Gemini. Lo que no cubren: la captura real con dxcam y las
-respuestas reales de Gemini.
+Corren sin ventana, con una base temporal (nunca tocan `career_roleplay.db`),
+sin llamar a Gemini y con un microfono falso. Lo que no cubren: la captura real
+con dxcam, el microfono real y las respuestas reales de Gemini.
 
 ## Por que esta armado asi
 
@@ -79,4 +95,6 @@ respuestas reales de Gemini.
   pydantic; nada de parsear JSON "prometido" en texto libre.
 - **Varias keys y modelos**: si un modelo se queda sin cuota (429) se prueba el
   siguiente con la misma key; si una key no sirve (401/403), la siguiente key.
-- **Arranque rapido**: Gemini, dxcam y OpenCV se cargan recien cuando se usan.
+- **Arranque rapido**: Gemini, dxcam, OpenCV y el audio se cargan recien cuando se usan.
+- **La carta cambia de color con tu reputacion**: bronce, plata (45+), oro (70+) y
+  elite (85+), como los niveles de las cartas de FUT.

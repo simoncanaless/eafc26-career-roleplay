@@ -1,19 +1,22 @@
 """
-Pagina de entrevistas post-partido. Flujo:
+Sala de prensa (entrevista post-partido). Flujo:
 
 1. Capturar la pantalla de fin de partido y leer las stats con Gemini
    Vision, o escribirlas a mano. Quedan editables en los dos casos.
 2. Generar las preguntas con Gemini (perfil + partido).
-3. El usuario responde con sus palabras.
+3. El usuario responde escribiendo o por voz (se graba y Gemini lo
+   transcribe; el texto queda editable).
 4. Gemini evalua las respuestas: reaccion de prensa, cambio de
    reputacion y, a veces, un gancho narrativo nuevo. Se guarda todo y se
    revisa si el partido disparo algun hito de prensa.
 """
 
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
-    QCheckBox,
+    QComboBox,
     QDoubleSpinBox,
-    QFormLayout,
+    QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -38,32 +41,58 @@ from roleplay.database import (
     set_estado_prensa,
 )
 from roleplay.models import MatchInterviewRecord, PlayerProfile
+from roleplay.servicios.audio import MINIMO_SEGUNDOS, GrabadorMicrofono, listar_microfonos, transcribir
 from roleplay.servicios.captura import capturar_pantalla
 from roleplay.servicios.entrevista import evaluar_respuestas, generar_entrevista
 from roleplay.servicios.prensa import revisar_prensa
 from roleplay.servicios.vision import MatchStats, extraer_stats_partido
+from roleplay.ui import estilos
 from roleplay.ui.comun import ejecutar_en_hilo, esc
-from roleplay.ui.estilos import marcar_subtitulo, marcar_titulo
+from roleplay.ui.componentes import (
+    Mosaico,
+    Tarjeta,
+    agregar_noticia,
+    boton,
+    chip,
+    chip_alternable,
+    etiqueta_campo,
+    fila,
+    icono,
+    limpiar_layout,
+    separador,
+    subtitulo,
+    texto_suave,
+    titulo_pagina,
+)
+from roleplay.ui.estilos import fuente_titulo
 
-TEXTO_CAPTURAR = "Capturar pantalla de fin de partido"
+TEXTO_CAPTURAR = "Capturar pantalla"
 TEXTO_GENERAR = "Generar entrevista con IA"
 TEXTO_REGENERAR = "Regenerar entrevista"
-TEXTO_ENVIAR = "Enviar respuestas y ver reaccion de la prensa"
+TEXTO_ENVIAR = "Enviar respuestas"
 TEXTO_PRENSA = "Revisar prensa ahora"
+TEXTO_VOZ = "Responder por voz"
 
 
 def _capturar_y_leer() -> MatchStats:
     return extraer_stats_partido(capturar_pantalla())
 
 
+def _repintar(widget: QWidget) -> None:
+    """Vuelve a aplicar la hoja de estilos tras cambiar una propiedad."""
+    widget.style().unpolish(widget)
+    widget.style().polish(widget)
+
+
 class InterviewWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("EAFC 26 Roleplay - Entrevista post-partido")
+        self.setWindowTitle("EAFC 26 Roleplay - Sala de prensa")
 
         self.perfil = None
         self._preguntas: list[str] = []
         self._respuesta_edits: list[QTextEdit] = []
+        self._botones_voz: list[QPushButton] = []
         # Lo que hay en curso. _evaluando guarda lo que se mando a evaluar
         # (jugador, stats, preguntas y respuestas), para guardar exactamente
         # eso aunque se toque el formulario, o se cree otro personaje,
@@ -72,112 +101,192 @@ class InterviewWindow(QWidget):
         self._generando = False
         self._evaluando: tuple[PlayerProfile, MatchStats, list[tuple[str, str]]] | None = None
         self._prensa_en_curso = False
-        self._prensa_player_id: int | None = None
         self._prensa_manual = False
+        self._prensa_player_id: int | None = None
+        # voz: (grabador, numero de pregunta) y la pregunta que se transcribe
+        self._grabacion: tuple[GrabadorMicrofono, int] | None = None
+        self._transcribiendo: int | None = None
+        self._microfonos_cargados = False
+        self._sin_microfono: str | None = None  # el motivo, si no se puede grabar
+        self._reloj = QTimer(self)
+        self._reloj.setInterval(200)
+        self._reloj.timeout.connect(self._tic_grabacion)
 
-        layout = QVBoxLayout()
-        layout.setContentsMargins(28, 28, 28, 28)
-        layout.setSpacing(8)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(40, 34, 40, 34)
+        layout.setSpacing(18)
 
-        self.header_label = QLabel()
-        self.header_label.setWordWrap(True)
-        marcar_titulo(self.header_label)
-        layout.addWidget(self.header_label)
+        # ---- cabecera ----
+        cabecera = QHBoxLayout()
+        textos = QVBoxLayout()
+        textos.setSpacing(2)
+        textos.addWidget(titulo_pagina("Sala de prensa"))
+        self.header_label = subtitulo()
+        textos.addWidget(self.header_label)
+        cabecera.addLayout(textos, 1)
+        self.reputacion_mosaico = Mosaico("Reputacion")
+        self.reputacion_mosaico.setFixedWidth(130)
+        cabecera.addWidget(self.reputacion_mosaico)
+        layout.addLayout(cabecera)
 
-        self.reputacion_label = QLabel()
-        layout.addWidget(self.reputacion_label)
-
-        club_layout = QHBoxLayout()
-        club_layout.addWidget(QLabel("Club actual:"))
+        club = Tarjeta()
         self.club_edit = QLineEdit()
         self.club_edit.setPlaceholderText("Ej: Luton Town")
-        club_layout.addWidget(self.club_edit)
-        self.guardar_club_btn = QPushButton("Guardar club")
+        self.guardar_club_btn = boton("Guardar club", icono_nombre="escudo")
         self.guardar_club_btn.clicked.connect(self._on_guardar_club_clicked)
-        club_layout.addWidget(self.guardar_club_btn)
-        layout.addLayout(club_layout)
+        club.cuerpo.addLayout(fila(etiqueta_campo("Club actual"), self.club_edit, self.guardar_club_btn, espaciado=14))
+        layout.addWidget(club)
 
-        # ---- 1. el partido ----
-        layout.addSpacing(8)
-        layout.addWidget(self._subtitulo("1. El partido"))
-        layout.addWidget(QLabel("Captura la pantalla de stats o escribilas a mano:"))
+        layout.addWidget(self._tarjeta_partido())
+        layout.addWidget(self._tarjeta_entrevista())
+        layout.addWidget(self._tarjeta_prensa())
+        layout.addStretch()
 
-        self.capturar_btn = QPushButton(TEXTO_CAPTURAR)
+        self.actualizar()
+
+    # ---- armado de la pagina ----
+
+    def _tarjeta_partido(self) -> Tarjeta:
+        tarjeta = Tarjeta("1 · El partido", espaciado=14)
+
+        self.capturar_btn = boton(TEXTO_CAPTURAR, icono_nombre="captura")
         self.capturar_btn.clicked.connect(self._on_capturar_clicked)
-        layout.addWidget(self.capturar_btn)
+        tarjeta.cuerpo.addLayout(
+            fila(
+                texto_suave("Captura la pantalla de stats al terminar el partido, o escribilas a mano.", ajustar=False),
+                None,
+                self.capturar_btn,
+            )
+        )
 
-        form = QFormLayout()
-        self.goles_equipo_spin = self._spin(form, "Goles de tu equipo:", 20)
-        self.goles_rival_spin = self._spin(form, "Goles del rival:", 20)
+        # marcador
+        self.goles_equipo_spin = self._spin_marcador()
+        self.goles_rival_spin = self._spin_marcador()
+        self.equipo_propio_label = QLabel()
+        self.equipo_propio_label.setFont(fuente_titulo(17, 1))
+        self.equipo_propio_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.equipo_rival_edit = QLineEdit()
-        form.addRow("Equipo rival:", self.equipo_rival_edit)
-        self.goles_jugador_spin = self._spin(form, "Tus goles:", 10)
-        self.asistencias_spin = self._spin(form, "Tus asistencias:", 10)
+        self.equipo_rival_edit.setPlaceholderText("Equipo rival")
+        self.equipo_rival_edit.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.equipo_rival_edit.setFixedWidth(200)
+        guion = QLabel("-")
+        guion.setFont(fuente_titulo(40))
+        guion.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        marcador = QGridLayout()
+        marcador.setHorizontalSpacing(18)
+        marcador.setVerticalSpacing(6)
+        marcador.addWidget(self.equipo_propio_label, 0, 0)
+        marcador.addWidget(self.equipo_rival_edit, 0, 2)
+        marcador.addWidget(self.goles_equipo_spin, 1, 0, Qt.AlignmentFlag.AlignHCenter)
+        marcador.addWidget(guion, 1, 1)
+        marcador.addWidget(self.goles_rival_spin, 1, 2, Qt.AlignmentFlag.AlignHCenter)
+        marcador.setColumnMinimumWidth(0, 200)
+        marcador.setColumnMinimumWidth(2, 200)
+        contenedor_marcador = QFrame()
+        contenedor_marcador.setObjectName("mosaico")
+        envoltura = QHBoxLayout(contenedor_marcador)
+        envoltura.setContentsMargins(16, 14, 16, 14)
+        envoltura.addStretch()
+        envoltura.addLayout(marcador)
+        envoltura.addStretch()
+        tarjeta.cuerpo.addWidget(contenedor_marcador)
+
+        # tus numeros
+        self.goles_jugador_spin = self._spin(10)
+        self.asistencias_spin = self._spin(10)
         self.rating_spin = QDoubleSpinBox()
         self.rating_spin.setRange(0.0, 10.0)
         self.rating_spin.setSingleStep(0.1)
         self.rating_spin.setDecimals(1)
-        form.addRow("Tu rating:", self.rating_spin)
-        self.minutos_spin = self._spin(form, "Minutos jugados:", 120)
-        layout.addLayout(form)
+        self.minutos_spin = self._spin(120)
+        numeros = QGridLayout()
+        numeros.setHorizontalSpacing(14)
+        numeros.setVerticalSpacing(4)
+        for columna, (rotulo, campo) in enumerate(
+            (
+                ("Tus goles", self.goles_jugador_spin),
+                ("Asistencias", self.asistencias_spin),
+                ("Rating", self.rating_spin),
+                ("Minutos", self.minutos_spin),
+            )
+        ):
+            numeros.addWidget(etiqueta_campo(rotulo), 0, columna)
+            numeros.addWidget(campo, 1, columna)
+        tarjeta.cuerpo.addLayout(numeros)
 
-        checks_layout = QHBoxLayout()
-        self.amarilla_check = QCheckBox("Tarjeta amarilla")
-        self.roja_check = QCheckBox("Tarjeta roja")
-        self.motm_check = QCheckBox("Hombre del partido")
-        for check in (self.amarilla_check, self.roja_check, self.motm_check):
-            checks_layout.addWidget(check)
-        checks_layout.addStretch()
-        layout.addLayout(checks_layout)
+        self.amarilla_check = chip_alternable("Tarjeta amarilla")
+        self.roja_check = chip_alternable("Tarjeta roja")
+        self.motm_check = chip_alternable("Figura del partido")
+        tarjeta.cuerpo.addLayout(
+            fila(self.amarilla_check, self.roja_check, self.motm_check, estirar_al_final=True)
+        )
+        return tarjeta
 
-        # ---- 2. la entrevista ----
-        layout.addSpacing(8)
-        layout.addWidget(self._subtitulo("2. La entrevista"))
+    def _tarjeta_entrevista(self) -> Tarjeta:
+        tarjeta = Tarjeta("2 · La entrevista", espaciado=14)
 
-        self.generar_entrevista_btn = QPushButton(TEXTO_GENERAR)
+        self.generar_entrevista_btn = boton(TEXTO_GENERAR, primario=True, icono_nombre="chispa")
         self.generar_entrevista_btn.clicked.connect(self._on_generar_entrevista_clicked)
-        layout.addWidget(self.generar_entrevista_btn)
+        self.microfono_combo = QComboBox()
+        self.microfono_combo.setMinimumWidth(260)
+        self.microfono_combo.addItem("Predeterminado de Windows", None)
+        self.microfono_combo.setToolTip("Microfono para responder por voz")
+        tarjeta.cuerpo.addLayout(
+            fila(
+                self.generar_entrevista_btn,
+                None,
+                etiqueta_campo("Microfono"),
+                self.microfono_combo,
+            )
+        )
 
         self.qa_layout = QVBoxLayout()
-        self.qa_layout.setContentsMargins(0, 0, 0, 0)
-        layout.addLayout(self.qa_layout)
+        self.qa_layout.setSpacing(12)
+        tarjeta.cuerpo.addLayout(self.qa_layout)
 
-        self.enviar_respuestas_btn = QPushButton(TEXTO_ENVIAR)
+        self.enviar_respuestas_btn = boton(TEXTO_ENVIAR, primario=True, icono_nombre="enviar")
         self.enviar_respuestas_btn.clicked.connect(self._on_enviar_respuestas_clicked)
-        layout.addWidget(self.enviar_respuestas_btn)
+        tarjeta.cuerpo.addLayout(fila(None, self.enviar_respuestas_btn))
 
+        self.reaccion_tarjeta = Tarjeta("Reaccion de la prensa", destacada=True)
+        self.reaccion_chips = QHBoxLayout()
+        self.reaccion_tarjeta.cuerpo.addLayout(self.reaccion_chips)
         self.reaccion_label = QLabel()
         self.reaccion_label.setWordWrap(True)
-        layout.addWidget(self.reaccion_label)
+        self.reaccion_tarjeta.cuerpo.addWidget(self.reaccion_label)
+        self.reaccion_tarjeta.hide()
+        tarjeta.cuerpo.addWidget(self.reaccion_tarjeta)
+        return tarjeta
 
-        # ---- 3. la prensa ----
-        layout.addSpacing(8)
-        layout.addWidget(self._subtitulo("3. La prensa"))
-        layout.addWidget(QLabel("Titulares sobre vos y del mundo del futbol:"))
-        self.noticias_label = QLabel()
-        self.noticias_label.setWordWrap(True)
-        layout.addWidget(self.noticias_label)
-
-        self.revisar_prensa_btn = QPushButton(TEXTO_PRENSA)
+    def _tarjeta_prensa(self) -> Tarjeta:
+        tarjeta = Tarjeta("3 · La prensa", espaciado=10)
+        self.revisar_prensa_btn = boton(TEXTO_PRENSA, icono_nombre="prensa")
         self.revisar_prensa_btn.clicked.connect(self._on_revisar_prensa_clicked)
-        layout.addWidget(self.revisar_prensa_btn)
-
-        layout.addStretch()
-        self.setLayout(layout)
-        self.actualizar()
-
-    @staticmethod
-    def _subtitulo(texto: str) -> QLabel:
-        label = QLabel(texto)
-        marcar_subtitulo(label)
-        return label
+        tarjeta.cuerpo.addLayout(
+            fila(texto_suave("Titulares sobre vos y del mundo del futbol.", ajustar=False), None, self.revisar_prensa_btn)
+        )
+        self.noticias_layout = QVBoxLayout()
+        self.noticias_layout.setSpacing(8)
+        tarjeta.cuerpo.addLayout(self.noticias_layout)
+        return tarjeta
 
     @staticmethod
-    def _spin(form: QFormLayout, etiqueta: str, maximo: int) -> QSpinBox:
+    def _spin(maximo: int) -> QSpinBox:
         spin = QSpinBox()
         spin.setRange(0, maximo)
-        form.addRow(etiqueta, spin)
         return spin
+
+    @staticmethod
+    def _spin_marcador() -> QSpinBox:
+        spin = QSpinBox()
+        spin.setObjectName("marcador")
+        spin.setRange(0, 20)
+        spin.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        spin.setFixedSize(112, 66)
+        return spin
+
+    # ---- estado ----
 
     def actualizar(self):
         """Recarga el perfil (por si se creo uno nuevo) y refresca la pagina."""
@@ -186,24 +295,25 @@ class InterviewWindow(QWidget):
 
         if self.perfil is None:
             self.header_label.setText(
-                "No encontre ningun personaje guardado. Crea uno primero desde la pestana de Resumen."
+                "No encontre ningun personaje guardado. Crea uno primero desde el Resumen."
             )
-            self.reputacion_label.setText("")
+            self.reputacion_mosaico.poner("-")
             self.club_edit.setText("")
+            self.equipo_propio_label.setText("TU EQUIPO")
             return
 
         self.header_label.setText(f"Entrevista post-partido de {esc(self.perfil.nombre_jugador)}")
         self.club_edit.setText(self.perfil.club_actual)
-        self._refrescar_reputacion_label()
-
-    # ---- helpers de estado ----
+        self.equipo_propio_label.setText((self.perfil.club_actual or "Tu equipo").upper())
+        self._refrescar_reputacion()
 
     def _refrescar_botones(self):
         """Habilita cada boton segun lo que haya en curso. Es el unico lugar
         que lo decide: asi, volver a esta pestana en medio de una evaluacion
         no deja regenerar las preguntas que se estan evaluando."""
         hay_perfil = self.perfil is not None
-        ocupado_con_preguntas = self._generando or self._evaluando is not None
+        con_voz = self._grabacion is not None or self._transcribiendo is not None
+        ocupado_con_preguntas = self._generando or self._evaluando is not None or con_voz
         self.guardar_club_btn.setEnabled(hay_perfil)
         self.capturar_btn.setEnabled(hay_perfil and not self._capturando)
         self.generar_entrevista_btn.setEnabled(hay_perfil and not ocupado_con_preguntas)
@@ -212,9 +322,20 @@ class InterviewWindow(QWidget):
         )
         self.revisar_prensa_btn.setEnabled(hay_perfil and not self._prensa_en_curso)
 
-    def _refrescar_reputacion_label(self):
-        reputacion = get_reputacion_actual(self.perfil.id)
-        self.reputacion_label.setText(f"Reputacion actual: {reputacion}/100")
+        hay_microfono = self._sin_microfono is None
+        self.microfono_combo.setEnabled(hay_microfono and self._grabacion is None)
+        for numero, boton_voz in enumerate(self._botones_voz):
+            grabando_esta = self._grabacion is not None and self._grabacion[1] == numero
+            libre = (
+                not self._generando
+                and self._evaluando is None
+                and self._transcribiendo is None
+                and self._grabacion is None
+            )
+            boton_voz.setEnabled(hay_microfono and (grabando_esta or libre))
+
+    def _refrescar_reputacion(self):
+        self.reputacion_mosaico.poner(get_reputacion_actual(self.perfil.id))
 
     def _leer_stats_desde_formulario(self) -> MatchStats:
         return MatchStats(
@@ -243,30 +364,44 @@ class InterviewWindow(QWidget):
         self.motm_check.setChecked(stats.hombre_del_partido)
 
     def _mostrar_preguntas(self, preguntas: list[str]):
-        while self.qa_layout.count():
-            widget = self.qa_layout.takeAt(0).widget()
-            if widget is not None:
-                widget.deleteLater()
-
+        limpiar_layout(self.qa_layout)
         self._preguntas = preguntas
         self._respuesta_edits = []
-        for i, pregunta in enumerate(preguntas, start=1):
-            pregunta_label = QLabel(f"<b>{i}.</b> {esc(pregunta)}")
-            pregunta_label.setWordWrap(True)
-            self.qa_layout.addWidget(pregunta_label)
+        self._botones_voz = []
+        self._cargar_microfonos()
+
+        for numero, pregunta in enumerate(preguntas):
+            caja = QFrame()
+            caja.setObjectName("mosaico")
+            caja_layout = QVBoxLayout(caja)
+            caja_layout.setContentsMargins(16, 14, 16, 14)
+            caja_layout.setSpacing(10)
+
+            texto_pregunta = QLabel(esc(pregunta))
+            texto_pregunta.setWordWrap(True)
+            texto_pregunta.setFont(fuente_titulo(18, 0.2))
+            caja_layout.addLayout(fila(chip(f"P{numero + 1}", estilos.ACENTO), texto_pregunta, espaciado=12))
 
             respuesta_edit = QTextEdit()
-            respuesta_edit.setPlaceholderText("Tu respuesta...")
-            respuesta_edit.setMaximumHeight(70)
-            self.qa_layout.addWidget(respuesta_edit)
+            respuesta_edit.setPlaceholderText("Tu respuesta... (escribila o grabala)")
+            respuesta_edit.setFixedHeight(76)
+            caja_layout.addWidget(respuesta_edit)
+
+            boton_voz = boton(TEXTO_VOZ, icono_nombre="microfono")
+            boton_voz.setObjectName("microfono")
+            boton_voz.clicked.connect(lambda _=False, n=numero: self._on_voz_clicked(n))
+            caja_layout.addLayout(fila(None, boton_voz))
+
+            self.qa_layout.addWidget(caja)
             self._respuesta_edits.append(respuesta_edit)
+            self._botones_voz.append(boton_voz)
 
     # ---- 1. capturar pantalla ----
 
     def _on_capturar_clicked(self):
         self._capturando = True
         self._refrescar_botones()
-        self.capturar_btn.setText("Capturando y leyendo pantalla...")
+        self.capturar_btn.setText("LEYENDO PANTALLA...")
         ejecutar_en_hilo(
             _capturar_y_leer,
             al_completar=self._on_extraccion_completada,
@@ -276,7 +411,7 @@ class InterviewWindow(QWidget):
     def _on_extraccion_completada(self, stats: MatchStats):
         self._capturando = False
         self._refrescar_botones()
-        self.capturar_btn.setText("Volver a capturar pantalla")
+        self.capturar_btn.setText("VOLVER A CAPTURAR")
         self._cargar_stats_en_formulario(stats)
         if stats.confianza_baja:
             QMessageBox.information(
@@ -289,7 +424,7 @@ class InterviewWindow(QWidget):
     def _on_extraccion_error(self, mensaje: str):
         self._capturando = False
         self._refrescar_botones()
-        self.capturar_btn.setText(TEXTO_CAPTURAR)
+        self.capturar_btn.setText(TEXTO_CAPTURAR.upper())
         QMessageBox.warning(self, "Error al capturar/leer la pantalla", mensaje)
 
     # ---- 2. generar preguntas ----
@@ -297,8 +432,8 @@ class InterviewWindow(QWidget):
     def _on_generar_entrevista_clicked(self):
         self._generando = True
         self._refrescar_botones()
-        self.generar_entrevista_btn.setText("Generando...")
-        self.reaccion_label.setText("")
+        self.generar_entrevista_btn.setText("GENERANDO...")
+        self.reaccion_tarjeta.hide()
         ejecutar_en_hilo(
             generar_entrevista,
             self.perfil,
@@ -311,15 +446,115 @@ class InterviewWindow(QWidget):
         self._generando = False
         self._mostrar_preguntas(preguntas)
         self._refrescar_botones()
-        self.generar_entrevista_btn.setText(TEXTO_REGENERAR)
+        self.generar_entrevista_btn.setText(TEXTO_REGENERAR.upper())
 
     def _on_entrevista_error(self, mensaje: str):
         self._generando = False
         self._refrescar_botones()
-        self.generar_entrevista_btn.setText(TEXTO_REGENERAR if self._preguntas else TEXTO_GENERAR)
+        self.generar_entrevista_btn.setText((TEXTO_REGENERAR if self._preguntas else TEXTO_GENERAR).upper())
         QMessageBox.warning(self, "Error al generar la entrevista", mensaje)
 
-    # ---- 3. responder y evaluar ----
+    # ---- 3a. responder por voz ----
+
+    def _cargar_microfonos(self):
+        """La lista de microfonos se arma recien cuando hay preguntas: para
+        abrir la app no hace falta cargar la libreria de audio."""
+        if self._microfonos_cargados:
+            return
+        self._microfonos_cargados = True
+        try:
+            microfonos = listar_microfonos()
+        except RuntimeError as exc:
+            self._sin_microfono = str(exc)
+            self.microfono_combo.clear()
+            self.microfono_combo.addItem("Sin microfono disponible", None)
+            self.microfono_combo.setToolTip(self._sin_microfono)
+            return
+        self.microfono_combo.clear()
+        for microfono in microfonos:
+            self.microfono_combo.addItem(microfono.nombre, microfono.indice)
+
+    def _on_voz_clicked(self, numero: int):
+        if self._grabacion is not None:
+            self._terminar_grabacion()
+            return
+
+        grabador = GrabadorMicrofono(dispositivo=self.microfono_combo.currentData())
+        try:
+            grabador.iniciar()
+        except RuntimeError as exc:
+            QMessageBox.warning(self, "No se pudo grabar", str(exc))
+            return
+
+        self._grabacion = (grabador, numero)
+        boton_voz = self._botones_voz[numero]
+        boton_voz.setProperty("grabando", True)
+        boton_voz.setIcon(icono("detener", "#FFFFFF"))
+        _repintar(boton_voz)
+        self._tic_grabacion()
+        self._reloj.start()
+        self._refrescar_botones()
+
+    def _tic_grabacion(self):
+        if self._grabacion is None:
+            return
+        grabador, numero = self._grabacion
+        segundos = int(grabador.segundos)
+        self._botones_voz[numero].setText(f"DETENER · {segundos // 60}:{segundos % 60:02d}")
+        if grabador.lleno:
+            self._terminar_grabacion()
+
+    def _terminar_grabacion(self):
+        grabador, numero = self._grabacion
+        self._grabacion = None
+        self._reloj.stop()
+        wav = grabador.detener()
+
+        boton_voz = self._botones_voz[numero]
+        boton_voz.setProperty("grabando", False)
+        boton_voz.setIcon(icono("microfono", estilos.TEXTO))
+        _repintar(boton_voz)
+
+        if grabador.segundos < MINIMO_SEGUNDOS:
+            boton_voz.setText(TEXTO_VOZ.upper())
+            self._refrescar_botones()
+            QMessageBox.information(
+                self, "Grabacion vacia", "No alcance a grabar nada. Apreta el boton, habla, y apretalo de nuevo."
+            )
+            return
+
+        self._transcribiendo = numero
+        boton_voz.setText("TRANSCRIBIENDO...")
+        self._refrescar_botones()
+        ejecutar_en_hilo(
+            transcribir,
+            wav,
+            self._preguntas[numero],
+            al_completar=self._on_transcripcion,
+            al_fallar=self._on_transcripcion_error,
+        )
+
+    def _terminar_transcripcion(self) -> int:
+        numero = self._transcribiendo
+        self._transcribiendo = None
+        self._botones_voz[numero].setText(TEXTO_VOZ.upper())
+        self._refrescar_botones()
+        return numero
+
+    def _on_transcripcion(self, texto: str):
+        numero = self._terminar_transcripcion()
+        if not texto:
+            QMessageBox.information(self, "No se escucho nada", "La grabacion no tenia voz. Proba de nuevo.")
+            return
+        edit = self._respuesta_edits[numero]
+        anterior = edit.toPlainText().strip()
+        edit.setPlainText(f"{anterior} {texto}" if anterior else texto)
+
+    def _on_transcripcion_error(self, mensaje: str):
+        self._terminar_transcripcion()
+        QMessageBox.warning(self, "Error al transcribir", mensaje)
+
+    # ---- 3b. enviar y evaluar ----
 
     def _on_enviar_respuestas_clicked(self):
         respuestas = [edit.toPlainText().strip() for edit in self._respuesta_edits]
@@ -333,7 +568,7 @@ class InterviewWindow(QWidget):
         pares = list(zip(self._preguntas, respuestas))
         self._evaluando = (self.perfil, stats, pares)
         self._refrescar_botones()
-        self.enviar_respuestas_btn.setText("Evaluando reacciones...")
+        self.enviar_respuestas_btn.setText("EVALUANDO...")
 
         ejecutar_en_hilo(
             evaluar_respuestas,
@@ -348,7 +583,7 @@ class InterviewWindow(QWidget):
         perfil, stats, pares = self._evaluando
         self._evaluando = None
         self._refrescar_botones()
-        self.enviar_respuestas_btn.setText(TEXTO_ENVIAR)
+        self.enviar_respuestas_btn.setText(TEXTO_ENVIAR.upper())
 
         nueva_reputacion = aplicar_delta_reputacion(
             perfil.id,
@@ -370,23 +605,30 @@ class InterviewWindow(QWidget):
             )
         )
 
-        signo = "+" if resultado.delta_reputacion >= 0 else ""
-        texto = (
-            f"<b>Reaccion de la prensa:</b> {esc(resultado.reaccion_prensa)}<br>"
-            f"<b>Impacto en reputacion:</b> {signo}{resultado.delta_reputacion} "
-            f"(ahora: {nueva_reputacion}/100)"
-        )
+        delta = resultado.delta_reputacion
+        color = estilos.POSITIVO if delta > 0 else estilos.NEGATIVO if delta < 0 else estilos.NEUTRO
+        limpiar_layout(self.reaccion_chips)
+        self.reaccion_chips.addWidget(chip(f"{'+' if delta >= 0 else ''}{delta} reputacion", color))
+        self.reaccion_chips.addWidget(chip(f"Ahora {nueva_reputacion}/100", estilos.TEXTO_SUAVE))
+        self.reaccion_chips.addStretch()
+
+        texto = esc(resultado.reaccion_prensa)
         if resultado.nuevo_gancho_narrativo:
-            texto += f"<br><b>Nuevo gancho narrativo:</b> {esc(resultado.nuevo_gancho_narrativo)}"
+            texto += (
+                f"<br><br><span style='color:{estilos.ACENTO}'>Nueva trama:</span> "
+                f"{esc(resultado.nuevo_gancho_narrativo)}"
+            )
         self.reaccion_label.setText(texto)
+        self.reaccion_tarjeta.show()
+
         if self.perfil is not None and self.perfil.id == perfil.id:
-            self._refrescar_reputacion_label()
+            self._refrescar_reputacion()
             self._iniciar_revision_prensa(manual=False)
 
     def _on_evaluacion_error(self, mensaje: str):
         self._evaluando = None
         self._refrescar_botones()
-        self.enviar_respuestas_btn.setText(TEXTO_ENVIAR)
+        self.enviar_respuestas_btn.setText(TEXTO_ENVIAR.upper())
         QMessageBox.warning(self, "Error al evaluar las respuestas", mensaje)
 
     # ---- club ----
@@ -395,6 +637,7 @@ class InterviewWindow(QWidget):
         nuevo_club = self.club_edit.text().strip()
         actualizar_club(self.perfil.id, nuevo_club)
         self.perfil.club_actual = nuevo_club
+        self.equipo_propio_label.setText((nuevo_club or "Tu equipo").upper())
         QMessageBox.information(
             self, "Club actualizado", f"Club actual: {nuevo_club or '(sin definir)'}"
         )
@@ -413,7 +656,7 @@ class InterviewWindow(QWidget):
         self._prensa_manual = manual
         self._prensa_player_id = self.perfil.id
         self._refrescar_botones()
-        self.revisar_prensa_btn.setText("Revisando...")
+        self.revisar_prensa_btn.setText("REVISANDO...")
 
         ejecutar_en_hilo(
             revisar_prensa,
@@ -427,7 +670,7 @@ class InterviewWindow(QWidget):
     def _terminar_revision_prensa(self):
         self._prensa_en_curso = False
         self._refrescar_botones()
-        self.revisar_prensa_btn.setText(TEXTO_PRENSA)
+        self.revisar_prensa_btn.setText(TEXTO_PRENSA.upper())
 
     def _on_prensa_completada(self, resultado: dict):
         self._terminar_revision_prensa()
@@ -436,13 +679,14 @@ class InterviewWindow(QWidget):
             save_noticia_prensa(noticia)
 
         if resultado["noticias"]:
-            bloques = []
-            for noticia in resultado["noticias"]:
-                etiqueta = "📰 Sobre vos" if noticia.categoria == "jugador" else "🌍 Mundo del futbol"
-                bloques.append(f"<b>{etiqueta}: {esc(noticia.titular)}</b><br>{esc(noticia.cuerpo)}")
-            self.noticias_label.setText("<br><br>".join(bloques))
+            limpiar_layout(self.noticias_layout)
+            for i, noticia in enumerate(resultado["noticias"]):
+                if i:
+                    self.noticias_layout.addWidget(separador())
+                agregar_noticia(self.noticias_layout, noticia)
         elif self._prensa_manual:
-            self.noticias_label.setText("Sin novedades de prensa por ahora.")
+            limpiar_layout(self.noticias_layout)
+            self.noticias_layout.addWidget(texto_suave("Sin novedades de prensa por ahora."))
 
     def _on_prensa_error(self, mensaje: str):
         self._terminar_revision_prensa()

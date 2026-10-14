@@ -10,3 +10,7 @@ __pycache__/
 # la base con tu carrera (datos personales, no codigo)
 career_roleplay.db
 career_roleplay.db-journal
+
+# lanzador compilado (lo genera scripts/crear_acceso_directo.py) y errores de la app
+*.exe
+errores.log

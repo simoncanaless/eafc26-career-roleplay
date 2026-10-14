@@ -254,11 +254,26 @@ class TestPersonajeYMenu(ayuda.PruebaDeInterfaz):
                 self.assertIsNotNone(app._crear_ventana(modulo))
 
 
+class TestCarta(unittest.TestCase):
+    def test_el_color_de_la_carta_sube_con_la_reputacion(self):
+        from roleplay.ui.componentes import nivel_carta
+
+        self.assertEqual(
+            [nivel_carta(r).nombre for r in (0, 44, 45, 69, 70, 84, 85, 100)],
+            ["BRONCE", "BRONCE", "PLATA", "PLATA", "ORO", "ORO", "ELITE", "ELITE"],
+        )
+
+    def test_numeros_compactos(self):
+        from roleplay.ui.componentes import compacto
+
+        self.assertEqual([compacto(n) for n in (211, 1000, 1500, 25300, 3400000)], ["211", "1K", "1,5K", "25,3K", "3,4M"])
+
+
 class TestArranque(unittest.TestCase):
     def test_abrir_la_app_no_carga_gemini_ni_la_captura(self):
         proceso = ayuda.correr_aislado(
             "import sys, roleplay.ui.menu\n"
-            "print(sorted(m for m in ('google.genai', 'cv2', 'dxcam') if m in sys.modules))"
+            "print(sorted(m for m in ('google.genai', 'cv2', 'dxcam', 'sounddevice') if m in sys.modules))"
         )
         self.assertEqual(proceso.returncode, 0, proceso.stderr)
         self.assertEqual(proceso.stdout.strip(), "[]")

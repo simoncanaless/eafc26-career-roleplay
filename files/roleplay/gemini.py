@@ -140,7 +140,7 @@ def generar_json(
     prompt: str,
     esquema: type[Esquema],
     que_hacer: str,
-    imagen_png: Optional[bytes] = None,
+    adjunto: Optional[tuple[bytes, str]] = None,
     api_key: Optional[str] = None,
 ) -> Esquema:
     """Pide a Gemini una respuesta con la forma de `esquema` y la devuelve
@@ -148,12 +148,15 @@ def generar_json(
 
     `que_hacer` es lo que se le dice al usuario si falla, ej. "Esperate un
     poco y apreta 'Regenerar entrevista' de nuevo."
+    `adjunto` es (bytes, tipo MIME), ej. una captura (image/png) o una
+    respuesta grabada (audio/wav).
     """
     from google.genai import types
 
     contenido: Any = prompt
-    if imagen_png is not None:
-        contenido = [prompt, types.Part.from_bytes(data=imagen_png, mime_type="image/png")]
+    if adjunto is not None:
+        datos, tipo_mime = adjunto
+        contenido = [prompt, types.Part.from_bytes(data=datos, mime_type=tipo_mime)]
 
     configuracion = types.GenerateContentConfig(
         response_mime_type="application/json",

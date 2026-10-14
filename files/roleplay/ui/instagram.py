@@ -1,9 +1,10 @@
 """
-Pagina de Instagram del jugador: vos escribis el post y Gemini genera los
+Instagram del jugador: vos escribis el post y Gemini genera los
 comentarios, los likes y cuanto suben o bajan tus seguidores.
 """
 
-from PySide6.QtWidgets import QLabel, QMessageBox, QPushButton, QTextEdit, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMessageBox, QTextEdit, QVBoxLayout, QWidget
 
 from roleplay.database import (
     get_reputacion_actual,
@@ -15,14 +16,41 @@ from roleplay.database import (
 )
 from roleplay.models import InstagramPost, PlayerProfile
 from roleplay.servicios.instagram import generar_reaccion_post
+from roleplay.ui import estilos
 from roleplay.ui.comun import ejecutar_en_hilo, esc, fecha_corta, miles
-from roleplay.ui.estilos import marcar_subtitulo, marcar_titulo
+from roleplay.ui.componentes import (
+    Avatar,
+    Mosaico,
+    Tarjeta,
+    boton,
+    chip,
+    fila,
+    limpiar_layout,
+    subtitulo,
+    texto_suave,
+)
+from roleplay.ui.estilos import fuente_titulo
 
 TEXTO_PUBLICAR = "Publicar"
+POSTS_EN_FEED = 20
 
 
 def _usuario(perfil: PlayerProfile) -> str:
     return "@" + perfil.nombre_jugador.replace(" ", "").lower()
+
+
+def _crecimiento(numero: int) -> str:
+    return f"{'+' if numero >= 0 else ''}{miles(numero)}"
+
+
+def _comentarios_html(comentarios) -> str:
+    """comentarios: dicts {"autor", "texto", "tono"} o ComentarioIA."""
+    lineas = []
+    for comentario in comentarios:
+        autor = comentario["autor"] if isinstance(comentario, dict) else comentario.autor
+        texto = comentario["texto"] if isinstance(comentario, dict) else comentario.texto
+        lineas.append(f"<b>{esc(autor)}</b>&nbsp; {esc(texto)}")
+    return "<br>".join(lineas)
 
 
 class InstagramWindow(QWidget):
@@ -34,88 +62,123 @@ class InstagramWindow(QWidget):
         # (jugador, texto) del post que se esta publicando
         self._publicando: tuple[PlayerProfile, str] | None = None
 
-        layout = QVBoxLayout()
-        layout.setContentsMargins(28, 28, 28, 28)
-        layout.setSpacing(8)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(40, 34, 40, 34)
+        layout.setSpacing(18)
 
+        # ---- perfil ----
+        perfil_layout = QHBoxLayout()
+        perfil_layout.setSpacing(22)
+        self.avatar = Avatar(92)
+        perfil_layout.addWidget(self.avatar)
+        textos = QVBoxLayout()
+        textos.setSpacing(2)
         self.header_label = QLabel()
-        self.header_label.setWordWrap(True)
-        marcar_titulo(self.header_label)
-        layout.addWidget(self.header_label)
+        self.header_label.setFont(fuente_titulo(30, 0.6))
+        self.sub_label = subtitulo()
+        textos.addStretch()
+        textos.addWidget(self.header_label)
+        textos.addWidget(self.sub_label)
+        textos.addStretch()
+        perfil_layout.addLayout(textos, 1)
+        self.mosaico_posts = Mosaico("Posts")
+        self.mosaico_seguidores = Mosaico("Seguidores")
+        self.mosaico_reputacion = Mosaico("Reputacion")
+        for mosaico in (self.mosaico_posts, self.mosaico_seguidores, self.mosaico_reputacion):
+            mosaico.setFixedWidth(130)
+            perfil_layout.addWidget(mosaico)
+        layout.addLayout(perfil_layout)
 
-        layout.addWidget(QLabel("Escribi tu post:"))
+        # ---- nuevo post ----
+        nuevo = Tarjeta("Nuevo post")
         self.post_edit = QTextEdit()
         self.post_edit.setPlaceholderText("Ej: Feliz por la victoria de hoy, vamos por mas 💪")
-        self.post_edit.setMaximumHeight(90)
-        layout.addWidget(self.post_edit)
-
-        self.publicar_btn = QPushButton(TEXTO_PUBLICAR)
+        self.post_edit.setFixedHeight(96)
+        nuevo.cuerpo.addWidget(self.post_edit)
+        self.publicar_btn = boton(TEXTO_PUBLICAR, primario=True, icono_nombre="enviar")
         self.publicar_btn.clicked.connect(self._on_publicar_clicked)
-        layout.addWidget(self.publicar_btn)
+        nuevo.cuerpo.addLayout(
+            fila(texto_suave("Los comentarios dependen de tu reputacion.", ajustar=False), None, self.publicar_btn)
+        )
+        layout.addWidget(nuevo)
 
-        resultado_titulo = QLabel("Resultado del ultimo post")
-        marcar_subtitulo(resultado_titulo)
-        layout.addSpacing(8)
-        layout.addWidget(resultado_titulo)
+        # ---- resultado del ultimo post ----
+        self.resultado_tarjeta = Tarjeta("Como le fue a tu post", destacada=True)
         self.resultado_label = QLabel()
         self.resultado_label.setWordWrap(True)
-        layout.addWidget(self.resultado_label)
+        self.resultado_tarjeta.cuerpo.addWidget(self.resultado_label)
+        self.resultado_tarjeta.hide()
+        layout.addWidget(self.resultado_tarjeta)
 
-        historial_titulo = QLabel("Posts anteriores")
-        marcar_subtitulo(historial_titulo)
-        layout.addSpacing(8)
-        layout.addWidget(historial_titulo)
-        self.historial_edit = QTextEdit()
-        self.historial_edit.setReadOnly(True)
-        self.historial_edit.setMinimumHeight(260)
-        layout.addWidget(self.historial_edit, 1)
+        # ---- feed ----
+        feed = Tarjeta("Tu feed", espaciado=12)
+        self.feed_layout = QVBoxLayout()
+        self.feed_layout.setSpacing(12)
+        feed.cuerpo.addLayout(self.feed_layout)
+        layout.addWidget(feed)
+        layout.addStretch()
 
-        self.setLayout(layout)
         self.actualizar()
 
     def actualizar(self):
-        """Recarga el perfil y refresca el encabezado y el historial."""
+        """Recarga el perfil y refresca la cabecera y el feed."""
         self.perfil = load_latest_profile()
 
         if self.perfil is None:
-            self.header_label.setText(
-                "No encontre ningun personaje guardado. Crea uno primero desde la pestana de Resumen."
-            )
+            self.header_label.setText("INSTAGRAM")
+            self.sub_label.setText("No encontre ningun personaje guardado. Crea uno primero desde el Resumen.")
             self.publicar_btn.setEnabled(False)
-            self.historial_edit.setPlainText("")
+            limpiar_layout(self.feed_layout)
             return
 
-        self._refrescar_header()
+        self._refrescar_cabecera()
         self.publicar_btn.setEnabled(self._publicando is None)
-        self._cargar_historial()
+        self._cargar_feed()
 
-    def _refrescar_header(self):
+    def _refrescar_cabecera(self):
         reputacion = get_reputacion_actual(self.perfil.id)
         seguidores = get_seguidores(self.perfil.id)
-        club = self.perfil.club_actual or "sin club definido"
-        self.header_label.setText(
-            f"<b>{esc(_usuario(self.perfil))}</b> · {esc(club)} · Reputacion {reputacion}/100 · "
-            f"<b>{miles(seguidores)} seguidores</b>"
+        self.avatar.poner(self.perfil.nombre_jugador)
+        self.header_label.setText(esc(_usuario(self.perfil)))
+        self.sub_label.setText(
+            f"{esc(self.perfil.nombre_jugador)} · {esc(self.perfil.club_actual or 'sin club definido')}"
         )
+        self.mosaico_seguidores.poner(miles(seguidores))
+        self.mosaico_reputacion.poner(reputacion)
 
-    def _cargar_historial(self):
-        posts = load_instagram_posts(self.perfil.id)
+    def _cargar_feed(self):
+        posts = load_instagram_posts(self.perfil.id, limite=POSTS_EN_FEED)
+        self.mosaico_posts.poner(len(posts) if len(posts) < POSTS_EN_FEED else f"{POSTS_EN_FEED}+")
+        limpiar_layout(self.feed_layout)
         if not posts:
-            self.historial_edit.setPlainText("Todavia no publicaste nada.")
+            self.feed_layout.addWidget(texto_suave("Todavia no publicaste nada."))
             return
 
-        bloques = []
         for post in posts:
-            signo = "+" if post.crecimiento_seguidores >= 0 else ""
-            bloque = (
-                f"📅 {fecha_corta(post.fecha)}\n"
-                f'"{post.texto}"\n'
-                f"❤️ {miles(post.likes)} likes · {signo}{miles(post.crecimiento_seguidores)} seguidores\n"
+            caja = QFrame()
+            caja.setObjectName("mosaico")
+            caja_layout = QVBoxLayout(caja)
+            caja_layout.setContentsMargins(16, 14, 16, 14)
+            caja_layout.setSpacing(8)
+
+            color = estilos.POSITIVO if post.crecimiento_seguidores >= 0 else estilos.NEGATIVO
+            caja_layout.addLayout(
+                fila(
+                    chip(f"♥ {miles(post.likes)}", "#FF5A8A"),
+                    chip(f"{_crecimiento(post.crecimiento_seguidores)} seguidores", color),
+                    None,
+                    texto_suave(fecha_corta(post.fecha), ajustar=False),
+                )
             )
-            for comentario in post.comentarios:
-                bloque += f"  💬 {comentario.get('autor', '?')}: {comentario.get('texto', '')}\n"
-            bloques.append(bloque)
-        self.historial_edit.setPlainText("\n".join(bloques))
+            texto = QLabel(esc(post.texto))
+            texto.setWordWrap(True)
+            texto.setFont(fuente_titulo(19, 0.2))
+            caja_layout.addWidget(texto)
+            if post.comentarios:
+                comentarios = texto_suave(_comentarios_html(post.comentarios))
+                comentarios.setTextFormat(Qt.TextFormat.RichText)
+                caja_layout.addWidget(comentarios)
+            self.feed_layout.addWidget(caja)
 
     def _on_publicar_clicked(self):
         texto = self.post_edit.toPlainText().strip()
@@ -125,7 +188,7 @@ class InstagramWindow(QWidget):
 
         self._publicando = (self.perfil, texto)
         self.publicar_btn.setEnabled(False)
-        self.publicar_btn.setText("Publicando...")
+        self.publicar_btn.setText("PUBLICANDO...")
 
         ejecutar_en_hilo(
             generar_reaccion_post,
@@ -140,7 +203,7 @@ class InstagramWindow(QWidget):
     def _terminar_publicacion(self):
         self._publicando = None
         self.publicar_btn.setEnabled(self.perfil is not None)
-        self.publicar_btn.setText(TEXTO_PUBLICAR)
+        self.publicar_btn.setText(TEXTO_PUBLICAR.upper())
 
     def _on_publicar_completado(self, resultado):
         perfil, texto = self._publicando
@@ -157,20 +220,18 @@ class InstagramWindow(QWidget):
             )
         )
 
-        signo = "+" if resultado.crecimiento_seguidores >= 0 else ""
-        texto_resultado = (
-            f"❤️ {miles(resultado.likes_estimados)} likes · "
-            f"{signo}{miles(resultado.crecimiento_seguidores)} seguidores "
-            f"(ahora: {miles(nuevo_total)} en total)<br><br>"
+        self.resultado_label.setText(
+            f"<span style='font-size:16px'><b>♥ {miles(resultado.likes_estimados)} likes</b> · "
+            f"{_crecimiento(resultado.crecimiento_seguidores)} seguidores "
+            f"(ahora: {miles(nuevo_total)} en total)</span><br><br>"
+            + _comentarios_html(resultado.comentarios)
         )
-        for comentario in resultado.comentarios:
-            texto_resultado += f"💬 <b>{esc(comentario.autor)}:</b> {esc(comentario.texto)}<br>"
-        self.resultado_label.setText(texto_resultado)
+        self.resultado_tarjeta.show()
 
         self.post_edit.setPlainText("")
         if self.perfil is not None and self.perfil.id == perfil.id:
-            self._refrescar_header()
-            self._cargar_historial()
+            self._refrescar_cabecera()
+            self._cargar_feed()
 
     def _on_publicar_error(self, mensaje: str):
         self._terminar_publicacion()
