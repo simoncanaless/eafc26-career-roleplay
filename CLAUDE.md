@@ -156,7 +156,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 
 ## Testing
 
-`.venv\Scripts\python.exe -m unittest discover -s tests` (141 pruebas, ~11 s). `tests/ayuda.py`:
+`.venv\Scripts\python.exe -m unittest discover -s tests` (153 pruebas, ~11 s). `tests/ayuda.py`:
 - Fija `EAFC_FC26_GUARDADOS` a una carpeta vacia: las pruebas no leen la partida real.
   `tests/fabrica_partida.py` arma un guardado FALSO con el mismo formato (para todo lo de
   `roleplay/partida`). `TestPartidaRealDelPC` lee la partida real si existe (solo lectura,
@@ -230,6 +230,12 @@ Siguiente (decidido con Simon el 2026-10-14):
   Falta probarlo encima del juego real (requiere FC 26 en "ventana sin bordes").
 - **Instagram con contexto real + "Sugerir post": HECHO el 2026-10-14**.
 - **Pagina Temporada (tabla, goleadores, tus partidos, ultima fecha): HECHO el 2026-10-14**.
+- **Premios reales: HECHO el 2026-10-14**. `premio_del_mes()` (partida_real.py): al pasar de mes en el juego,
+  el que mas goles hizo en la liga (goles de la liga ahora menos `estado_prensa.mes.base`; lo del mes nuevo se
+  descuenta con las ultimas actuaciones). Si la app no vio el mes entero, no premia: vuelve a contar.
+  `liga_terminada()` (sin pendientes Y una rueda completa) dispara `campeon` y `maximo_goleador`.
+  `prensa.BONOS_REPUTACION` -> `revisar_prensa()["delta_reputacion"]`, que aplica la sala de prensa.
+  Los premios del usuario quedan en `estado_prensa.vitrina` y el Resumen los muestra (tarjeta "Vitrina").
 - **Conferencia previa al proximo partido: HECHO el 2026-10-14** (modo de la sala de prensa: `InterviewWindow._modo` "post"/"previa"; la sala flotante lo refleja con `texto_contexto()`).
 - **Leer la partida guardada: HECHO el 2026-10-14** (`roleplay/partida/`). La sala de
   prensa carga sola el ultimo partido, el Resumen muestra la temporada real y sincroniza

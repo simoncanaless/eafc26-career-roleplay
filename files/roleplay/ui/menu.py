@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 
 from roleplay.database import (
     actualizar_club,
+    get_estado_prensa,
     get_reputacion_actual,
     get_seguidores,
     load_latest_profile,
@@ -159,6 +160,14 @@ class PaginaResumen(QWidget):
         self.temporada.hide()
         contenido.addWidget(self.temporada)
 
+        # ---- premios de verdad (jugador del mes, campeon...) ----
+        self.vitrina = Tarjeta("Vitrina")
+        self.vitrina_layout = QVBoxLayout()
+        self.vitrina_layout.setSpacing(6)
+        self.vitrina.cuerpo.addLayout(self.vitrina_layout)
+        self.vitrina.hide()
+        contenido.addWidget(self.vitrina)
+
         self.tramas = Tarjeta("Tramas abiertas")
         self.tramas_layout = QVBoxLayout()
         self.tramas_layout.setSpacing(6)
@@ -221,7 +230,20 @@ class PaginaResumen(QWidget):
             self.tramas_layout.addWidget(trama)
         self.tramas.setVisible(bool(perfil.ganchos_narrativos))
 
+        self._cargar_vitrina(perfil)
         self._cargar_noticias(perfil)
+
+    def _cargar_vitrina(self, perfil):
+        limpiar_layout(self.vitrina_layout)
+        premios = get_estado_prensa(perfil.id).get("vitrina", [])
+        for premio in reversed(premios):  # el mas nuevo arriba
+            linea = QLabel(
+                f"<span style='color:{estilos.MIXTO}'>★</span>&nbsp; <b>{esc(premio['premio'])}</b> · "
+                f"<span style='color:{estilos.TEXTO_SUAVE}'>{esc(premio['detalle'])} ({esc(premio.get('temporada', ''))})</span>"
+            )
+            linea.setWordWrap(True)
+            self.vitrina_layout.addWidget(linea)
+        self.vitrina.setVisible(bool(premios))
 
     def _mostrar_numeros(self, perfil, reputacion, seguidores, partidos, goles, asistencias, figura, nota):
         rating = f"{nota:.1f}" if nota is not None else "-"

@@ -72,6 +72,11 @@ toca) y todo se vuelve real:
   (vos incluido), tus resultados y lo que viene, y la ultima fecha. Una pestana por cada
   competicion que juega tu club (liga, Champions, copas).
 
+**Premios**: al pasar de mes en el juego, la prensa elige al jugador del mes de tu liga
+(el que mas goles hizo en el mes, con datos reales). Si sos vos, es noticia y sube tu
+reputacion; si no, es la noticia del mundo. Salir campeon o terminar como maximo goleador
+tambien. Tus premios quedan en la VITRINA del Resumen.
+
 **Conferencia previa**: en la sala de prensa, "Previa del proximo" arma una conferencia
 antes de tu proximo partido con datos reales (los dos en la tabla, las rachas, si ya se
 enfrentaron, el goleador rival). Respondes igual (escrito o por voz); la prensa saca un

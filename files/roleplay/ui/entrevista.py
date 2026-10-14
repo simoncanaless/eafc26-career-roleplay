@@ -52,7 +52,7 @@ from roleplay.servicios.captura import capturar_pantalla
 from roleplay.servicios.entrevista import evaluar_respuestas, generar_entrevista
 from roleplay.servicios.partida_real import leer_para_entrevista, revisar_prensa_con_partida
 from roleplay.servicios.previa import evaluar_previa, generar_previa, noticia_de_previa
-from roleplay.servicios.prensa import revisar_prensa
+from roleplay.servicios.prensa import BONOS_REPUTACION, revisar_prensa
 from roleplay.servicios.vision import MatchStats, extraer_stats_partido
 from roleplay.ui import estilos
 from roleplay.ui.comun import ejecutar_en_hilo, esc
@@ -935,6 +935,12 @@ class InterviewWindow(QWidget):
     def _on_prensa_completada(self, resultado: dict):
         self._terminar_revision_prensa()
         set_estado_prensa(self._prensa_player_id, resultado["estado_prensa"])
+        bono = resultado.get("delta_reputacion", 0)
+        if bono:
+            premios = ", ".join(h["tipo"] for h in resultado["hitos"] if h["tipo"] in BONOS_REPUTACION)
+            aplicar_delta_reputacion(self._prensa_player_id, bono, motivo=f"Premios y logros: {premios}")
+            if self.perfil is not None and self.perfil.id == self._prensa_player_id:
+                self._refrescar_reputacion()
         for noticia in resultado["noticias"]:
             save_noticia_prensa(noticia)
         if resultado["noticias"]:

@@ -42,7 +42,13 @@ DESCRIPCIONES_HITOS = {
     "lider_liga": "su equipo paso a liderar la {valor}",
     "perdio_liderato": "su equipo perdio el liderato de la {valor}",
     "campeon": "su equipo salio campeon de la {valor}",
+    "maximo_goleador": "termino la temporada como maximo goleador de la {valor}",
+    "jugador_del_mes": "fue elegido jugador del mes: {valor}",
 }
+
+# Los premios y logros reales tambien mueven la reputacion (la sala de
+# prensa aplica la suma cuando guarda las noticias).
+BONOS_REPUTACION = {"jugador_del_mes": 5, "campeon": 10, "maximo_goleador": 8}
 
 
 def _racha(historial: list[MatchInterviewRecord], condicion) -> int:
@@ -266,7 +272,8 @@ def revisar_prensa(
 
     Devuelve {"noticias": list[NoticiaPrensa] (sin guardar),
               "hitos": list[dict],
-              "estado_prensa": dict listo para database.set_estado_prensa}.
+              "estado_prensa": dict listo para database.set_estado_prensa,
+              "delta_reputacion": int (bonos por premios y logros reales)}.
 
     Si falla la noticia de ambiente pero ya hay una sobre el jugador, se
     sigue sin la de ambiente: no vale la pena perder la importante.
@@ -313,4 +320,9 @@ def revisar_prensa(
                 )
             )
 
-    return {"noticias": noticias, "hitos": hitos, "estado_prensa": nuevo_estado}
+    return {
+        "noticias": noticias,
+        "hitos": hitos,
+        "estado_prensa": nuevo_estado,
+        "delta_reputacion": sum(BONOS_REPUTACION.get(h["tipo"], 0) for h in hitos),
+    }

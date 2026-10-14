@@ -12,6 +12,7 @@ Que es noticia lo decide el codigo (puntajes); la IA solo redacta y pone
 nombres a los jugadores (identificar.py, con cache en la base).
 """
 
+from collections import defaultdict
 from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from typing import Optional
@@ -341,12 +342,18 @@ def revisar_prensa_con_partida(
         if h.clave not in publicados
     ][:1]
 
-    ids = {h.figura for h in hechos}
+    premio, estado_mes = premio_del_mes(carrera, estado_prensa.get("mes"))
+    ids = {h.figura for h in hechos} | ({premio.jugador} if premio else set())
     for c in competiciones_del_usuario(carrera):
         if carrera.competiciones[c].es_liga:
             ids |= {e.jugador for e in carrera.goleadores(c, 3)}
     nombres = nombres_de_jugadores(carrera, ids)
     hitos_reales, estado_reales = detectar_hitos_reales(carrera, estado_prensa.get("reales"))
+    hechos_texto = [describir_hecho(carrera, h, nombres) for h in hechos]
+    if premio is not None and premio.es_usuario:
+        hitos_reales.append({"tipo": "jugador_del_mes", "valor": premio.detalle})
+    elif premio is not None:
+        hechos_texto.insert(0, describir_premio(carrera, premio, nombres))  # la noticia del mundo
 
     resultado = revisar_prensa(
         perfil,
@@ -354,10 +361,17 @@ def revisar_prensa_con_partida(
         estado_prensa,
         api_key=api_key,
         contexto_real=contexto_temporada(carrera, nombres),
-        hechos_reales=[describir_hecho(carrera, h, nombres) for h in hechos],
+        hechos_reales=hechos_texto,
         hitos_reales=hitos_reales,
     )
     resultado["estado_prensa"]["reales"] = estado_reales
+    resultado["estado_prensa"]["mes"] = estado_mes
+    vitrina = list(estado_prensa.get("vitrina", []))
+    for hito in hitos_reales:
+        if hito["tipo"] in PREMIOS_DE_VITRINA:
+            vitrina.append({"premio": PREMIOS_DE_VITRINA[hito["tipo"]], "detalle": hito["valor"],
+                            "temporada": temporada_de(carrera.fecha_actual())})
+    resultado["estado_prensa"]["vitrina"] = vitrina
     hoy = carrera.fecha_actual()
     if hoy:
         resultado["estado_prensa"]["partida_hasta"] = hoy.isoformat()
@@ -485,6 +499,15 @@ def temporada_de(dia: date) -> str:
     return f"{inicio}/{str(inicio + 1)[-2:]}"
 
 
+def liga_terminada(carrera: Carrera, liga: int) -> bool:
+    """Sin partidos pendientes y con al menos una rueda completa jugada por
+    todos (si la partida trajera un fixture a medias, no se da por cerrada)."""
+    if any(p.competicion == liga and not p.jugado for p in carrera.partidos):
+        return False
+    tabla = carrera.tabla(liga)
+    return bool(tabla) and min(f.pj for f in tabla) >= len(tabla) - 1
+
+
 def detectar_hitos_reales(carrera: Carrera, estado: Optional[dict] = None) -> tuple[list[dict], dict]:
     """Hitos del jugador que salen de la partida (no de las entrevistas):
     goles de la temporada, maximo goleador de la liga, partidazo (3+ goles),
@@ -524,10 +547,13 @@ def detectar_hitos_reales(carrera: Carrera, estado: Optional[dict] = None) -> tu
             hitos.append({"tipo": "perdio_liderato", "valor": nombre})
         estado["club_lider"] = posicion == 1
 
-        pendientes = [p for p in carrera.partidos if p.competicion == liga and not p.jugado]
-        if posicion == 1 and not pendientes and not estado.get("campeon"):
+        terminada = liga_terminada(carrera, liga)
+        if posicion == 1 and terminada and not estado.get("campeon"):
             hitos.append({"tipo": "campeon", "valor": nombre})
             estado["campeon"] = True
+        if es_lider and terminada and not estado.get("maximo_goleador"):
+            hitos.append({"tipo": "maximo_goleador", "valor": nombre})
+            estado["maximo_goleador"] = True
 
     partido = carrera.ultimo_partido_de(equipo)
     if partido is not None:
@@ -540,3 +566,113 @@ def detectar_hitos_reales(carrera: Carrera, estado: Optional[dict] = None) -> tu
             })
             estado["partidazo"] = clave
     return hitos, estado
+
+
+# ---- premios: jugador del mes y la vitrina ----
+
+MESES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
+         "septiembre", "octubre", "noviembre", "diciembre")
+MINIMO_PARTIDOS_MES = 2  # partidos de liga del club en el mes para que haya premio
+PREMIOS_DE_VITRINA = {
+    "jugador_del_mes": "Jugador del mes",
+    "campeon": "Campeon",
+    "maximo_goleador": "Maximo goleador",
+}
+
+
+@dataclass
+class PremioMes:
+    mes: str  # "enero de 2027"
+    liga: str
+    jugador: int
+    equipo: int
+    goles: int
+    es_usuario: bool
+
+    @property
+    def detalle(self) -> str:
+        return f"{self.mes} en la {self.liga}, con {cantidad(self.goles, 'gol', 'goles')}"
+
+
+def _goles_en_liga(carrera: Carrera, liga: int) -> dict[int, int]:
+    goles: dict[int, int] = defaultdict(int)
+    for e in carrera.estadisticas:
+        if e.competicion == liga and e.goles:
+            goles[e.jugador] += e.goles
+    return goles
+
+
+def _goles_desde(carrera: Carrera, liga: int, desde: date) -> dict[int, int]:
+    """Goles de liga en los partidos desde `desde`, segun los ultimos
+    partidos guardados de cada jugador (alcanza para unas pocas fechas)."""
+    goles: dict[int, int] = defaultdict(int)
+    for a in carrera.actuaciones:
+        if a.competicion == liga and a.fecha >= desde and a.goles:
+            goles[a.jugador] += a.goles
+    return goles
+
+
+def _restar(a: dict, b: dict) -> dict[int, int]:
+    return {j: a.get(j, 0) - b.get(j, 0) for j in set(a) | set(b) if a.get(j, 0) - b.get(j, 0)}
+
+
+def _mes_siguiente(mes: str) -> str:
+    anio, numero = (int(x) for x in mes.split("-"))
+    return f"{anio + numero // 12}-{numero % 12 + 1:02d}"
+
+
+def premio_del_mes(carrera: Carrera, estado: Optional[dict] = None) -> tuple[Optional["PremioMes"], dict]:
+    """El jugador del mes de la liga del usuario (el que mas goles hizo),
+    cuando el juego pasa al mes siguiente. `estado` (estado_prensa["mes"])
+    guarda los goles de cada uno al empezar el mes en curso: el premio es
+    la diferencia al cerrarlo. Si la app no vio el mes entero (se salteo
+    un mes, cambio la temporada o la liga) no se inventa: se vuelve a
+    empezar a contar."""
+    estado = dict(estado or {})
+    hoy = carrera.fecha_actual()
+    equipo = carrera.equipo_usuario()
+    ligas = [c for c in competiciones_del_usuario(carrera) if carrera.competiciones[c].es_liga]
+    if hoy is None or equipo is None or not ligas:
+        return None, estado
+    liga = ligas[0]
+    mes, inicio_mes = hoy.strftime("%Y-%m"), hoy.replace(day=1)
+    if estado.get("mes") == mes and estado.get("liga") == liga:
+        return None, estado
+    # los goles de cada uno al terminar el mes anterior (= al empezar este)
+    al_empezar = {j: g for j, g in _restar(_goles_en_liga(carrera, liga), _goles_desde(carrera, liga, inicio_mes)).items() if g > 0}
+    nuevo = {"mes": mes, "liga": liga, "base": {str(j): g for j, g in al_empezar.items()}}
+
+    anterior = estado.get("mes")
+    if (
+        anterior is None or estado.get("liga") != liga or _mes_siguiente(anterior) != mes
+        or temporada_de(date.fromisoformat(f"{anterior}-01")) != temporada_de(inicio_mes)
+    ):
+        return None, nuevo
+    base = {int(j): g for j, g in estado.get("base", {}).items()}
+    del_mes = {j: g for j, g in _restar(al_empezar, base).items() if g > 0}
+    jugados = [
+        p for p in carrera.partidos_de(equipo, jugados=True)
+        if p.competicion == liga and p.fecha.strftime("%Y-%m") == anterior
+    ]
+    if len(jugados) < MINIMO_PARTIDOS_MES or not del_mes:
+        return None, nuevo
+    # en empate, el que lleva mas goles en la liga; despues, el de id menor (estable)
+    ganador = max(del_mes, key=lambda j: (del_mes[j], al_empezar.get(j, 0), -j))
+    filas = [e for e in carrera.estadisticas if e.jugador == ganador and e.competicion == liga]
+    anio, numero = (int(x) for x in anterior.split("-"))
+    return PremioMes(
+        mes=f"{MESES[numero - 1]} de {anio}",
+        liga=carrera.competicion(liga),
+        jugador=ganador,
+        equipo=max(filas, key=lambda e: e.partidos).equipo if filas else equipo,
+        goles=del_mes[ganador],
+        es_usuario=ganador == carrera.usuario_id,
+    ), nuevo
+
+
+def describir_premio(carrera: Carrera, premio: PremioMes, nombres: dict[int, str]) -> str:
+    return (
+        f"{describir_jugador(carrera, premio.jugador, nombres)} ({carrera.equipo(premio.equipo)}) fue elegido "
+        f"jugador del mes de {premio.mes.split(' de ')[0]} en la {premio.liga}: marco "
+        f"{cantidad(premio.goles, 'gol', 'goles')} en el mes."
+    )
