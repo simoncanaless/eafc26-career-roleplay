@@ -69,6 +69,13 @@ toca) y todo se vuelve real:
 - **Resumen**: tu temporada real (partidos, goles, asistencias, nota por competicion, la
   tabla, la racha y el proximo rival) y tu club al dia.
 
+**Modo en vivo**: con la app abierta mientras juegas, cuando el juego guarda un partido
+nuevo te llega una notificacion de Windows ("Partido nuevo: Man Utd 2-1 Arsenal. Tu
+entrevista te espera"), la sala de prensa ya tiene el partido cargado y las preguntas
+listas, y la prensa reacciona. Las noticias sobre vos tambien salen de tus numeros
+reales: 50 o 100 goles en la temporada, pasar a ser el goleador de la liga, un
+partidazo, tu club lider o campeon. Se apaga en Ajustes > Modo en vivo.
+
 Como funciona por dentro: `docs/partida-fc26.md`.
 
 ## Que hace cada modulo

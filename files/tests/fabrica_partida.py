@@ -110,7 +110,21 @@ def _bits(valores: list[tuple[int, int, int]], tam: int, base: int = 0) -> bytes
     return entero.to_bytes(tam, "little")
 
 
-def construir_bytes(nombre_partida: str = "Carrera - Prog. de Futbolista 1") -> bytes:
+# Lo que cambia cuando el usuario juega un partido mas (modo en vivo)
+PARTIDO_NUEVO = (20270123, LIGA, MAN_UTD, ARSENAL, 2, 1, True)
+ACTUACION_NUEVA = (20270123, 90, 8.8, 2, 25)
+
+
+def construir_bytes(nombre_partida: str = "Carrera - Prog. de Futbolista 1", partido_nuevo: bool = False) -> bytes:
+    """`partido_nuevo`: la misma partida despues de que el usuario jugo el
+    Man Utd 2-1 Arsenal del 23-01-2027 (2 goles suyos, 1 asistencia)."""
+    partidos_lista = list(PARTIDOS)
+    estadisticas_lista = list(ESTADISTICAS)
+    if partido_nuevo:
+        partidos_lista.insert(-1, PARTIDO_NUEVO)
+        jugador, equipo, comp, pj, minutos, nota, goles, ta, tr, ast, fig, ultimos = estadisticas_lista[0]
+        estadisticas_lista[0] = (jugador, equipo, comp, pj + 1, minutos + 90, nota + 88, goles + 2, ta, tr,
+                                 ast + 1, fig, ultimos + [ACTUACION_NUEVA])
     mundo = _base({
         "lyxL": _tabla([("mCXg", 3, 18), ("AUsv", 0, 240)],
                        [{"mCXg": i - 1, "AUsv": n} for i, n in NOMBRES_EQUIPOS.items()]),
@@ -137,7 +151,7 @@ def construir_bytes(nombre_partida: str = "Carrera - Prog. de Futbolista 1") -> 
             filas += struct.pack("<2sHHiB5s5sBB", b"\xff\x01", indice, grupo, equipo, 0, bytes(5), bytes(5), 0, 0)
 
     partidos = b"basura" + bytes(9)
-    for n, (fecha, comp, local, visita, gl, gv, jugado) in enumerate(PARTIDOS, start=1):
+    for n, (fecha, comp, local, visita, gl, gv, jugado) in enumerate(partidos_lista, start=1):
         partidos += struct.pack(
             "<2sHHBIHHBBHBBB", b"\xff\x01", n, comp, 1, fecha, 2000,
             indice_de[(comp, local)], gl, 0, indice_de[(comp, visita)], gv, 0, int(jugado),
@@ -145,7 +159,7 @@ def construir_bytes(nombre_partida: str = "Carrera - Prog. de Futbolista 1") -> 
         partidos += b"\x07\x07\x07"  # datos entre medio, como en el real
 
     estadisticas = b""
-    for jugador, equipo, comp, pj, minutos, nota, goles, ta, tr, ast, fig, ultimos in ESTADISTICAS:
+    for jugador, equipo, comp, pj, minutos, nota, goles, ta, tr, ast, fig, ultimos in estadisticas_lista:
         cabeza = _bits(
             [(equipo + 1, 16, 18), (jugador + 1, 34, 19), (comp, 53, 11), (minutos, 69, 15), (nota, 84, 12),
              (goles, 108, 9), (ta, 117, 7), (tr, 124, 6), (pj, 130, 8), (ast, 138, 8), (fig, 146, 8)],

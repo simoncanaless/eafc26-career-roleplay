@@ -346,6 +346,7 @@ def revisar_prensa_con_partida(
         if carrera.competiciones[c].es_liga:
             ids |= {e.jugador for e in carrera.goleadores(c, 3)}
     nombres = nombres_de_jugadores(carrera, ids)
+    hitos_reales, estado_reales = detectar_hitos_reales(carrera, estado_prensa.get("reales"))
 
     resultado = revisar_prensa(
         perfil,
@@ -354,7 +355,9 @@ def revisar_prensa_con_partida(
         api_key=api_key,
         contexto_real=contexto_temporada(carrera, nombres),
         hechos_reales=[describir_hecho(carrera, h, nombres) for h in hechos],
+        hitos_reales=hitos_reales,
     )
+    resultado["estado_prensa"]["reales"] = estado_reales
     hoy = carrera.fecha_actual()
     if hoy:
         resultado["estado_prensa"]["partida_hasta"] = hoy.isoformat()
@@ -464,3 +467,71 @@ def resumen_temporada() -> Optional[ResumenTemporada]:
             if proximo else ""
         ),
     )
+
+
+# ---- hitos reales: lo que la partida dice del jugador ----
+
+CHECKPOINTS_GOLES_TEMPORADA = [5, 10, 25, 50, 75, 100, 150, 200, 300]
+
+
+def temporada_de(dia: date) -> str:
+    """Las temporadas empiezan en julio: 2027-01-16 -> "2026/27"."""
+    inicio = dia.year if dia.month >= 7 else dia.year - 1
+    return f"{inicio}/{str(inicio + 1)[-2:]}"
+
+
+def detectar_hitos_reales(carrera: Carrera, estado: Optional[dict] = None) -> tuple[list[dict], dict]:
+    """Hitos del jugador que salen de la partida (no de las entrevistas):
+    goles de la temporada, maximo goleador de la liga, partidazo (3+ goles),
+    su club pasa a liderar o pierde el liderato, campeon. `estado` es lo ya
+    reportado (estado_prensa["reales"]): cada hito sale una vez, y los de
+    goles se reinician al empezar otra temporada."""
+    estado = dict(estado or {})
+    hoy = carrera.fecha_actual()
+    equipo = carrera.equipo_usuario()
+    if hoy is None or equipo is None or carrera.usuario_id is None:
+        return [], estado
+    temporada = temporada_de(hoy)
+    if estado.get("temporada") != temporada:
+        estado = {"temporada": temporada}
+    hitos = []
+
+    goles = sum(t["goles"] for t in totales_usuario(carrera).values())
+    alcanzados = [c for c in CHECKPOINTS_GOLES_TEMPORADA if goles >= c and c > estado.get("goles", 0)]
+    if alcanzados:
+        hitos.append({"tipo": "goles_temporada", "valor": max(alcanzados)})
+        estado["goles"] = max(alcanzados)
+
+    ligas = [c for c in competiciones_del_usuario(carrera) if carrera.competiciones[c].es_liga]
+    for liga in ligas[:1]:
+        nombre = carrera.competicion(liga)
+        goleadores = carrera.goleadores(liga, 1)
+        es_lider = bool(goleadores) and goleadores[0].jugador == carrera.usuario_id
+        if es_lider and not estado.get("lider_goleadores"):
+            hitos.append({"tipo": "lider_goleadores", "valor": nombre})
+        estado["lider_goleadores"] = es_lider
+
+        posicion = carrera.posicion_en(liga, equipo)
+        era_lider = estado.get("club_lider")
+        if posicion == 1 and era_lider is False:
+            hitos.append({"tipo": "lider_liga", "valor": nombre})
+        elif posicion and posicion > 1 and era_lider:
+            hitos.append({"tipo": "perdio_liderato", "valor": nombre})
+        estado["club_lider"] = posicion == 1
+
+        pendientes = [p for p in carrera.partidos if p.competicion == liga and not p.jugado]
+        if posicion == 1 and not pendientes and not estado.get("campeon"):
+            hitos.append({"tipo": "campeon", "valor": nombre})
+            estado["campeon"] = True
+
+    partido = carrera.ultimo_partido_de(equipo)
+    if partido is not None:
+        clave = clave_partido(partido)
+        suya = next((a for a in carrera.actuaciones_en(partido) if a.jugador == carrera.usuario_id), None)
+        if suya and suya.goles >= 3 and estado.get("partidazo") != clave:
+            hitos.append({
+                "tipo": "partidazo",
+                "valor": f"{cantidad(suya.goles, 'gol', 'goles')} en el {marcador(carrera, partido)}",
+            })
+            estado["partidazo"] = clave
+    return hitos, estado

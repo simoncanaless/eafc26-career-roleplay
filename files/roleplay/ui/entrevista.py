@@ -702,6 +702,27 @@ class InterviewWindow(QWidget):
         self.partida_label.setText(f"No pude leer tu partida de FC 26 ({esc(mensaje)}). Captura la pantalla o escribi las stats.")
         self._refrescar_botones()
 
+    def ocupada(self) -> bool:
+        """Hay una entrevista a medio hacer (preguntas con respuestas sin
+        enviar, o algo en curso): no se le pisa con un partido nuevo."""
+        return bool(
+            self._generando or self._evaluando is not None or self._grabacion is not None
+            or self._transcribiendo is not None
+            or any(edit.toPlainText().strip() for edit in self._respuesta_edits)
+        )
+
+    def recibir_partido_nuevo(self, lectura, preparar_preguntas: bool) -> bool:
+        """Modo en vivo: el juego guardo un partido nuevo. Si la sala esta
+        libre, lo carga y (si se pide) genera las preguntas. Devuelve si lo
+        cargo."""
+        self._on_partida_leida(lectura)
+        if self.perfil is None or self.ocupada() or lectura.ultimo is None:
+            return False
+        self._on_cargar_partida_clicked()
+        if preparar_preguntas:
+            self._on_generar_entrevista_clicked()
+        return True
+
     def _on_cargar_partida_clicked(self):
         ultimo = self._lectura.ultimo
         self._cargar_stats_en_formulario(ultimo.stats)

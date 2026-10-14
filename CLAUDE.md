@@ -72,6 +72,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 | `roleplay/partida/lector.py` | `carrera_actual()`: el `CmPlr*` mas reciente (o el elegido en Ajustes) de `%LOCALAPPDATA%\EA SPORTS FC 26\settings`, con cache por fecha/tamano. Solo lee. `EAFC_FC26_GUARDADOS` cambia la carpeta |
 | `roleplay/servicios/partida_real.py` | Lo que la app hace con la partida: `ultimo_partido()` (stats del ultimo partido; asistencias/tarjetas/figura por diferencia con la lectura anterior, `estado_json.partida`), `contexto_temporada()` (para los prompts), `hechos_destacados()` (hat-trick > goleada > choque de punta, elegidos por codigo), `revisar_prensa_con_partida()`, `resumen_temporada()`, `leer_para_entrevista()` |
 | `roleplay/servicios/identificar.py` | La IA pone nombre a jugadores (por su ficha: club, posicion, seleccion, nacimiento) y copas (por sus equipos). Sin seguridad -> nombre vacio. Cache en la tabla `nombre_conocido` |
+| `roleplay/ui/vigilante.py` | **Modo en vivo**: `VigilantePartida` mira el guardado cada 5 s (sin abrirlo); si cambio y se asento, lo lee en un hilo. `partido_nuevo` si el club del usuario jugo un partido que no se aviso (`estado_json.partida.avisado`; la primera lectura solo marca). Ajustes `en_vivo.vigilar` / `en_vivo.preguntas_solas` |
 | `roleplay/ui/comun.py` | `ejecutar_en_hilo`, `esc` (escape HTML), `miles`, `fecha_corta`, `con_scroll` (pagina transparente) |
 | `roleplay/ui/estilos.py` | Tema oscuro estilo EA FC: colores (unico lugar), `fuente_titulo()`, QSS, paleta forzada |
 | `roleplay/ui/componentes.py` | `icono()` (SVG propios coloreados), `titulo_pagina`, `titulo_seccion`, `Tarjeta`, `Mosaico`, `chip`/`chip_tono`, `chip_alternable`, `fila` (None = estirable), `CartaJugador` (carta FUT pintada; nivel por reputacion: bronce <45, plata, oro >=70, elite >=85), `Avatar`, `FondoEstadio`, `agregar_noticia`, `limpiar_layout` |
@@ -88,6 +89,13 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 
 ## Convenciones (respetarlas)
 
+- **Modo en vivo**: ante un partido nuevo, `MainMenuWindow._on_partido_nuevo` avisa en la
+  bandeja de Windows (QSystemTrayIcon), marca "Entrevistas ●", la sala lo carga y genera
+  las preguntas si esta libre (`InterviewWindow.ocupada()`: nunca pisar una entrevista a
+  medias) y corre la prensa. `set_estado_partida` MEZCLA claves (no reemplaza).
+- **Hitos reales** (`detectar_hitos_reales`, en `estado_prensa.reales`): goles de la
+  temporada (se reinician por temporada, julio a junio), maximo goleador, partidazo,
+  liderato ganado/perdido, campeon. Se suman a los hitos del historial de entrevistas.
 - **La partida de FC 26 se LEE, nunca se escribe** (y no se toca el juego). Los numeros
   (resultados, goles, tablas, quien es noticia) los decide el codigo; la IA solo pone
   nombres que la partida no trae (con cache) y redacta. Un nombre dudoso va vacio y el
@@ -140,7 +148,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 
 ## Testing
 
-`.venv\Scripts\python.exe -m unittest discover -s tests` (101 pruebas, ~8 s). `tests/ayuda.py`:
+`.venv\Scripts\python.exe -m unittest discover -s tests` (110 pruebas, ~10 s). `tests/ayuda.py`:
 - Fija `EAFC_FC26_GUARDADOS` a una carpeta vacia: las pruebas no leen la partida real.
   `tests/fabrica_partida.py` arma un guardado FALSO con el mismo formato (para todo lo de
   `roleplay/partida`). `TestPartidaRealDelPC` lee la partida real si existe (solo lectura,
@@ -211,6 +219,7 @@ Siguiente (decidido con Simon el 2026-10-14):
   bordes" (en pantalla completa exclusiva ninguna ventana se puede dibujar encima sin
   engancharse al render del juego, que es justo lo que vigila el anticheat: no hacerlo).
   Se hace despues de que el resto este estable, reusando `componentes.py`.
+- **Modo en vivo: HECHO el 2026-10-14** (`ui/vigilante.py`, hitos reales en la prensa).
 - **Leer la partida guardada: HECHO el 2026-10-14** (`roleplay/partida/`). La sala de
   prensa carga sola el ultimo partido, el Resumen muestra la temporada real y sincroniza
   el club, la prensa escribe sobre hechos reales con nombres reconocidos. Formato y

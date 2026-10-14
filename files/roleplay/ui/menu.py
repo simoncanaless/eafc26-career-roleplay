@@ -5,7 +5,9 @@ de un scroll.
 """
 
 from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
+    QApplication,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -13,6 +15,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QPushButton,
     QStackedWidget,
+    QSystemTrayIcon,
     QVBoxLayout,
     QWidget,
 )
@@ -25,6 +28,7 @@ from roleplay.database import (
     load_match_interviews,
     load_noticias_prensa,
 )
+from roleplay import config
 from roleplay.servicios.partida_real import resumen_temporada
 from roleplay.servicios.prensa import calcular_estadisticas_acumuladas
 from roleplay.ui import estilos
@@ -51,6 +55,7 @@ from roleplay.ui.estilos import fuente_titulo
 from roleplay.ui.instagram import InstagramWindow
 from roleplay.ui.ajustes import DialogoAjustes, abrir_juego_o_preguntar
 from roleplay.ui.personaje import CharacterWizard
+from roleplay.ui.vigilante import VigilantePartida, preparar_entrevista_sola
 
 NOTICIAS_EN_RESUMEN = 5
 
@@ -389,9 +394,24 @@ class MainMenuWindow(QMainWindow):
         layout_principal.addWidget(fondo, 1)
         self.setCentralWidget(contenedor)
 
+        # ---- modo en vivo: avisos de partidos nuevos ----
+        self.bandeja = None
+        if QSystemTrayIcon.isSystemTrayAvailable():
+            self.bandeja = QSystemTrayIcon(QIcon(str(config.ICONO_APP)), self)
+            self.bandeja.setToolTip("EAFC 26 Roleplay")
+            self.bandeja.messageClicked.connect(self._abrir_sala_de_prensa)
+            self.bandeja.activated.connect(lambda _motivo: self._traer_al_frente())
+            self.bandeja.show()
+        self.vigilante = VigilantePartida(self)
+        self.vigilante.partido_nuevo.connect(self._on_partido_nuevo)
+        self.vigilante.partida_actualizada.connect(self._on_partida_actualizada)
+        self.vigilante.iniciar()
+
         self._ir_a(pagina_inicial)
 
     def _ir_a(self, indice: int):
+        if indice == self.PAGINA_ENTREVISTAS:
+            self._marcar_entrevistas(False)
         self.stack.setCurrentIndex(indice)
         for i, boton_nav in enumerate(self._botones_nav):
             boton_nav.setChecked(i == indice)
@@ -408,6 +428,38 @@ class MainMenuWindow(QMainWindow):
             f"<span style='color:{estilos.TEXTO}'><b>{esc(perfil.nombre_jugador)}</b></span><br>"
             f"{esc(perfil.club_actual or 'Sin club')} · REP {reputacion} · {nivel_carta(reputacion).nombre}"
         )
+
+    # ---- modo en vivo ----
+
+    def _marcar_entrevistas(self, pendiente: bool):
+        texto = self._paginas[self.PAGINA_ENTREVISTAS][0].upper()
+        self._botones_nav[self.PAGINA_ENTREVISTAS].setText(f"  {texto}" + ("   ●" if pendiente else ""))
+
+    def _traer_al_frente(self):
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def _abrir_sala_de_prensa(self):
+        self._traer_al_frente()
+        self._ir_a(self.PAGINA_ENTREVISTAS)
+
+    def _on_partido_nuevo(self, lectura):
+        sala = self.pagina_entrevistas
+        cargado = sala.recibir_partido_nuevo(lectura, preparar_entrevista_sola())
+        if sala.perfil is not None:
+            sala._iniciar_revision_prensa(manual=False)  # la prensa reacciona al partido
+        if self.stack.currentIndex() != self.PAGINA_ENTREVISTAS:
+            self._marcar_entrevistas(True)
+        mensaje = lectura.ultimo.resumen + (". Tu entrevista te espera." if cargado else ".")
+        if self.bandeja is not None:
+            self.bandeja.showMessage("Partido nuevo", mensaje, QSystemTrayIcon.MessageIcon.Information, 10000)
+        QApplication.alert(self)
+
+    def _on_partida_actualizada(self, _lectura):
+        if self.stack.currentIndex() == self.PAGINA_RESUMEN:
+            self.pagina_resumen.actualizar()
+        self._refrescar_jugador()
 
     def _abrir_ajustes(self):
         dialogo = DialogoAjustes(self)

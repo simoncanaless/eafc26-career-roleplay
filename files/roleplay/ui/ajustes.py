@@ -8,6 +8,7 @@ import os
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import (
+    QCheckBox,
     QDialog,
     QFileDialog,
     QLabel,
@@ -183,6 +184,23 @@ class DialogoAjustes(QDialog):
         partida.cuerpo.addLayout(fila(None, reciente, elegir_partida))
         layout.addWidget(partida)
 
+        en_vivo = Tarjeta("Modo en vivo")
+        en_vivo.cuerpo.addWidget(
+            texto_suave(
+                "Mientras juegas, la app mira tu partida: cuando el juego guarda un partido nuevo, "
+                "te avisa y actualiza la prensa."
+            )
+        )
+        actuales = ajustes.leer().get("en_vivo", {})
+        self.vigilar_check = QCheckBox("Avisarme cuando juegue un partido nuevo")
+        self.vigilar_check.setChecked(actuales.get("vigilar", True))
+        self.preguntas_check = QCheckBox("Dejar la entrevista lista (cargar el partido y generar las preguntas)")
+        self.preguntas_check.setChecked(actuales.get("preguntas_solas", True))
+        for casilla in (self.vigilar_check, self.preguntas_check):
+            casilla.toggled.connect(self._on_en_vivo)
+            en_vivo.cuerpo.addWidget(casilla)
+        layout.addWidget(en_vivo)
+
         iconos = Tarjeta("Iconos del escritorio")
         iconos.cuerpo.addWidget(
             texto_suave(
@@ -249,6 +267,13 @@ class DialogoAjustes(QDialog):
         except ValueError as exc:
             QMessageBox.warning(self, "No se pudo elegir", str(exc))
         self._refrescar()
+
+    def _on_en_vivo(self, *_):
+        ajustes.guardar(en_vivo={
+            "vigilar": self.vigilar_check.isChecked(),
+            "preguntas_solas": self.preguntas_check.isChecked(),
+        })
+        self.preguntas_check.setEnabled(self.vigilar_check.isChecked())
 
     def _on_elegir_partida(self):
         ruta, _ = QFileDialog.getOpenFileName(

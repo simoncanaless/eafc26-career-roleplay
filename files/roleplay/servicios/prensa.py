@@ -35,6 +35,13 @@ DESCRIPCIONES_HITOS = {
     "racha_sin_gol": "lleva {valor} partidos consecutivos sin convertir",
     "buen_momento": "promedia un rating de {valor} o mas en sus ultimos 5 partidos",
     "mal_momento": "su rating promedio de los ultimos 5 partidos cayo a {valor} o menos",
+    # hitos reales, de su partida de FC 26 (servicios/partida_real.py)
+    "goles_temporada": "ya lleva {valor} goles en la temporada (dato real de su partida)",
+    "lider_goleadores": "es el maximo goleador de la {valor}",
+    "partidazo": "hizo un partidazo: {valor}",
+    "lider_liga": "su equipo paso a liderar la {valor}",
+    "perdio_liderato": "su equipo perdio el liderato de la {valor}",
+    "campeon": "su equipo salio campeon de la {valor}",
 }
 
 
@@ -247,6 +254,7 @@ def revisar_prensa(
     incluir_general: bool = True,
     contexto_real: str = "",
     hechos_reales: Optional[list[str]] = None,
+    hitos_reales: Optional[list[dict]] = None,
 ) -> dict:
     """Busca hitos nuevos en el historial y, a veces, agrega una noticia
     general de ambiente.
@@ -254,6 +262,7 @@ def revisar_prensa(
     Con la partida de FC 26 (servicios/partida_real.py): `contexto_real` va
     a la noticia sobre el jugador, y si hay `hechos_reales` la noticia del
     mundo es sobre el primero (siempre), en vez de una inventada al azar.
+    `hitos_reales` (los de la partida) se suman a los del historial.
 
     Devuelve {"noticias": list[NoticiaPrensa] (sin guardar),
               "hitos": list[dict],
@@ -264,6 +273,7 @@ def revisar_prensa(
     """
     stats = calcular_estadisticas_acumuladas(historial)
     hitos, nuevo_estado = detectar_nuevos_hitos(stats, estado_prensa)
+    hitos = hitos + list(hitos_reales or [])
     noticias: list[NoticiaPrensa] = []
 
     if hitos:

@@ -397,6 +397,8 @@ def get_estado_partida(player_id: int) -> dict:
     return leido[0].get("partida", {}) if leido else {}
 
 
-def set_estado_partida(player_id: int, estado_partida: dict) -> None:
+def set_estado_partida(player_id: int, cambios: dict) -> None:
+    """Mezcla `cambios` con lo guardado (no lo reemplaza: la sala de prensa
+    guarda los totales y el vigilante el ultimo partido avisado)."""
     with _editar_estado(player_id) as (estado, _):
-        estado["partida"] = estado_partida
+        estado["partida"] = {**estado.get("partida", {}), **cambios}
