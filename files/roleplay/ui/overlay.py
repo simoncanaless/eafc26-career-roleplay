@@ -38,6 +38,7 @@ class SalaFlotante(QWidget):
         self.setFixedWidth(ANCHO)
         self.sala = sala
         self._preguntas_mostradas: tuple = ()
+        self._textos: list[QLabel] = []
         self._edits: list[QPlainTextEdit] = []
         self._voces: list[QPushButton] = []
         self._copiando = False  # evita el eco al copiar texto entre la sala y el panel
@@ -140,7 +141,7 @@ class SalaFlotante(QWidget):
 
     def _armar_preguntas(self):
         limpiar_layout(self.preguntas_layout)
-        self._edits, self._voces = [], []
+        self._textos, self._edits, self._voces = [], [], []
         for numero, pregunta in enumerate(self.sala._preguntas):
             texto = QLabel(f"<span style='color:{estilos.ACENTO}'><b>P{numero + 1}</b></span>&nbsp; {esc(pregunta)}")
             texto.setTextFormat(Qt.TextFormat.RichText)
@@ -159,6 +160,7 @@ class SalaFlotante(QWidget):
             voz.clicked.connect(lambda _=False, n=numero: self.sala._on_voz_clicked(n))
             bloque.addLayout(fila(edit, voz, espaciado=8))
             self.preguntas_layout.addLayout(bloque)
+            self._textos.append(texto)
             self._edits.append(edit)
             self._voces.append(voz)
         self._preguntas_mostradas = tuple(self.sala._preguntas)

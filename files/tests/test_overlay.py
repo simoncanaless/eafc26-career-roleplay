@@ -33,7 +33,7 @@ class TestSalaFlotante(ayuda.PruebaDeInterfaz):
         self._con_preguntas()
         self.assertEqual(len(self.flotante._edits), 2)
         self.assertTrue(self.flotante.enviar_btn.isVisibleTo(self.flotante))
-        texto_pregunta = self.flotante.preguntas_layout.itemAt(0).widget().text()
+        texto_pregunta = self.flotante._textos[0].text()
         self.assertIn("P1 &lt;difícil&gt;?", texto_pregunta)  # escapado
 
         self.flotante._edits[0].setPlainText("desde el panel")
