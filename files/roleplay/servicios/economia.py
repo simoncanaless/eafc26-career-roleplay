@@ -8,16 +8,22 @@ gana, si la reputacion sube o baja (una donacion suma; presumir un jet en
 plena mala racha resta, y mas si el personaje es humilde), y si es noticia.
 La IA solo redacta la noticia y los comentarios de los hinchas.
 
+Los autos se piden en el concesionario (servicios/autos.py, marcas reales):
+se pagan al pedir y llegan dias despues en el juego; lo que provocan
+(seguidores, reputacion, noticia) pasa cuando llegan y se muestran.
+
 El dinero vive en estado_json.economia:
 {"saldo", "hasta" (dia del juego hasta donde se cobro), "sueldo",
- "posesiones": [{"id", "articulo", "precio", "desde"}],
+ "posesiones": [{"id", "articulo", "precio", "desde", ("config")}],
+ "pedidos": [{"id", "modelo", "config", "precio", "pedido", "entrega"}],
  "movimientos": [{"fecha", "concepto", "monto"}]}  (el mas nuevo primero)
+Un auto en posesiones tiene articulo "auto:<modelo>".
 """
 
 import copy
 import uuid
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from typing import Optional
 
 from pydantic import BaseModel
@@ -25,6 +31,7 @@ from pydantic import BaseModel
 from roleplay.gemini import generar_json
 from roleplay.models import ActividadInstagram, NoticiaPrensa, PlayerProfile
 from roleplay.partida.carrera import Carrera
+from roleplay.servicios import autos
 from roleplay.servicios.contexto import ficha_jugador
 
 NETO = 0.55  # lo que queda del sueldo despues de impuestos y la comision del agente
@@ -41,6 +48,7 @@ class Articulo:
     precio: int
     mantenimiento: int = 0  # por semana
     ostentoso: bool = False
+    detalle: str = ""  # como esta configurado (los autos del concesionario)
 
     @property
     def es_donacion(self) -> bool:
@@ -62,9 +70,6 @@ CATALOGO = [
     Articulo("casa_jardin", "casa", "Casa con jardin en las afueras", 2_500_000, 4_000),
     Articulo("mansion", "casa", "Mansion con pileta y cine", 9_000_000, 15_000, ostentoso=True),
     Articulo("villa_mar", "casa", "Villa frente al mar", 22_000_000, 30_000, ostentoso=True),
-    Articulo("auto_aleman", "auto", "Deportivo aleman", 180_000, 1_000),
-    Articulo("superdeportivo", "auto", "Superdeportivo italiano", 450_000, 2_500, ostentoso=True),
-    Articulo("hiperdeportivo", "auto", "Hiperdeportivo de edicion limitada", 2_800_000, 8_000, ostentoso=True),
     Articulo("reloj_suizo", "reloj", "Reloj suizo", 60_000),
     Articulo("cadena", "reloj", "Cadena de oro y diamantes", 250_000, ostentoso=True),
     Articulo("reloj_diamantes", "reloj", "Reloj de alta relojeria con diamantes", 900_000, ostentoso=True),
@@ -77,7 +82,14 @@ CATALOGO = [
     Articulo("escuela", "donacion", "Financiar una escuela de futbol en tu barrio de origen", 1_500_000),
     Articulo("fundacion", "donacion", "Crear tu propia fundacion", 5_000_000),
 ]
-POR_ID = {a.id: a for a in CATALOGO}
+# los autos genericos de la primera version: ya no se venden (ahora esta el
+# concesionario), pero si alguien los compro siguen en su garage
+ANTERIORES = [
+    Articulo("auto_aleman", "auto", "Deportivo aleman", 180_000, 1_000),
+    Articulo("superdeportivo", "auto", "Superdeportivo italiano", 450_000, 2_500, ostentoso=True),
+    Articulo("hiperdeportivo", "auto", "Hiperdeportivo de edicion limitada", 2_800_000, 8_000, ostentoso=True),
+]
+POR_ID = {a.id: a for a in CATALOGO + ANTERIORES}
 
 # moneda segun la liga del club (id de liga + 1, como en la base de EA)
 LIGAS_EN_LIBRAS = {13, 14, 50, 60, 61}  # Premier, Championship, Escocia, League One y Two
@@ -145,8 +157,22 @@ def acreditar(economia: Optional[dict], hoy: date, sueldo: int) -> dict:
     return e
 
 
+def articulo_de_posesion(posesion: dict) -> Optional[Articulo]:
+    """El articulo de algo que tiene: del catalogo, o un auto configurado."""
+    if posesion["articulo"].startswith("auto:"):
+        modelo = autos.POR_ID.get(posesion["articulo"][5:])
+        if modelo is None:
+            return None
+        config = autos.Configuracion.desde_dict(posesion.get("config", {"modelo": modelo.id}))
+        return Articulo(
+            posesion["articulo"], "auto", modelo.nombre_completo, posesion["precio"],
+            autos.mantenimiento(posesion["precio"]), posesion["precio"] >= autos.OSTENTOSO_DESDE, autos.describir(config),
+        )
+    return POR_ID.get(posesion["articulo"])
+
+
 def mantenimiento_semanal(economia: dict) -> int:
-    return sum(POR_ID[p["articulo"]].mantenimiento for p in economia.get("posesiones", []) if p["articulo"] in POR_ID)
+    return sum(a.mantenimiento for p in economia.get("posesiones", []) if (a := articulo_de_posesion(p)))
 
 
 def patrimonio(economia: dict) -> int:
@@ -186,9 +212,45 @@ def vender(economia: dict, posesion_id: str, hoy: date) -> tuple[dict, int]:
     e["posesiones"].remove(posesion)
     recuperado = round(posesion["precio"] * VENTA)
     e["saldo"] += recuperado
-    articulo = POR_ID.get(posesion["articulo"])
+    articulo = articulo_de_posesion(posesion)
     _movimiento(e, hoy, f"Venta: {articulo.nombre if articulo else posesion['articulo']}", recuperado)
     return e, recuperado
+
+
+# ---- el concesionario: pedir y recibir ----
+
+
+def pedir_auto(economia: dict, config: autos.Configuracion, hoy: date) -> dict:
+    total = autos.precio(config)
+    if economia.get("saldo", 0) < total:
+        raise SinPlata(f"No te alcanza: cuesta {total:,} y tenes {economia.get('saldo', 0):,}".replace(",", "."))
+    modelo = autos.POR_ID[config.modelo]
+    e = copy.deepcopy(economia)
+    e["saldo"] -= total
+    e.setdefault("pedidos", []).append({
+        "id": uuid.uuid4().hex[:8], "modelo": modelo.id, "config": config.a_dict(), "precio": total,
+        "pedido": hoy.isoformat(), "entrega": (hoy + timedelta(days=modelo.dias_entrega)).isoformat(),
+    })
+    _movimiento(e, hoy, f"Pedido: {modelo.nombre_completo}", -total)
+    return e
+
+
+def entregar_pedidos(economia: dict, hoy: date) -> tuple[dict, list[dict]]:
+    """Los pedidos cuya fecha de entrega ya paso en el juego pasan al
+    garage. Devuelve (economia, posesiones nuevas)."""
+    listos = [p for p in economia.get("pedidos", []) if p["entrega"] <= hoy.isoformat()]
+    if not listos:
+        return economia, []
+    e = copy.deepcopy(economia)
+    entregados = []
+    for pedido in listos:
+        e["pedidos"] = [p for p in e["pedidos"] if p["id"] != pedido["id"]]
+        posesion = {"id": pedido["id"], "articulo": f"auto:{pedido['modelo']}", "precio": pedido["precio"],
+                    "desde": hoy.isoformat(), "config": pedido["config"]}
+        e.setdefault("posesiones", []).append(posesion)
+        entregados.append(posesion)
+        _movimiento(e, hoy, f"Te llego: {autos.POR_ID[pedido['modelo']].nombre_completo}", 0)
+    return e, entregados
 
 
 # ---- lo que provoca ----
@@ -262,6 +324,8 @@ def _descripcion(perfil: PlayerProfile, articulo: Articulo, efecto_: Efecto, mon
     precio = dinero(articulo.precio, moneda)
     if articulo.es_donacion:  # los nombres de las donaciones ya son una accion: "Donar a ..."
         texto = f"{perfil.nombre_jugador} decidio {articulo.nombre[0].lower()}{articulo.nombre[1:]} ({precio})"
+    elif articulo.id.startswith("auto:"):
+        texto = f"{perfil.nombre_jugador} recibio su nuevo {articulo.nombre} ({articulo.detalle}; {precio})"
     else:
         texto = f"{perfil.nombre_jugador} se compro: {articulo.nombre} ({precio})"
     return texto + (f"; {efecto_.motivo}" if efecto_.motivo else "")
@@ -288,8 +352,9 @@ roleplay de EAFC 26:
 {descripcion}.
 {ficha_jugador(perfil)}
 {contexto_real}
-El tono de la noticia es {efecto_.tono} (respetalo). Sin marcas ni nombres
-de personas reales. No inventes resultados ni datos que no esten arriba.
+El tono de la noticia es {efecto_.tono} (respetalo). Podes nombrar la marca
+del auto si la hay, pero no nombres de personas reales. No inventes
+resultados ni datos que no esten arriba.
 """.strip(),
                 NoticiaCompra,
                 "No se pudo escribir la noticia esta vez.",
@@ -303,9 +368,8 @@ de personas reales. No inventes resultados ni datos que no esten arriba.
             hitos=[f"{'donacion' if articulo.es_donacion else 'compra'}:{articulo.id}"],
         )
 
-    evento = EventoHinchada(
-        "donacion" if articulo.es_donacion else "compra", fecha_juego, articulo.nombre, descripcion, efecto_.seguidores
-    )
+    tipo = "donacion" if articulo.es_donacion else "entrega" if articulo.id.startswith("auto:") else "compra"
+    evento = EventoHinchada(tipo, fecha_juego, articulo.nombre, descripcion, efecto_.seguidores)
     try:
         comentarios = comentar_eventos(perfil, [evento], contexto_real).get(0, [])
     except RuntimeError:

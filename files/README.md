@@ -72,6 +72,12 @@ toca) y todo se vuelve real:
   (vos incluido), tus resultados y lo que viene, y la ultima fecha. Una pestana por cada
   competicion que juega tu club (liga, Champions, copas).
 
+**Concesionario**: en VIDA > Autos estan los modelos de Ferrari, Porsche, Lamborghini, McLaren,
+Mercedes-AMG, Rolls-Royce, Bentley, Aston Martin, Range Rover y Bugatti. Los configuras (color y
+acabado, llantas, pinzas, franjas, interior, fibra de carbono, escape y patente personalizada)
+con una vista previa, lo pedis y llega unos dias despues en el juego: ahi lo ven la prensa y
+tus hinchas.
+
 **Vida**: tu sueldo es el de tu contrato real en la partida (lo cobras a medida que pasan las
 semanas del juego). Con eso compras casas, autos, relojes, ropa, un yate o un jet, o donas a
 un hospital, una escuela de futbol o tu propia fundacion. Lo que hagas mueve tus seguidores

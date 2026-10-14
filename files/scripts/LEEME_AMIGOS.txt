@@ -42,7 +42,8 @@ JUGAR
   Jugador: "Capturar pantalla" en la pantalla de estadisticas, o escribi los
   numeros a mano.
 - En VIDA cobras tu sueldo real y te compras lo que quieras (o donas):
-  la prensa y tus hinchas reaccionan.
+  la prensa y tus hinchas reaccionan. En Autos configuras y pedis tu auto
+  (Ferrari, Porsche, Lamborghini...) y llega unos dias despues en el juego.
 - Deja el AUTOGUARDADO de FC 26 activado: con cada guardado la prensa y tu
   Instagram se mueven solos (tambien al simular dias sin jugar).
 - Antes de un partido: en la Sala de prensa, "Previa del proximo" para la

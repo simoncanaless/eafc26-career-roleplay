@@ -79,6 +79,8 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 | `roleplay/ui/estilos.py` | Tema oscuro estilo EA FC: colores (unico lugar), `fuente_titulo()`, QSS, paleta forzada |
 | `roleplay/ui/componentes.py` | `icono()` (SVG propios coloreados), `titulo_pagina`, `titulo_seccion`, `Tarjeta`, `Mosaico`, `chip`/`chip_tono`, `chip_alternable`, `fila` (None = estirable), `CartaJugador` (carta FUT pintada; nivel por reputacion: bronce <45, plata, oro >=70, elite >=85), `Avatar`, `FondoEstadio`, `agregar_noticia`, `limpiar_layout` |
 | `roleplay/servicios/economia.py` | Vida y patrimonio: el sueldo real (`Carrera.sueldo_usuario`, campo `cmGX` de `mPrV`) se acredita con los dias del juego (`acreditar()`, neto 55%; la primera vez, lo cobrado desde el 1 de julio), catalogo sin marcas (casas, autos, relojes, moda, yate, jet) y donaciones; `efecto()` decide seguidores, reputacion, si es noticia y el tono (donar suma; presumir en mala racha resta, mas si es humilde/reservado); `repercusion()` (hilo) escribe la noticia y los comentarios, con respaldo sin IA. Todo en `estado_json.economia` |
+| `roleplay/servicios/autos.py` | El concesionario: modelos de marcas REALES (solo el nombre como texto; decision de Simon: la app es entre amigos; nunca logos ni modelos 3D de las marcas), precio base aproximado, opciones con recargo (`precio()`), `describir()` y `Configuracion` (se guarda como dict en el pedido) |
+| `roleplay/ui/configurador.py` | `Configurador` (QDialog) y `svg_auto(config)`: siluetas propias por carroceria (deportivo, gt, suv) pintadas con la configuracion. **QtSvg no soporta clip-path**: franjas y fibra van como cortes del degradado de la pintura (`_pintura`), y los parantes solo dentro de la ventana. `VistaAuto` dibuja el SVG |
 | `roleplay/ui/vida.py` | `PaginaVida`: saldo, sueldo neto, gastos fijos, patrimonio; tienda por categoria, lo que tenes (vender al 70%), filantropia y movimientos. `acreditar_con(carrera)` la llama el menu en cada autoguardado. Los botones se identifican por la propiedad `articulo` (el objectName es el del estilo) |
 | `roleplay/servicios/metas.py` | Metas de temporada que se propone el usuario (`estado_json.metas`: goles, goles en liga, asistencias, top N de la liga). `evaluar_metas()` las decide con la partida (contables apenas se llega; el puesto al terminar la liga; las de una temporada pasada fallan) y `texto_para_prompt()` las pone en el contexto de entrevistas y prensa. La prensa devuelve `resultado["metas"]` y la sala lo guarda con `database.actualizar_metas` (que no revive una meta borrada) |
 | `roleplay/servicios/mercado.py` | Fichajes reales: `clubes_de_jugadores(carrera)` (hombres, club de hoy) contra la foto anterior de la misma partida (tabla `club_visto`, `database.get/guardar_clubes_vistos`) -> `detectar_traspasos()` (noticia: tu club, media >= 82, o tu liga con media >= 75), `traspaso_del_usuario()` (hito `nuevo_club`). La foto se guarda recien despues de que la IA redacto: si falla, se detectan de nuevo |
@@ -167,7 +169,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 
 ## Testing
 
-`.venv\Scripts\python.exe -m unittest discover -s tests` (220 pruebas, ~15 s). `tests/ayuda.py`:
+`.venv\Scripts\python.exe -m unittest discover -s tests` (231 pruebas, ~15 s). `tests/ayuda.py`:
 - Fija `EAFC_FC26_GUARDADOS` a una carpeta vacia: las pruebas no leen la partida real.
   `tests/fabrica_partida.py` arma un guardado FALSO con el mismo formato (para todo lo de
   `roleplay/partida`). `TestPartidaRealDelPC` lee la partida real si existe (solo lectura,
@@ -241,6 +243,10 @@ Siguiente (decidido con Simon el 2026-10-14):
   Falta probarlo encima del juego real (requiere FC 26 en "ventana sin bordes").
 - **Instagram con contexto real + "Sugerir post": HECHO el 2026-10-14**.
 - **Pagina Temporada (tabla, goleadores, tus partidos, ultima fecha): HECHO el 2026-10-14**.
+- **Concesionario con configurador (marcas reales en texto): HECHO el 2026-10-14**. Se paga al pedir;
+  `economia.entregar_pedidos()` lo entrega cuando la fecha del juego llega (lo llama `PaginaVida.acreditar_con` en
+  cada autoguardado) y RECIEN AHI se aplica el efecto y sale la noticia (tipo de actividad "entrega"); el menu avisa
+  en la bandeja. Los autos genericos viejos quedan en `economia.ANTERIORES` (solo para garages ya existentes).
 - **Vida y patrimonio (economia + filantropia): HECHO el 2026-10-14** (`servicios/economia.py`, `ui/vida.py`).
   Sueldo real verificado: `cmGX` correlaciona 0,89 con la media en los contratos del plantel (`DvsP`).
 - **Prensa en cada autoguardado e Instagram que se mueve solo: HECHO el 2026-10-14** (`dia_nuevo`,

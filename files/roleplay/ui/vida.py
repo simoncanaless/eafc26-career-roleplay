@@ -6,10 +6,14 @@ casas, autos, relojes, moda, un yate, un jet, o donaciones.
 Cada compra mueve seguidores y reputacion (lo decide servicios/economia.py)
 al instante; despues, en un hilo, la prensa escribe la noticia (si es
 noticia) y los hinchas la comentan en Instagram.
+
+Los autos van por el concesionario (marcas reales, servicios/autos.py): se
+configuran (ui/configurador.py), se pagan al pedir y llegan dias despues en
+el juego; lo que provocan pasa cuando llegan (acreditar_con los entrega).
 """
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QButtonGroup, QHBoxLayout, QLabel, QMessageBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QButtonGroup, QDialog, QHBoxLayout, QLabel, QMessageBox, QVBoxLayout, QWidget
 
 from roleplay.database import (
     get_economia,
@@ -21,17 +25,19 @@ from roleplay.database import (
     set_economia,
     sumar_reputacion_y_seguidores,
 )
-from roleplay.servicios import economia
+from roleplay.servicios import autos, economia
 from roleplay.servicios.economia import CATALOGO, CATEGORIAS, POR_ID, dinero
 from roleplay.servicios.partida_real import contexto_temporada
 from roleplay.ui import estilos
 from roleplay.ui.comun import ejecutar_en_hilo, esc
+from roleplay.ui.configurador import Configurador, VistaAuto
 from roleplay.ui.componentes import (
     Mosaico,
     Tarjeta,
     boton,
     chip,
     chip_alternable,
+    etiqueta_campo,
     fila,
     limpiar_layout,
     subtitulo,
@@ -48,6 +54,7 @@ def _con_signo(numero: int) -> str:
 
 class PaginaVida(QWidget):
     compra_hecha = Signal()  # la reputacion cambio: el menu refresca la barra lateral
+    auto_entregado = Signal(str)  # llego un auto pedido: el menu avisa en la bandeja
 
     def __init__(self):
         super().__init__()
@@ -119,6 +126,13 @@ class PaginaVida(QWidget):
         tienda.cuerpo.addLayout(self.tienda_layout)
         contenido.addWidget(tienda)
 
+        self.pedidos = Tarjeta("En camino")
+        self.pedidos_layout = QVBoxLayout()
+        self.pedidos_layout.setSpacing(8)
+        self.pedidos.cuerpo.addLayout(self.pedidos_layout)
+        self.pedidos.hide()
+        contenido.addWidget(self.pedidos)
+
         self.posesiones = Tarjeta("Lo que tenes")
         self.posesiones_layout = QVBoxLayout()
         self.posesiones_layout.setSpacing(8)
@@ -165,8 +179,16 @@ class PaginaVida(QWidget):
         self.perfil = load_latest_profile()
         self._carrera = carrera
         hoy = carrera.fecha_actual() if carrera is not None else None
+        entregados = []
         if self.perfil is not None and hoy is not None and carrera.sueldo_usuario:
-            set_economia(self.perfil.id, economia.acreditar(get_economia(self.perfil.id), hoy, carrera.sueldo_usuario))
+            e = economia.acreditar(get_economia(self.perfil.id), hoy, carrera.sueldo_usuario)
+            e, entregados = economia.entregar_pedidos(e, hoy)
+            set_economia(self.perfil.id, e)
+        for posesion in entregados:  # se luce cuando llega: ahi es noticia
+            articulo = economia.articulo_de_posesion(posesion)
+            if articulo is not None:
+                self._aplicar_y_repercutir(self.perfil, carrera, articulo, "Te llego tu")
+                self.auto_entregado.emit(articulo.nombre)
         self._mostrar()
 
     # ---- dibujo ----
@@ -200,6 +222,7 @@ class PaginaVida(QWidget):
         self.mosaico_gastos.poner(dinero(economia.mantenimiento_semanal(e), moneda))
         self.mosaico_patrimonio.poner(dinero(economia.patrimonio(e), moneda))
         self._mostrar_tienda(e)
+        self._mostrar_pedidos(e)
         self._mostrar_posesiones(e)
         self._mostrar_donaciones(e)
         self._mostrar_movimientos(e)
@@ -227,9 +250,54 @@ class PaginaVida(QWidget):
 
     def _mostrar_tienda(self, e: dict):
         limpiar_layout(self.tienda_layout)
+        if self._categoria == "auto":
+            self._mostrar_concesionario()
+            return
         for articulo in CATALOGO:
             if articulo.categoria == self._categoria:
                 self.tienda_layout.addLayout(self._linea_articulo(articulo, e, "Comprar"))
+
+    def _mostrar_concesionario(self):
+        moneda = self._moneda()
+        self.tienda_layout.addWidget(texto_suave(
+            "Elegi el modelo y configuralo a tu gusto. Se paga al pedir y llega dias despues en el juego."
+        ))
+        for marca in autos.MARCAS:
+            self.tienda_layout.addSpacing(4)
+            self.tienda_layout.addWidget(etiqueta_campo(marca))
+            for modelo in (m for m in autos.MODELOS if m.marca == marca):
+                textos = QLabel(
+                    f"<b>{esc(modelo.nombre_completo)}</b><br><span style='color:{estilos.TEXTO_SUAVE}'>desde "
+                    f"{dinero(modelo.precio, moneda)} · llega {modelo.dias_entrega} dias despues de pedirlo</span>"
+                )
+                configurar = boton("Configurar", primario=True)
+                configurar.setProperty("modelo", modelo.id)
+                configurar.clicked.connect(lambda _=False, i=modelo.id: self._on_configurar(i))
+                self.tienda_layout.addLayout(fila(textos, None, configurar))
+
+    def _mostrar_pedidos(self, e: dict):
+        limpiar_layout(self.pedidos_layout)
+        moneda = self._moneda()
+        hoy = e.get("hasta", "")
+        for pedido in e.get("pedidos", []):
+            config = autos.Configuracion.desde_dict(pedido["config"])
+            vista = VistaAuto(config, alto=56)
+            vista.setFixedWidth(132)
+            entrega = pedido["entrega"]
+            faltan = ""
+            if hoy:
+                from datetime import date
+
+                dias = (date.fromisoformat(entrega) - date.fromisoformat(hoy)).days
+                faltan = f" (faltan {dias} dias del juego)" if dias > 0 else " (llega con el proximo guardado)"
+            texto = QLabel(
+                f"<b>{esc(autos.POR_ID[pedido['modelo']].nombre_completo)}</b> · {dinero(pedido['precio'], moneda)}"
+                f"<br><span style='color:{estilos.TEXTO_SUAVE}'>{esc(autos.describir(config))}<br>"
+                f"Llega el {entrega[8:10]}/{entrega[5:7]}/{entrega[:4]}{faltan}</span>"
+            )
+            texto.setWordWrap(True)
+            self.pedidos_layout.addLayout(fila(vista, texto, None))
+        self.pedidos.setVisible(bool(e.get("pedidos")))
 
     def _mostrar_donaciones(self, e: dict):
         limpiar_layout(self.donaciones_layout)
@@ -242,14 +310,21 @@ class PaginaVida(QWidget):
         moneda = self._moneda()
         posesiones = e.get("posesiones", [])
         for posesion in posesiones:
-            articulo = POR_ID.get(posesion["articulo"])
+            articulo = economia.articulo_de_posesion(posesion)
             nombre = articulo.nombre if articulo else posesion["articulo"]
             vender_btn = boton(f"Vender por {dinero(posesion['precio'] * economia.VENTA, moneda)}")
             vender_btn.clicked.connect(lambda _=False, i=posesion["id"]: self._on_vender(i))
             desde = posesion.get("desde", "")
-            texto = QLabel(f"<b>{esc(nombre)}</b><br><span style='color:{estilos.TEXTO_SUAVE}'>desde el "
+            detalle = f"{esc(articulo.detalle)}<br>" if articulo is not None and articulo.detalle else ""
+            texto = QLabel(f"<b>{esc(nombre)}</b><br><span style='color:{estilos.TEXTO_SUAVE}'>{detalle}desde el "
                            f"{desde[8:10]}/{desde[5:7]}/{desde[:4]}</span>")
-            self.posesiones_layout.addLayout(fila(texto, None, vender_btn))
+            texto.setWordWrap(True)
+            partes = [texto, None, vender_btn]
+            if posesion.get("config"):  # los autos del concesionario, con su dibujo
+                vista = VistaAuto(autos.Configuracion.desde_dict(posesion["config"]), alto=56)
+                vista.setFixedWidth(132)
+                partes.insert(0, vista)
+            self.posesiones_layout.addLayout(fila(*partes))
         if not posesiones:
             self.posesiones_layout.addWidget(texto_suave("Todavia no te compraste nada."))
 
@@ -280,18 +355,25 @@ class PaginaVida(QWidget):
             QMessageBox.information(self, "No te alcanza", str(exc))
             return
         set_economia(perfil.id, nueva)
-        efecto = economia.efecto(
-            articulo, perfil, get_seguidores(perfil.id), get_reputacion_actual(perfil.id), nueva["sueldo"],
-            economia.mala_racha(carrera),
-        )
-        tipo = "Donacion" if articulo.es_donacion else "Compra"
-        sumar_reputacion_y_seguidores(perfil.id, efecto.reputacion, efecto.seguidores, motivo=f"{tipo}: {articulo.nombre}")
+        self._aplicar_y_repercutir(perfil, carrera, articulo, "Donaste" if articulo.es_donacion else "Compraste")
+        self._mostrar()
 
-        partes = [f"<b>{'Donaste' if articulo.es_donacion else 'Compraste'}: {esc(articulo.nombre)}</b>",
-                  f"{_con_signo(efecto.seguidores)} seguidores"]
+    def _aplicar_y_repercutir(self, perfil, carrera, articulo, accion: str):
+        """Aplica lo que provoca (seguidores, reputacion), lo muestra y lanza
+        en un hilo la noticia y los comentarios de los hinchas."""
+        hoy = carrera.fecha_actual()
+        efecto = economia.efecto(
+            articulo, perfil, get_seguidores(perfil.id), get_reputacion_actual(perfil.id),
+            get_economia(perfil.id).get("sueldo", 0), economia.mala_racha(carrera),
+        )
+        sumar_reputacion_y_seguidores(perfil.id, efecto.reputacion, efecto.seguidores, motivo=f"{accion}: {articulo.nombre}")
+
+        partes = [f"<b>{accion}: {esc(articulo.nombre)}</b>", f"{_con_signo(efecto.seguidores)} seguidores"]
         if efecto.reputacion:
             partes.append(f"reputacion {_con_signo(efecto.reputacion)}")
         texto = " · ".join(partes)
+        if articulo.detalle:
+            texto += f"<br><span style='color:{estilos.TEXTO_SUAVE}'>{esc(autos.primera_mayuscula(articulo.detalle))}.</span>"
         if efecto.motivo:
             texto += f"<br><span style='color:{estilos.TEXTO_SUAVE}'>{esc(efecto.motivo[0].upper() + efecto.motivo[1:])}.</span>"
         texto += f"<br><span style='color:{estilos.TEXTO_SUAVE}'>Los hinchas estan comentando"
@@ -299,12 +381,44 @@ class PaginaVida(QWidget):
         self.resultado_label.setText(texto)
         self.resultado.show()
         self._ultima_compra = articulo.nombre
-        self._mostrar()
         self.compra_hecha.emit()
         ejecutar_en_hilo(
             economia.repercusion, perfil, articulo, efecto, self._moneda(), hoy.isoformat(), contexto_temporada(carrera),
             al_completar=self._on_repercusion, al_fallar=self._on_repercusion_error,
         )
+
+    # ---- el concesionario ----
+
+    def _on_configurar(self, modelo_id: str):
+        if self.perfil is None:
+            return
+        dialogo = Configurador(autos.POR_ID[modelo_id], get_economia(self.perfil.id).get("saldo", 0), self._moneda(), self)
+        if dialogo.exec() == QDialog.DialogCode.Accepted:
+            self.pedir(dialogo.configuracion())
+        dialogo.deleteLater()
+
+    def pedir(self, config: autos.Configuracion):
+        perfil, carrera = self.perfil, self._carrera
+        if perfil is None or carrera is None or carrera.fecha_actual() is None:
+            return
+        try:
+            nueva = economia.pedir_auto(get_economia(perfil.id), config, carrera.fecha_actual())
+        except economia.SinPlata as exc:
+            QMessageBox.information(self, "No te alcanza", str(exc))
+            return
+        set_economia(perfil.id, nueva)
+        pedido = nueva["pedidos"][-1]
+        modelo = autos.POR_ID[config.modelo]
+        entrega = pedido["entrega"]
+        self._ultima_compra = None
+        self.resultado_label.setText(
+            f"<b>Pediste tu {esc(modelo.nombre_completo)}</b> · {dinero(pedido['precio'], self._moneda())}"
+            f"<br><span style='color:{estilos.TEXTO_SUAVE}'>{esc(autos.primera_mayuscula(autos.describir(config)))}.<br>"
+            f"Llega el {entrega[8:10]}/{entrega[5:7]}/{entrega[:4]} ({modelo.dias_entrega} dias del juego). "
+            "Cuando llegue, la prensa y tus hinchas lo van a ver.</span>"
+        )
+        self.resultado.show()
+        self._mostrar()
 
     def _on_repercusion(self, resultado):
         noticia, actividad = resultado

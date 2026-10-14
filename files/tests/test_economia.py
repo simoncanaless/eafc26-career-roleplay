@@ -198,18 +198,18 @@ class TestPaginaVida(ayuda.PruebaDeInterfaz):
     def test_comprar_mueve_seguidores_y_deja_la_repercusion(self):
         seguidores = database.get_seguidores(self.pid)
         saldo = database.get_economia(self.pid)["saldo"]
-        self.pagina._elegir_categoria("auto")
-        self._boton(self.pagina.tienda_layout, "comprar_superdeportivo").click()
+        self.pagina._elegir_categoria("moda")
+        self._boton(self.pagina.tienda_layout, "comprar_coleccion_moda").click()
         ayuda.esperar_tareas()
         e = database.get_economia(self.pid)
-        self.assertEqual(e["saldo"], saldo - 450_000)
+        self.assertEqual(e["saldo"], saldo - 400_000)
         self.assertGreater(database.get_seguidores(self.pid), seguidores)
         self.assertEqual(database.get_reputacion_actual(self.pid), 50 - 1)  # humilde y ostentoso
         self.assertEqual([a.tipo for a in database.load_actividad_instagram(self.pid)], ["compra"])
         self.assertEqual(database.load_noticias_prensa(self.pid)[0].titular, "T")
-        self.assertIn("Compraste: Superdeportivo italiano", self.pagina.resultado_label.text())
-        self.assertFalse(self._boton(self.pagina.tienda_layout, "comprar_superdeportivo").isEnabled())  # ya lo tiene
-        self.assertTrue(self.pagina._botones_categoria["auto"].isChecked())
+        self.assertIn("Compraste: Coleccion de alta costura", self.pagina.resultado_label.text())
+        self.assertFalse(self._boton(self.pagina.tienda_layout, "comprar_coleccion_moda").isEnabled())  # ya lo tiene
+        self.assertTrue(self.pagina._botones_categoria["moda"].isChecked())
         self.assertIn("En la prensa:", self.pagina.resultado_label.text())
 
     def test_la_noticia_de_una_compra_anterior_no_pisa_la_tarjeta(self):

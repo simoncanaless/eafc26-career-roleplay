@@ -491,6 +491,7 @@ class MainMenuWindow(QMainWindow):
         self.pagina_instagram = InstagramWindow()
         self.pagina_vida = PaginaVida()
         self.pagina_vida.compra_hecha.connect(self._refrescar_jugador)
+        self.pagina_vida.auto_entregado.connect(self._on_auto_entregado)
         self._paginas = [
             ("Resumen", "inicio", self.pagina_resumen),
             ("Temporada", "trofeo", self.pagina_temporada),
@@ -651,6 +652,13 @@ class MainMenuWindow(QMainWindow):
         if sala.perfil is not None:
             sala._iniciar_revision_prensa(manual=False, solo_hechos=True)
         self.pagina_instagram.revisar_hinchada()
+
+    def _on_auto_entregado(self, nombre: str):
+        if self.bandeja is not None and not self.isActiveWindow():
+            self.bandeja.showMessage(
+                "Te llego tu auto", f"{nombre}: la prensa y tus hinchas ya lo vieron.",
+                QSystemTrayIcon.MessageIcon.Information, 8000,
+            )
 
     def _on_noticias_publicadas(self, noticias: list, manual: bool):
         self.pagina_instagram.revisar_hinchada()  # los hinchas reaccionan a las noticias
