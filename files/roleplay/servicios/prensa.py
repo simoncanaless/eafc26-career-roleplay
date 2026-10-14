@@ -47,11 +47,15 @@ DESCRIPCIONES_HITOS = {
     "jugador_del_mes": "fue elegido jugador del mes: {valor}",
     "nuevo_club": "fue transferido {valor} (dato real de su partida: es su nuevo club)",
     "fin_de_temporada": "termino la {valor}. Escribi el balance de su temporada",
+    "meta_cumplida": "cumplio la meta que se habia propuesto publicamente: {valor}",
+    "meta_fallida": "NO cumplio la meta que se habia propuesto publicamente: {valor}",
 }
 
 # Los premios y logros reales tambien mueven la reputacion (la sala de
 # prensa aplica la suma cuando guarda las noticias).
-BONOS_REPUTACION = {"jugador_del_mes": 5, "campeon": 10, "maximo_goleador": 8}
+BONOS_REPUTACION = {
+    "jugador_del_mes": 5, "campeon": 10, "maximo_goleador": 8, "meta_cumplida": 4, "meta_fallida": -4,
+}
 
 
 def _racha(historial: list[MatchInterviewRecord], condicion) -> int:

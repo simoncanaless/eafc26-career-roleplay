@@ -343,8 +343,12 @@ def revisar_prensa_con_partida(
         if h.clave not in publicados
     ][:1]
 
+    from roleplay.servicios import metas as servicio_metas  # (metas importa este modulo)
+
     premio, estado_mes = premio_del_mes(carrera, estado_prensa.get("mes"))
     terminada, en_curso = archivar_temporada(carrera, estado_prensa.get("temporada_en_curso"))
+    metas = database.get_metas(perfil.id) if perfil.id is not None else []
+    hitos_metas, cambios_metas = servicio_metas.evaluar_metas(carrera, metas)
     anteriores = database.get_clubes_vistos(carrera.partida)
     traspasos = mercado.detectar_traspasos(carrera, anteriores)[: mercado.TRASPASOS_EN_LA_NOTICIA]
     propio = mercado.traspaso_del_usuario(carrera, anteriores)
@@ -354,6 +358,7 @@ def revisar_prensa_con_partida(
             ids |= {e.jugador for e in carrera.goleadores(c, 3)}
     nombres = nombres_de_jugadores(carrera, ids)
     hitos_reales, estado_reales = detectar_hitos_reales(carrera, estado_prensa.get("reales"))
+    hitos_reales += hitos_metas
     if terminada is not None:
         hitos_reales.append({"tipo": "fin_de_temporada", "valor": describir_temporada(terminada)})
     if propio is not None:
@@ -378,12 +383,15 @@ def revisar_prensa_con_partida(
         historial,
         estado_prensa,
         api_key=api_key,
-        contexto_real=contexto_temporada(carrera, nombres),
+        contexto_real="\n".join(
+            t for t in (contexto_temporada(carrera, nombres), servicio_metas.texto_para_prompt(carrera, metas)) if t
+        ),
         hechos_reales=hechos_texto,
         hitos_reales=hitos_reales,
     )
     resultado["estado_prensa"]["reales"] = estado_reales
     resultado["estado_prensa"]["mes"] = estado_mes
+    resultado["metas"] = cambios_metas  # la sala las guarda (database.actualizar_metas)
     vitrina = list(estado_prensa.get("vitrina", []))
     for hito in hitos_reales:
         if hito["tipo"] in PREMIOS_DE_VITRINA:
@@ -435,14 +443,17 @@ def leer_para_entrevista(player_id: int) -> Optional[LecturaPartida]:
         return None
     from roleplay.servicios.previa import previa_del_proximo  # (previa importa este modulo)
 
+    from roleplay.servicios import metas  # (metas importa este modulo)
+
     estado = database.get_estado_partida(player_id)
     ultimo = ultimo_partido(carrera, estado)
     nombrar_competiciones(carrera, competiciones_del_usuario(carrera))  # una vez; despues, cache
     historial = database.load_match_interviews(player_id)
+    texto_metas = metas.texto_para_prompt(carrera, database.get_metas(player_id))
     return LecturaPartida(
         carrera=carrera,
         ultimo=ultimo,
-        contexto=contexto_temporada(carrera),
+        contexto=contexto_temporada(carrera) + (f"\n{texto_metas}" if texto_metas else ""),
         ya_entrevistado=bool(ultimo and ya_entrevistado(ultimo, historial)),
         previa=previa_del_proximo(carrera, estado_partida=estado),
     )
@@ -461,12 +472,16 @@ class ResumenTemporada:
     posicion: str  # "2° en la Premier League con 55 pts (lider: Manchester City, 56)"
     ultimos: list  # (letra G/E/P, "Man Utd 5-3 Sunderland", competicion), del mas viejo al ultimo
     proximo: str
+    temporada: str = ""
+    progreso_metas: dict = field(default_factory=dict)  # id de meta -> lo que lleva (o el puesto)
 
 
-def resumen_temporada() -> Optional[ResumenTemporada]:
-    """Lo que el Resumen muestra de la partida. None si no hay partida o no
-    se encuentra al jugador del usuario. Corre en un hilo."""
+def resumen_temporada(metas: Optional[list] = None) -> Optional[ResumenTemporada]:
+    """Lo que el Resumen muestra de la partida (y cuanto llevan `metas`).
+    None si no hay partida o no se encuentra al jugador del usuario. Corre
+    en un hilo."""
     from roleplay.partida.lector import carrera_actual
+    from roleplay.servicios.metas import progreso
 
     carrera = carrera_actual()
     if carrera is None or carrera.usuario_id is None or carrera.equipo_usuario() is None:
@@ -519,6 +534,8 @@ def resumen_temporada() -> Optional[ResumenTemporada]:
             f"{carrera.competicion(proximo.competicion)} · {fecha_corta(proximo.fecha)}"
             if proximo else ""
         ),
+        temporada=temporada_de(hoy) if hoy else "",
+        progreso_metas={m["id"]: progreso(carrera, m) for m in (metas or []) if m.get("estado") == "en_curso"},
     )
 
 

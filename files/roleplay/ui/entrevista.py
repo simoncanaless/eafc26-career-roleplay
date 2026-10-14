@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
 
 from roleplay.database import (
     actualizar_club,
+    actualizar_metas,
     agregar_gancho_narrativo,
     aplicar_delta_reputacion,
     get_estado_prensa,
@@ -935,10 +936,11 @@ class InterviewWindow(QWidget):
     def _on_prensa_completada(self, resultado: dict):
         self._terminar_revision_prensa()
         set_estado_prensa(self._prensa_player_id, resultado["estado_prensa"])
+        actualizar_metas(self._prensa_player_id, resultado.get("metas", {}))
         bono = resultado.get("delta_reputacion", 0)
         if bono:
             premios = ", ".join(h["tipo"] for h in resultado["hitos"] if h["tipo"] in BONOS_REPUTACION)
-            aplicar_delta_reputacion(self._prensa_player_id, bono, motivo=f"Premios y logros: {premios}")
+            aplicar_delta_reputacion(self._prensa_player_id, bono, motivo=f"Premios, metas y logros: {premios}")
             if self.perfil is not None and self.perfil.id == self._prensa_player_id:
                 self._refrescar_reputacion()
         for noticia in resultado["noticias"]:

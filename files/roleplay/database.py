@@ -332,6 +332,32 @@ def set_estado_prensa(player_id: int, estado_prensa: dict) -> None:
         estado["prensa"] = estado_prensa
 
 
+def get_metas(player_id: int) -> list[dict]:
+    """Las metas de temporada que se propuso (servicios/metas.py): estado_json.metas."""
+    leido = _leer_estado(player_id)
+    return list(leido[0].get("metas", [])) if leido else []
+
+
+def agregar_meta(player_id: int, meta: dict) -> None:
+    with _editar_estado(player_id) as (estado, _):
+        estado.setdefault("metas", []).append(meta)
+
+
+def quitar_meta(player_id: int, meta_id: str) -> None:
+    with _editar_estado(player_id) as (estado, _):
+        estado["metas"] = [m for m in estado.get("metas", []) if m.get("id") != meta_id]
+
+
+def actualizar_metas(player_id: int, cambios: dict) -> None:
+    """cambios: {id: {campo: valor}}. Solo toca las metas que siguen
+    existiendo (si se borro una mientras la prensa la evaluaba, no vuelve)."""
+    if not cambios:
+        return
+    with _editar_estado(player_id) as (estado, _):
+        for meta in estado.get("metas", []):
+            meta.update(cambios.get(meta.get("id"), {}))
+
+
 def get_seguidores(player_id: int) -> int:
     leido = _leer_estado(player_id)
     return _seguidores(*leido) if leido else 0

@@ -8,13 +8,16 @@ from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QFrame,
     QMenu,
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QProgressBar,
     QPushButton,
+    QSpinBox,
     QStackedWidget,
     QSystemTrayIcon,
     QVBoxLayout,
@@ -23,14 +26,18 @@ from PySide6.QtWidgets import (
 
 from roleplay.database import (
     actualizar_club,
+    agregar_meta,
     get_estado_prensa,
+    get_metas,
     get_reputacion_actual,
     get_seguidores,
     load_latest_profile,
     load_match_interviews,
     load_noticias_prensa,
+    quitar_meta,
 )
 from roleplay import config
+from roleplay.servicios.metas import CONTABLES, TIPOS, nueva_meta, texto_meta
 from roleplay.servicios.partida_real import resumen_temporada
 from roleplay.servicios.prensa import calcular_estadisticas_acumuladas
 from roleplay.ui import estilos
@@ -45,6 +52,7 @@ from roleplay.ui.componentes import (
     chip,
     compacto,
     etiqueta_campo,
+    fila,
     icono,
     limpiar_layout,
     nivel_carta,
@@ -76,6 +84,7 @@ class PaginaResumen(QWidget):
         self._on_club_cambiado = on_club_cambiado  # para que la barra lateral se entere
         self._perfil = None
         self._leyendo_temporada = False
+        self._temporada_actual = ""  # "2026/27", de la partida: a esa temporada van las metas nuevas
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 34, 40, 34)
@@ -161,6 +170,28 @@ class PaginaResumen(QWidget):
         self.temporada.hide()
         contenido.addWidget(self.temporada)
 
+        # ---- metas de la temporada (se siguen con la partida) ----
+        self.metas = Tarjeta("Metas de la temporada")
+        self.metas.cuerpo.addWidget(texto_suave(
+            "Proponete metas: se siguen solas con tu partida, la prensa te pregunta por ellas y "
+            "cumplirlas (o no) mueve tu reputacion."
+        ))
+        self.metas_layout = QVBoxLayout()
+        self.metas_layout.setSpacing(8)
+        self.metas.cuerpo.addLayout(self.metas_layout)
+        self.meta_tipo = QComboBox()
+        for tipo, (rotulo, _) in TIPOS.items():
+            self.meta_tipo.addItem(rotulo, tipo)
+        self.meta_objetivo = QSpinBox()
+        self.meta_objetivo.setRange(1, 300)
+        self.meta_objetivo.setValue(20)
+        self.meta_tipo.currentIndexChanged.connect(self._on_tipo_meta)
+        self.meta_agregar_btn = boton("Agregar meta", icono_nombre="mas")
+        self.meta_agregar_btn.clicked.connect(self._on_agregar_meta)
+        self.metas.cuerpo.addLayout(fila(self.meta_tipo, self.meta_objetivo, self.meta_agregar_btn, None))
+        self.metas.hide()
+        contenido.addWidget(self.metas)
+
         # ---- premios de verdad (jugador del mes, campeon...) ----
         self.vitrina = Tarjeta("Vitrina")
         self.vitrina_layout = QVBoxLayout()
@@ -229,7 +260,9 @@ class PaginaResumen(QWidget):
         )
         if not self._leyendo_temporada:
             self._leyendo_temporada = True
-            ejecutar_en_hilo(resumen_temporada, al_completar=self._on_temporada, al_fallar=self._on_temporada_error)
+            ejecutar_en_hilo(
+                resumen_temporada, get_metas(perfil.id), al_completar=self._on_temporada, al_fallar=self._on_temporada_error
+            )
 
         self.backstory_label.setText(esc(perfil.backstory_generado) or "(sin historia todavia)")
 
@@ -303,7 +336,10 @@ class PaginaResumen(QWidget):
         self._leyendo_temporada = False
         if resumen is None or self._perfil is None:
             self.temporada.hide()
+            self.metas.hide()  # sin partida no hay con que seguirlas
             return
+        self._temporada_actual = resumen.temporada
+        self._mostrar_metas(resumen.progreso_metas)
         perfil = self._perfil
         if resumen.club != perfil.club_actual:
             # el club de la partida es el de verdad (cambia con los traspasos)
@@ -350,6 +386,61 @@ class PaginaResumen(QWidget):
         # sin la partida el Resumen funciona igual, con los numeros de la app
         self._leyendo_temporada = False
         self.temporada.hide()
+        self.metas.hide()
+
+    # ---- metas ----
+
+    def _on_tipo_meta(self):
+        # un puesto en la tabla se pide chico; goles o asistencias, mas grande
+        self.meta_objetivo.setValue(4 if self.meta_tipo.currentData() == "top_liga" else 20)
+
+    def _on_agregar_meta(self):
+        if self._perfil is None or not self._temporada_actual:
+            return
+        agregar_meta(self._perfil.id, nueva_meta(self.meta_tipo.currentData(), self.meta_objetivo.value(), self._temporada_actual))
+        self.actualizar()
+
+    def _on_quitar_meta(self, meta_id: str):
+        if self._perfil is not None:
+            quitar_meta(self._perfil.id, meta_id)
+            self.actualizar()
+
+    def _mostrar_metas(self, progreso: dict):
+        limpiar_layout(self.metas_layout)
+        estados = {
+            "en_curso": ("En curso", estilos.SECUNDARIO),
+            "cumplida": ("Cumplida", estilos.POSITIVO),
+            "fallida": ("Fallida", estilos.NEGATIVO),
+        }
+        for meta in get_metas(self._perfil.id):
+            if meta["temporada"] != self._temporada_actual:
+                continue
+            actual = progreso.get(meta["id"], meta.get("actual"))
+            estado = meta["estado"]
+            if estado == "en_curso" and meta["tipo"] in CONTABLES and actual is not None and actual >= meta["objetivo"]:
+                estado = "cumplida"  # ya se llego: la prensa lo hace oficial en la proxima revision
+            rotulo, color = estados.get(estado, estados["en_curso"])
+            partes = [chip(rotulo, color), QLabel(esc(texto_meta(meta))), None]
+            if meta["tipo"] == "top_liga":
+                if actual:
+                    partes.append(texto_suave(f"va {actual}°", ajustar=False))
+            elif actual is not None:
+                barra = QProgressBar()
+                barra.setRange(0, meta["objetivo"])
+                barra.setValue(min(actual, meta["objetivo"]))
+                barra.setTextVisible(False)
+                barra.setFixedWidth(160)
+                partes += [barra, texto_suave(f"{actual}/{meta['objetivo']}", ajustar=False)]
+            if estado == "en_curso":
+                quitar = QPushButton("✕")
+                quitar.setObjectName("quitarMeta")
+                quitar.setFixedSize(28, 28)
+                quitar.setToolTip("Quitar esta meta")
+                quitar.setStyleSheet("QPushButton#quitarMeta { padding: 0; font-size: 13px; }")
+                quitar.clicked.connect(lambda _=False, i=meta["id"]: self._on_quitar_meta(i))
+                partes.append(quitar)
+            self.metas_layout.addLayout(fila(*partes, espaciado=10))
+        self.metas.show()
 
     def _cargar_noticias(self, perfil):
         limpiar_layout(self.noticias_layout)

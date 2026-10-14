@@ -322,6 +322,20 @@ QStackedWidget, QScrollArea, QWidget#pagina {{
     background: transparent;
 }}
 
+/* avance de una meta */
+QProgressBar {{
+    background-color: {CAMPO};
+    border: 1px solid {BORDE};
+    border-radius: 4px;
+    max-height: 8px;
+    min-height: 8px;
+    text-align: center;
+}}
+QProgressBar::chunk {{
+    background-color: {ACENTO};
+    border-radius: 3px;
+}}
+
 QScrollBar:vertical {{
     background: transparent;
     width: 10px;

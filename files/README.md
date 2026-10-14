@@ -72,6 +72,11 @@ toca) y todo se vuelve real:
   (vos incluido), tus resultados y lo que viene, y la ultima fecha. Una pestana por cada
   competicion que juega tu club (liga, Champions, copas).
 
+**Metas de la temporada**: en el Resumen te propones metas (goles, goles en liga, asistencias,
+terminar entre los N primeros de la liga). Se siguen solas con tu partida, la prensa te
+pregunta por ellas en las entrevistas, y cumplirlas o fallarlas es noticia y mueve tu
+reputacion.
+
 **Trayectoria**: cuando el juego pasa a la temporada siguiente, la prensa publica el balance
 de tu temporada y queda archivada en el Resumen (club, partidos, goles, asistencias, nota,
 posicion de tu club y titulos).
