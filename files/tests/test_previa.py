@@ -156,6 +156,28 @@ class TestSalaConPrevia(ayuda.PruebaDeInterfaz):
         self.assertFalse(flotante.cargar_btn.isVisibleTo(flotante))
         self.assertEqual(len(flotante._edits), 1)
 
+    def test_cambiar_de_modo_desde_la_sala_flotante(self):
+        from roleplay.ui.overlay import SalaFlotante
+
+        flotante = SalaFlotante(self.sala)
+        self.assertTrue(flotante.modo_post_btn.isChecked())
+        flotante.modo_previa_btn.click()
+        self.assertEqual(self.sala._modo, "previa")
+        self.assertTrue(flotante.modo_previa_btn.isChecked())
+        self.assertFalse(flotante.modo_post_btn.isChecked())
+        flotante.modo_post_btn.click()
+        self.assertEqual(self.sala._modo, "post")
+
+    def test_sin_previa_el_panel_tampoco_la_ofrece(self):
+        from roleplay.ui.overlay import SalaFlotante
+
+        self.lectura.previa = None
+        self.sala._on_partida_leida(self.lectura)
+        flotante = SalaFlotante(self.sala)
+        self.assertFalse(flotante.modo_previa_btn.isEnabled())
+        flotante.modo_previa_btn.click()  # deshabilitado: no hace nada
+        self.assertEqual(self.sala._modo, "post")
+
     def test_un_partido_nuevo_vuelve_al_post_partido(self):
         self.sala.modo_previa_btn.click()
         self.assertTrue(self.sala.recibir_partido_nuevo(self.lectura, preparar_preguntas=False))

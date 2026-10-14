@@ -19,7 +19,7 @@ from PySide6.QtWidgets import QLabel, QPlainTextEdit, QPushButton, QVBoxLayout, 
 from roleplay.ui import estilos
 from roleplay.ui.atajo import ATAJO_TEXTO
 from roleplay.ui.comun import esc
-from roleplay.ui.componentes import boton, chip, fila, icono, limpiar_layout, texto_suave
+from roleplay.ui.componentes import boton, chip, chip_alternable, fila, icono, limpiar_layout, texto_suave
 from roleplay.ui.estilos import fuente_titulo
 
 ANCHO = 440
@@ -61,6 +61,13 @@ class SalaFlotante(QWidget):
         )
         cerrar.clicked.connect(self.hide)
         layout.addLayout(fila(titulo, None, chip(ATAJO_TEXTO, estilos.TEXTO_SUAVE), cerrar))
+
+        # despues del partido / previa del proximo: los mismos modos de la sala
+        self.modo_post_btn = chip_alternable("Post-partido")
+        self.modo_previa_btn = chip_alternable("Previa")
+        self.modo_post_btn.clicked.connect(lambda: self._elegir_modo("post"))
+        self.modo_previa_btn.clicked.connect(lambda: self._elegir_modo("previa"))
+        layout.addLayout(fila(self.modo_post_btn, self.modo_previa_btn, espaciado=8, estirar_al_final=True))
 
         self.partido_label = texto_suave()
         layout.addWidget(self.partido_label)
@@ -139,6 +146,12 @@ class SalaFlotante(QWidget):
 
     # ---- espejo de la sala ----
 
+    def _elegir_modo(self, modo: str):
+        boton_sala = self.sala.modo_post_btn if modo == "post" else self.sala.modo_previa_btn
+        if boton_sala.isEnabled():
+            boton_sala.click()  # la sala decide; el panel se entera por `cambio`
+        self.refrescar()
+
     def _armar_preguntas(self):
         limpiar_layout(self.preguntas_layout)
         self._textos, self._edits, self._voces = [], [], []
@@ -176,6 +189,10 @@ class SalaFlotante(QWidget):
         if self._copiando:
             return
         sala = self.sala
+        self.modo_post_btn.setChecked(sala._modo == "post")
+        self.modo_previa_btn.setChecked(sala._modo == "previa")
+        self.modo_post_btn.setEnabled(sala.modo_post_btn.isEnabled())
+        self.modo_previa_btn.setEnabled(sala.modo_previa_btn.isEnabled())
         self.partido_label.setText(sala.texto_contexto())
         lectura = sala._lectura
         ya_cargado = (
