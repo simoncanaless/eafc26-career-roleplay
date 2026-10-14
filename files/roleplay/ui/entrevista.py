@@ -99,6 +99,9 @@ class InterviewWindow(QWidget):
     # algo cambio (preguntas, respuestas, botones, reaccion): la sala
     # flotante (ui/overlay.py) se redibuja con esto
     cambio = Signal()
+    # la prensa publico noticias: (noticias, si la pidio el usuario). El menu
+    # avisa en la bandeja y el Instagram reacciona.
+    noticias_publicadas = Signal(list, bool)
 
     def __init__(self):
         super().__init__()
@@ -904,7 +907,9 @@ class InterviewWindow(QWidget):
     def _on_revisar_prensa_clicked(self):
         self._iniciar_revision_prensa(manual=True)
 
-    def _iniciar_revision_prensa(self, manual: bool):
+    def _iniciar_revision_prensa(self, manual: bool, solo_hechos: bool = False):
+        """`solo_hechos`: la revision automatica de cada dia del juego, que
+        no inventa una noticia de ambiente si no paso nada real."""
         # Una revision a la vez: dos en paralelo leen el mismo estado de
         # prensa y publican dos veces el mismo hito.
         if self._prensa_en_curso:
@@ -921,9 +926,11 @@ class InterviewWindow(QWidget):
             funcion, argumentos = revisar_prensa_con_partida, [*argumentos, self._lectura.carrera]
         else:
             funcion = revisar_prensa
+        extra = {"incluir_general": False} if solo_hechos else {}
         ejecutar_en_hilo(
             funcion,
             *argumentos,
+            **extra,
             al_completar=self._on_prensa_completada,
             al_fallar=self._on_prensa_error,
         )
@@ -948,6 +955,7 @@ class InterviewWindow(QWidget):
         if resultado["noticias"]:
             self.ultimas_noticias = list(resultado["noticias"])
             self.cambio.emit()
+            self.noticias_publicadas.emit(list(resultado["noticias"]), self._prensa_manual)
 
         if resultado["noticias"]:
             limpiar_layout(self.noticias_layout)

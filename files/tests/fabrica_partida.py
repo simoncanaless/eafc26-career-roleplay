@@ -132,13 +132,15 @@ ACTUACION_NUEVA = (20270123, 90, 8.8, 2, 25)
 
 def construir_bytes(
     nombre_partida: str = "Carrera - Prog. de Futbolista 1", partido_nuevo: bool = False,
-    fichajes: dict | None = None,
+    fichajes: dict | None = None, otros_partidos: list | None = None,
 ) -> bytes:
     """`partido_nuevo`: la misma partida despues de que el usuario jugo el
     Man Utd 2-1 Arsenal del 23-01-2027 (2 goles suyos, 1 asistencia).
-    `fichajes`: {jugador: club nuevo} (el resto de sus vinculos queda igual)."""
+    `fichajes`: {jugador: club nuevo} (el resto de sus vinculos queda igual).
+    `otros_partidos`: partidos de mas, con el formato de PARTIDOS (ej. de
+    otros equipos: el juego avanzo de dia sin que juegue el usuario)."""
     fichajes = fichajes or {}
-    partidos_lista = list(PARTIDOS)
+    partidos_lista = list(PARTIDOS) + list(otros_partidos or [])
     estadisticas_lista = list(ESTADISTICAS)
     if partido_nuevo:
         partidos_lista.insert(-1, PARTIDO_NUEVO)

@@ -136,6 +136,7 @@ def chip(texto: str, color: str) -> QLabel:
         f"color: {color}; border: 1px solid {color}; border-radius: 9px; padding: 1px 8px;"
     )
     label.setMaximumHeight(22)
+    label.setMinimumHeight(20)  # mas bajo que el doble del radio, Qt lo dibuja con esquinas rectas
     label.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
     return label
 

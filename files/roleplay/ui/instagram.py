@@ -1,6 +1,11 @@
 """
 Instagram del jugador: vos escribis el post y Gemini genera los
 comentarios, los likes y cuanto suben o bajan tus seguidores.
+
+Y se mueve solo (servicios/hinchada.py): con la partida de FC 26, los
+hinchas reaccionan a tus partidos y a las noticias sobre vos aunque no
+publiques nada. Lo dispara el modo en vivo en cada autoguardado
+(revisar_hinchada) y tambien abrir esta pagina.
 """
 
 from PySide6.QtCore import Qt
@@ -9,13 +14,17 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMessageBox, QTextEdi
 from roleplay.database import (
     get_reputacion_actual,
     get_seguidores,
+    load_actividad_instagram,
     load_instagram_posts,
     load_latest_profile,
     load_match_interviews,
+    save_actividad_instagram,
     save_instagram_post,
+    set_estado_hinchada,
     sumar_seguidores,
 )
 from roleplay.models import InstagramPost, PlayerProfile
+from roleplay.servicios import hinchada
 from roleplay.servicios.instagram import generar_reaccion_post, sugerir_post
 from roleplay.servicios.partida_real import leer_para_entrevista
 from roleplay.ui import estilos
@@ -35,6 +44,7 @@ from roleplay.ui.estilos import fuente_titulo
 
 TEXTO_PUBLICAR = "Publicar"
 POSTS_EN_FEED = 20
+ACTIVIDAD_VISIBLE = 8
 
 
 def _usuario(perfil: PlayerProfile) -> str:
@@ -66,6 +76,10 @@ class InstagramWindow(QWidget):
         self._lectura = None  # la partida de FC 26, si hay (para el contexto real)
         self._leyendo_partida = False
         self._sugiriendo = False
+        # los hinchas: una revision a la vez; si se pide otra mientras corre,
+        # se hace al terminar (puede haber llegado una noticia nueva)
+        self._hinchada_en_curso: int | None = None  # el jugador que se esta revisando
+        self._hinchada_pendiente = False
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 34, 40, 34)
@@ -121,6 +135,17 @@ class InstagramWindow(QWidget):
         self.resultado_tarjeta.hide()
         layout.addWidget(self.resultado_tarjeta)
 
+        # ---- lo que pasa sin publicar: los hinchas ----
+        self.actividad_tarjeta = Tarjeta("Tus hinchas", espaciado=10)
+        self.actividad_tarjeta.cuerpo.addWidget(texto_suave(
+            "Reaccionan solos a tus partidos y a las noticias sobre vos, cada vez que el juego guarda."
+        ))
+        self.actividad_layout = QVBoxLayout()
+        self.actividad_layout.setSpacing(12)
+        self.actividad_tarjeta.cuerpo.addLayout(self.actividad_layout)
+        self.actividad_tarjeta.hide()
+        layout.addWidget(self.actividad_tarjeta)
+
         # ---- feed ----
         feed = Tarjeta("Tu feed", espaciado=12)
         self.feed_layout = QVBoxLayout()
@@ -147,6 +172,8 @@ class InstagramWindow(QWidget):
         self.publicar_btn.setEnabled(self._publicando is None)
         self.sugerir_btn.setEnabled(not self._sugiriendo)
         self._cargar_feed()
+        self._cargar_actividad()
+        self.revisar_hinchada()
         if not self._leyendo_partida:
             self._leyendo_partida = True
             ejecutar_en_hilo(
@@ -299,6 +326,69 @@ class InstagramWindow(QWidget):
         if self.perfil is not None and self.perfil.id == perfil.id:
             self._refrescar_cabecera()
             self._cargar_feed()
+
+    # ---- los hinchas ----
+
+    def revisar_hinchada(self):
+        """Los hinchas reaccionan a lo nuevo de la partida (en un hilo)."""
+        perfil = load_latest_profile()
+        if perfil is None:
+            return
+        if self._hinchada_en_curso is not None:
+            self._hinchada_pendiente = True
+            return
+        self._hinchada_en_curso = perfil.id
+        ejecutar_en_hilo(
+            hinchada.revisar_hinchada, perfil.id,
+            al_completar=self._on_hinchada, al_fallar=self._on_hinchada_error,
+        )
+
+    def _terminar_hinchada(self):
+        self._hinchada_en_curso = None
+        if self._hinchada_pendiente:
+            self._hinchada_pendiente = False
+            self.revisar_hinchada()
+
+    def _on_hinchada(self, resultado):
+        player_id = self._hinchada_en_curso
+        if resultado is not None:
+            actividad, estado = resultado
+            for item in actividad:
+                save_actividad_instagram(item)
+            total = sum(item.crecimiento_seguidores for item in actividad)
+            if total:
+                sumar_seguidores(player_id, total)
+            set_estado_hinchada(player_id, estado)
+            if actividad and self.perfil is not None and self.perfil.id == player_id:
+                self._refrescar_cabecera()
+                self._cargar_actividad()
+        self._terminar_hinchada()
+
+    def _on_hinchada_error(self, _mensaje: str):
+        self._terminar_hinchada()  # sin partida legible, Instagram sigue como siempre
+
+    def _cargar_actividad(self):
+        limpiar_layout(self.actividad_layout)
+        actividad = load_actividad_instagram(self.perfil.id, limite=ACTIVIDAD_VISIBLE)
+        for item in actividad:
+            color = estilos.POSITIVO if item.crecimiento_seguidores >= 0 else estilos.NEGATIVO
+            dia = item.fecha_juego
+            fecha = texto_suave(f"{dia[8:10]}/{dia[5:7]}" if len(dia) >= 10 else "", ajustar=False)
+            icono_tipo = "⚽" if item.tipo == "partido" else "📰"
+            titulo = QLabel(f"{icono_tipo}&nbsp; <b>{esc(item.titulo)}</b>")
+            titulo.setWordWrap(True)
+            linea = QHBoxLayout()
+            linea.setSpacing(10)
+            linea.addWidget(chip(f"{_crecimiento(item.crecimiento_seguidores)} seguidores", color))
+            linea.addWidget(titulo, 1)  # el titulo ocupa el ancho (si no, se parte en tres lineas)
+            linea.addWidget(fecha)
+            self.actividad_layout.addLayout(linea)
+            if item.comentarios:
+                comentarios = texto_suave(_comentarios_html(item.comentarios))
+                comentarios.setTextFormat(Qt.TextFormat.RichText)
+                comentarios.setContentsMargins(4, 0, 0, 6)
+                self.actividad_layout.addWidget(comentarios)
+        self.actividad_tarjeta.setVisible(bool(actividad))
 
     def _on_publicar_error(self, mensaje: str):
         self._terminar_publicacion()

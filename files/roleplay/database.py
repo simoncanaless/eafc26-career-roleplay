@@ -19,7 +19,7 @@ from datetime import datetime
 from typing import Iterator, Optional, TypeVar
 
 from roleplay import config
-from roleplay.models import InstagramPost, MatchInterviewRecord, NoticiaPrensa, PlayerProfile
+from roleplay.models import ActividadInstagram, InstagramPost, MatchInterviewRecord, NoticiaPrensa, PlayerProfile
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS player_profile (
@@ -106,6 +106,19 @@ CREATE TABLE IF NOT EXISTS instagram_post (
     comentarios TEXT,  -- JSON list de {"autor","texto","tono"}
     FOREIGN KEY(player_id) REFERENCES player_profile(id)
 );
+
+-- Instagram sin publicar: los hinchas reaccionan a partidos y noticias.
+CREATE TABLE IF NOT EXISTS actividad_instagram (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    player_id INTEGER NOT NULL,
+    fecha TEXT,
+    fecha_juego TEXT,
+    tipo TEXT,
+    titulo TEXT,
+    crecimiento_seguidores INTEGER,
+    comentarios TEXT,  -- JSON list de {"autor","texto","tono"}
+    FOREIGN KEY(player_id) REFERENCES player_profile(id)
+);
 """
 
 # Columnas que se agregaron despues de que la DB del usuario ya existia:
@@ -121,11 +134,12 @@ TABLAS = {
     MatchInterviewRecord: "partido_entrevista",
     NoticiaPrensa: "noticia_prensa",
     InstagramPost: "instagram_post",
+    ActividadInstagram: "actividad_instagram",
 }
 
 REPUTACION_POR_DEFECTO = 50
 
-Modelo = TypeVar("Modelo", PlayerProfile, MatchInterviewRecord, NoticiaPrensa, InstagramPost)
+Modelo = TypeVar("Modelo", PlayerProfile, MatchInterviewRecord, NoticiaPrensa, InstagramPost, ActividadInstagram)
 
 
 @contextmanager
@@ -397,6 +411,26 @@ def save_instagram_post(post: InstagramPost) -> int:
 
 def load_instagram_posts(player_id: int, limite: int = 50) -> list[InstagramPost]:
     return _cargar_de_jugador(InstagramPost, player_id, limite)
+
+
+def save_actividad_instagram(actividad: ActividadInstagram) -> int:
+    return _insertar(actividad)
+
+
+def load_actividad_instagram(player_id: int, limite: int = 30) -> list[ActividadInstagram]:
+    return _cargar_de_jugador(ActividadInstagram, player_id, limite)
+
+
+def get_estado_hinchada(player_id: int) -> dict:
+    """Hasta donde reaccionaron los hinchas (estado_json.hinchada): fecha
+    del ultimo partido y id de la ultima noticia."""
+    leido = _leer_estado(player_id)
+    return dict(leido[0].get("hinchada", {})) if leido else {}
+
+
+def set_estado_hinchada(player_id: int, estado_hinchada: dict) -> None:
+    with _editar_estado(player_id) as (estado, _):
+        estado["hinchada"] = estado_hinchada
 
 
 # ---- nombres reconocidos (jugadores y copas de la partida de FC 26) ----

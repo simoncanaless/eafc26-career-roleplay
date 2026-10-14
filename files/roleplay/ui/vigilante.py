@@ -5,7 +5,9 @@ Cada pocos segundos se mira (sin abrirlo) el guardado de la carrera. Cuando
 el juego lo reescribe, se espera a que deje de cambiar -para no leerlo a
 medio escribir- y se lee en otro hilo. Si el club del usuario jugo un
 partido nuevo, se emite `partido_nuevo`: la app avisa, prepara la sala de
-prensa y actualiza la prensa.
+prensa y actualiza la prensa. Si no, pero el juego avanzo de dia (se
+jugaron partidos de otros), se emite `dia_nuevo`: la prensa y el Instagram
+se mueven igual, sin esperar al proximo partido del usuario.
 
 La primera lectura solo marca donde estamos (no avisa del ultimo partido
 que ya estaba jugado al abrir la app).
@@ -38,6 +40,7 @@ def mostrar_flotante_sola() -> bool:
 
 class VigilantePartida(QObject):
     partido_nuevo = Signal(object)  # LecturaPartida con un partido que no se habia avisado
+    dia_nuevo = Signal(object)  # LecturaPartida: avanzaron los dias pero el usuario no jugo
     partida_actualizada = Signal(object)  # LecturaPartida, ante cualquier guardado nuevo
 
     def __init__(self, parent: Optional[QObject] = None, intervalo_ms: int = INTERVALO_MS):
@@ -95,9 +98,14 @@ class VigilantePartida(QObject):
         perfil = load_latest_profile()
         if perfil is None:
             return
-        avisado = get_estado_partida(perfil.id).get("avisado")
-        if avisado == lectura.ultimo.clave:
-            return
-        set_estado_partida(perfil.id, {"avisado": lectura.ultimo.clave})
-        if avisado is not None:  # la primera vez solo se marca donde estamos
+        estado = get_estado_partida(perfil.id)
+        avisado, dia_visto = estado.get("avisado"), estado.get("dia_visto")
+        hoy = lectura.carrera.fecha_actual()
+        dia = hoy.isoformat() if hoy else None
+        set_estado_partida(perfil.id, {"avisado": lectura.ultimo.clave, "dia_visto": dia})
+        if avisado is None:
+            return  # la primera vez solo se marca donde estamos
+        if avisado != lectura.ultimo.clave:
             self.partido_nuevo.emit(lectura)
+        elif dia is not None and dia_visto is not None and dia > dia_visto:
+            self.dia_nuevo.emit(lectura)

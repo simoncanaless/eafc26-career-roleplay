@@ -108,6 +108,12 @@ listas, y la prensa reacciona. Las noticias sobre vos tambien salen de tus numer
 reales: 50 o 100 goles en la temporada, pasar a ser el goleador de la liga, un
 partidazo, tu club lider o campeon. Se apaga en Ajustes > Modo en vivo.
 
+Y no hace falta que juegues vos: cada vez que el juego autoguarda (por ejemplo al simular
+dias), la prensa cuenta lo que paso de verdad en el mundo (fichajes, premios, resultados) y
+tu Instagram se mueve solo: en "Tus hinchas" reaccionan a tus partidos y a las noticias
+sobre vos, y tus seguidores suben o bajan segun el resultado, tus goles y tu nota. Dejá el
+autoguardado de FC 26 activado.
+
 Como funciona por dentro: `docs/partida-fc26.md`.
 
 ## Que hace cada modulo

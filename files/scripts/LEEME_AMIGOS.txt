@@ -41,6 +41,8 @@ JUGAR
   "Generar entrevista" y responde, escribiendo o por voz. Si no jugas Carrera
   Jugador: "Capturar pantalla" en la pantalla de estadisticas, o escribi los
   numeros a mano.
+- Deja el AUTOGUARDADO de FC 26 activado: con cada guardado la prensa y tu
+  Instagram se mueven solos (tambien al simular dias sin jugar).
 - Antes de un partido: en la Sala de prensa, "Previa del proximo" para la
   conferencia previa (rival, tabla, rachas).
 - Ctrl+Shift+F12 abre la SALA FLOTANTE encima del juego: responde por voz

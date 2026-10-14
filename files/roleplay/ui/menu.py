@@ -571,6 +571,8 @@ class MainMenuWindow(QMainWindow):
             self.bandeja.show()
         self.vigilante = VigilantePartida(self)
         self.vigilante.partido_nuevo.connect(self._on_partido_nuevo)
+        self.vigilante.dia_nuevo.connect(self._on_dia_nuevo)
+        self.pagina_entrevistas.noticias_publicadas.connect(self._on_noticias_publicadas)
         self.vigilante.partida_actualizada.connect(self._on_partida_actualizada)
         self.vigilante.iniciar()
 
@@ -631,10 +633,27 @@ class MainMenuWindow(QMainWindow):
             self._marcar_entrevistas(True)
         if mostrar_flotante_sola():
             self.sala_flotante.mostrar()  # encima del juego, sin quitarle el foco
+        self.pagina_instagram.revisar_hinchada()  # los hinchas reaccionan al partido
         mensaje = lectura.ultimo.resumen + (". Tu entrevista te espera." if cargado else ".")
         if self.bandeja is not None:
             self.bandeja.showMessage("Partido nuevo", mensaje, QSystemTrayIcon.MessageIcon.Information, 10000)
         QApplication.alert(self)
+
+    def _on_dia_nuevo(self, lectura):
+        """El juego avanzo (autoguardado) sin partido del usuario: la prensa
+        revisa los hechos reales del mundo y el Instagram se mueve."""
+        sala = self.pagina_entrevistas
+        sala._on_partida_leida(lectura)  # la sala trabaja con la partida al dia
+        if sala.perfil is not None:
+            sala._iniciar_revision_prensa(manual=False, solo_hechos=True)
+        self.pagina_instagram.revisar_hinchada()
+
+    def _on_noticias_publicadas(self, noticias: list, manual: bool):
+        self.pagina_instagram.revisar_hinchada()  # los hinchas reaccionan a las noticias
+        if manual or self.bandeja is None or self.isActiveWindow():
+            return
+        principal = next((n for n in noticias if n.categoria == "jugador"), noticias[0])
+        self.bandeja.showMessage("Prensa", principal.titular, QSystemTrayIcon.MessageIcon.Information, 8000)
 
     def _on_partida_actualizada(self, _lectura):
         if self.stack.currentIndex() == self.PAGINA_RESUMEN:

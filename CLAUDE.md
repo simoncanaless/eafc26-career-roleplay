@@ -72,7 +72,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 | `roleplay/partida/lector.py` | `carrera_actual()`: el `CmPlr*` mas reciente (o el elegido en Ajustes) de `%LOCALAPPDATA%\EA SPORTS FC 26\settings`, con cache por fecha/tamano. Solo lee. `EAFC_FC26_GUARDADOS` cambia la carpeta |
 | `roleplay/servicios/partida_real.py` | Lo que la app hace con la partida: `ultimo_partido()` (stats del ultimo partido; asistencias/tarjetas/figura por diferencia con la lectura anterior, `estado_json.partida`), `contexto_temporada()` (para los prompts), `hechos_destacados()` (hat-trick > goleada > choque de punta, elegidos por codigo), `revisar_prensa_con_partida()`, `resumen_temporada()`, `leer_para_entrevista()` |
 | `roleplay/servicios/identificar.py` | La IA pone nombre a jugadores (por su ficha: club, posicion, seleccion, nacimiento) y copas (por sus equipos). Sin seguridad -> nombre vacio. Cache en la tabla `nombre_conocido` |
-| `roleplay/ui/vigilante.py` | **Modo en vivo**: `VigilantePartida` mira el guardado cada 5 s (sin abrirlo); si cambio y se asento, lo lee en un hilo. `partido_nuevo` si el club del usuario jugo un partido que no se aviso (`estado_json.partida.avisado`; la primera lectura solo marca). Ajustes `en_vivo.vigilar` / `en_vivo.preguntas_solas` |
+| `roleplay/ui/vigilante.py` | **Modo en vivo**: `VigilantePartida` mira el guardado cada 5 s (sin abrirlo); si cambio y se asento, lo lee en un hilo. `partido_nuevo` si el club del usuario jugo un partido que no se aviso (`estado_json.partida.avisado`; la primera lectura solo marca); si no, `dia_nuevo` cuando avanzo la fecha del juego (`partida.dia_visto`: jugaron otros). Ajustes `en_vivo.vigilar` / `en_vivo.preguntas_solas` |
 | `roleplay/ui/overlay.py` | `SalaFlotante`: panel semitransparente siempre encima (Tool + Frameless + StaysOnTop, `WA_ShowWithoutActivating`: no le quita el foco al juego). Es un ESPEJO de la sala de prensa: lee su estado al recibir `InterviewWindow.cambio` y sus botones llaman a los de la sala (una sola entrevista) |
 | `roleplay/ui/atajo.py` | `AtajoGlobal`: Ctrl+Shift+F12 con `RegisterHotKey` (ctypes) + `QAbstractNativeEventFilter`. Ojo: el tipo de evento llega como QByteArray (comparar con `bytes(tipo)`). Si la combinacion esta tomada, `registrar()` da False y la app sigue |
 | `roleplay/ui/comun.py` | `ejecutar_en_hilo`, `esc` (escape HTML), `miles`, `fecha_corta`, `con_scroll` (pagina transparente) |
@@ -87,7 +87,8 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 | `roleplay/ui/ajustes.py` | `DialogoClave` (bienvenida: clave de Gemini, la prueba con `models.list` y la guarda), `DialogoAjustes` (clave, juego, iconos, diagnostico), `abrir_juego_o_preguntar` |
 | `roleplay/ui/personaje.py` | `CharacterWizard` (ClassicStyle; titulos en rich text con "PASO n/8"; backstory editable o escrito a mano) |
 | `roleplay/ui/entrevista.py` | `InterviewWindow` "Sala de prensa": marcador -> preguntas (cada una con boton de voz) -> reaccion -> prensa |
-| `roleplay/ui/instagram.py` | `InstagramWindow`: perfil (avatar + mosaicos), nuevo post, resultado, feed en tarjetas |
+| `roleplay/ui/instagram.py` | `InstagramWindow`: perfil (avatar + mosaicos), nuevo post, resultado, "Tus hinchas" (actividad sin publicar) y feed en tarjetas. `revisar_hinchada()`: una a la vez; si se pide otra mientras corre, se hace al terminar |
+| `roleplay/servicios/hinchada.py` | El Instagram que se mueve solo: `eventos_nuevos()` (partidos del usuario y noticias sobre el desde `estado_json.hinchada`; la primera vez solo el ultimo partido), `crecimiento_por_partido/noticia()` (los seguidores los decide el codigo), `comentar_eventos()` (la IA, una consulta; si falla, sin comentarios). Se guarda en la tabla `actividad_instagram` |
 | `roleplay/ui/iconos/` | Flechas/check de la QSS (SVG) y `app.ico` (lo genera el script del acceso directo) |
 | `scripts/seed_test_matches.py` | Siembra/borra partidos "Rival de prueba N" en el ultimo personaje (base REAL) |
 | `scripts/crear_acceso_directo.py` + `scripts/lanzador/Lanzador.cs` | Icono, .exe lanzador (dev) y los dos iconos del escritorio |
@@ -100,6 +101,12 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
   bandeja de Windows (QSystemTrayIcon), marca "Entrevistas ●", la sala lo carga y genera
   las preguntas si esta libre (`InterviewWindow.ocupada()`: nunca pisar una entrevista a
   medias) y corre la prensa. `set_estado_partida` MEZCLA claves (no reemplaza).
+  Ante un `dia_nuevo` (autoguardado sin partido del usuario), `_on_dia_nuevo` le pasa la
+  partida a la sala y corre la prensa con `solo_hechos=True` (-> `incluir_general=False`: sin
+  noticia de ambiente inventada). Toda revision de prensa emite `noticias_publicadas`: el
+  menu avisa en la bandeja (solo las automaticas, con la ventana sin foco) y los hinchas
+  reaccionan. El kwarg `incluir_general` se pasa SOLO cuando es False (reemplazos de prueba
+  de la prensa no lo aceptan).
 - **Sala flotante**: toda accion nueva de la sala de prensa que cambie lo que se ve debe
   emitir `self.cambio` (o pasar por `_refrescar_botones`, que lo emite), o el panel no se
   entera. El panel nunca hace logica propia.
@@ -158,7 +165,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 
 ## Testing
 
-`.venv\Scripts\python.exe -m unittest discover -s tests` (186 pruebas, ~13 s). `tests/ayuda.py`:
+`.venv\Scripts\python.exe -m unittest discover -s tests` (196 pruebas, ~16 s). `tests/ayuda.py`:
 - Fija `EAFC_FC26_GUARDADOS` a una carpeta vacia: las pruebas no leen la partida real.
   `tests/fabrica_partida.py` arma un guardado FALSO con el mismo formato (para todo lo de
   `roleplay/partida`). `TestPartidaRealDelPC` lee la partida real si existe (solo lectura,
@@ -232,6 +239,8 @@ Siguiente (decidido con Simon el 2026-10-14):
   Falta probarlo encima del juego real (requiere FC 26 en "ventana sin bordes").
 - **Instagram con contexto real + "Sugerir post": HECHO el 2026-10-14**.
 - **Pagina Temporada (tabla, goleadores, tus partidos, ultima fecha): HECHO el 2026-10-14**.
+- **Prensa en cada autoguardado e Instagram que se mueve solo: HECHO el 2026-10-14** (`dia_nuevo`,
+  `servicios/hinchada.py`). Sin Live Editor: alcanza con el autoguardado de FC 26.
 - **Temporada: otras competiciones de la partida (otras ligas, copas, Mundial): HECHO el 2026-10-14**
   (`VistaTemporada.otras` / `es_propia`; combo "Otras competiciones...").
 - **Metas de temporada: HECHO el 2026-10-14** (tarjeta en el Resumen; `meta_cumplida` +4 / `meta_fallida` -4 de

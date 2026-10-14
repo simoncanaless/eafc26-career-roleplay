@@ -144,3 +144,20 @@ class InstagramPost:
     likes: int = 0
     crecimiento_seguidores: int = 0
     comentarios: list[dict] = field(default_factory=list)  # [{"autor","texto","tono"}]
+
+
+@dataclass
+class ActividadInstagram:
+    """Lo que pasa en el Instagram del jugador sin que publique nada: los
+    hinchas reaccionan a sus partidos y a las noticias sobre el
+    (servicios/hinchada.py). Los seguidores los calcula el codigo; la IA
+    solo escribe los comentarios."""
+
+    id: Optional[int] = None
+    player_id: int = 0
+    fecha: str = field(default_factory=_ahora)
+    fecha_juego: str = ""  # dia del juego al que reaccionan
+    tipo: str = "partido"  # "partido" | "noticia"
+    titulo: str = ""  # "Man Utd 5-3 Sunderland · 5 goles tuyos" o el titular de la noticia
+    crecimiento_seguidores: int = 0
+    comentarios: list[dict] = field(default_factory=list)  # [{"autor","texto","tono"}]
