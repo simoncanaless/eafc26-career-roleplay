@@ -11,11 +11,13 @@ from roleplay.database import (
     get_seguidores,
     load_instagram_posts,
     load_latest_profile,
+    load_match_interviews,
     save_instagram_post,
     sumar_seguidores,
 )
 from roleplay.models import InstagramPost, PlayerProfile
-from roleplay.servicios.instagram import generar_reaccion_post
+from roleplay.servicios.instagram import generar_reaccion_post, sugerir_post
+from roleplay.servicios.partida_real import leer_para_entrevista
 from roleplay.ui import estilos
 from roleplay.ui.comun import ejecutar_en_hilo, esc, fecha_corta, miles
 from roleplay.ui.componentes import (
@@ -61,6 +63,9 @@ class InstagramWindow(QWidget):
         self.perfil = None
         # (jugador, texto) del post que se esta publicando
         self._publicando: tuple[PlayerProfile, str] | None = None
+        self._lectura = None  # la partida de FC 26, si hay (para el contexto real)
+        self._leyendo_partida = False
+        self._sugiriendo = False
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 34, 40, 34)
@@ -97,8 +102,14 @@ class InstagramWindow(QWidget):
         nuevo.cuerpo.addWidget(self.post_edit)
         self.publicar_btn = boton(TEXTO_PUBLICAR, primario=True, icono_nombre="enviar")
         self.publicar_btn.clicked.connect(self._on_publicar_clicked)
+        self.sugerir_btn = boton("Sugerir post", icono_nombre="chispa")
+        self.sugerir_btn.setToolTip("Escribe un post con tu personalidad sobre tu ultimo partido (lo podes editar)")
+        self.sugerir_btn.clicked.connect(self._on_sugerir_clicked)
         nuevo.cuerpo.addLayout(
-            fila(texto_suave("Los comentarios dependen de tu reputacion.", ajustar=False), None, self.publicar_btn)
+            fila(
+                texto_suave("Los comentarios dependen de tu reputacion y de tu temporada.", ajustar=False),
+                None, self.sugerir_btn, self.publicar_btn,
+            )
         )
         layout.addWidget(nuevo)
 
@@ -128,12 +139,67 @@ class InstagramWindow(QWidget):
             self.header_label.setText("INSTAGRAM")
             self.sub_label.setText("No encontre ningun personaje guardado. Crea uno primero desde el Resumen.")
             self.publicar_btn.setEnabled(False)
+            self.sugerir_btn.setEnabled(False)
             limpiar_layout(self.feed_layout)
             return
 
         self._refrescar_cabecera()
         self.publicar_btn.setEnabled(self._publicando is None)
+        self.sugerir_btn.setEnabled(not self._sugiriendo)
         self._cargar_feed()
+        if not self._leyendo_partida:
+            self._leyendo_partida = True
+            ejecutar_en_hilo(
+                leer_para_entrevista, self.perfil.id,
+                al_completar=self._on_partida_leida, al_fallar=self._on_partida_error,
+            )
+
+    def _on_partida_leida(self, lectura):
+        self._leyendo_partida = False
+        self._lectura = lectura
+
+    def _on_partida_error(self, _mensaje: str):
+        self._leyendo_partida = False  # sin partida, Instagram funciona igual
+
+    def _contexto_real(self) -> str:
+        return self._lectura.contexto if self._lectura is not None else ""
+
+    def _ultimo_partido(self) -> str:
+        """El ultimo partido, de la partida de FC 26 o de las entrevistas."""
+        if self._lectura is not None and self._lectura.ultimo is not None:
+            s = self._lectura.ultimo.stats
+            return f"{self._lectura.ultimo.resumen}; el marco {s.goles_jugador} goles, nota {s.rating_jugador:.1f}"
+        historial = load_match_interviews(self.perfil.id)
+        if not historial:
+            return ""
+        p = historial[0]
+        return (
+            f"{self.perfil.club_actual or 'su equipo'} {p.goles_equipo}-{p.goles_rival} {p.equipo_rival or 'rival'}; "
+            f"el marco {p.goles_jugador} goles, rating {p.rating_jugador:.1f}"
+        )
+
+    def _on_sugerir_clicked(self):
+        self._sugiriendo = True
+        self.sugerir_btn.setEnabled(False)
+        self.sugerir_btn.setText("ESCRIBIENDO...")
+        ejecutar_en_hilo(
+            sugerir_post, self.perfil, self._contexto_real(), self._ultimo_partido(),
+            al_completar=self._on_sugerido, al_fallar=self._on_sugerir_error,
+        )
+
+    def _terminar_sugerencia(self):
+        self._sugiriendo = False
+        self.sugerir_btn.setEnabled(self.perfil is not None)
+        self.sugerir_btn.setText("SUGERIR POST")
+
+    def _on_sugerido(self, texto: str):
+        self._terminar_sugerencia()
+        self.post_edit.setPlainText(texto)
+        self.post_edit.setFocus()
+
+    def _on_sugerir_error(self, mensaje: str):
+        self._terminar_sugerencia()
+        QMessageBox.warning(self, "No se pudo sugerir el post", mensaje)
 
     def _refrescar_cabecera(self):
         reputacion = get_reputacion_actual(self.perfil.id)
@@ -196,6 +262,7 @@ class InstagramWindow(QWidget):
             texto,
             get_reputacion_actual(self.perfil.id),
             get_seguidores(self.perfil.id),
+            self._contexto_real(),
             al_completar=self._on_publicar_completado,
             al_fallar=self._on_publicar_error,
         )

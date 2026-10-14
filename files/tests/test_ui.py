@@ -281,3 +281,37 @@ class TestArranque(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestInstagramConContexto(ayuda.PruebaDeInterfaz):
+    def setUp(self):
+        super().setUp()
+        self.pid = database.save_profile(PlayerProfile(nombre_jugador="Simon Canales", club_actual="Man Utd"))
+        database.save_match_interview(
+            __import__("roleplay.models", fromlist=["MatchInterviewRecord"]).MatchInterviewRecord(
+                player_id=self.pid, goles_equipo=3, goles_rival=1, equipo_rival="Arsenal", goles_jugador=2, rating_jugador=8.7
+            )
+        )
+        from roleplay.ui import instagram
+
+        self.modulo = instagram
+        self.pagina = instagram.InstagramWindow()
+        ayuda.esperar_tareas()
+
+    def test_sugerir_post_usa_el_ultimo_partido_y_queda_editable(self):
+        with mock.patch.object(self.modulo, "sugerir_post", return_value="Tres puntos y dos goles ⚽") as sugerir:
+            self.pagina.sugerir_btn.click()
+            ayuda.esperar_tareas()
+        self.assertEqual(self.pagina.post_edit.toPlainText(), "Tres puntos y dos goles ⚽")
+        self.assertIn("Man Utd 3-1 Arsenal", sugerir.call_args.args[2])
+        self.assertTrue(self.pagina.sugerir_btn.isEnabled())
+
+    def test_publicar_manda_el_contexto_real(self):
+        lectura = mock.Mock(contexto="CONTEXTO REAL", ultimo=None)
+        self.pagina._lectura = lectura
+        self.pagina.post_edit.setPlainText("Vamos")
+        reaccion = InstagramReaccionIA(comentarios=[], likes_estimados=10, crecimiento_seguidores=1)
+        with mock.patch.object(self.modulo, "generar_reaccion_post", return_value=reaccion) as publicar:
+            self.pagina.publicar_btn.click()
+            ayuda.esperar_tareas()
+        self.assertEqual(publicar.call_args.args[4], "CONTEXTO REAL")
