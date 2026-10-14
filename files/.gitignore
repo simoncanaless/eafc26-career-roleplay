@@ -1,0 +1,12 @@
+# claves de Gemini: nunca al repositorio
+.env
+.env.txt
+
+# entorno y caches
+.venv/
+__pycache__/
+*.pyc
+
+# la base con tu carrera (datos personales, no codigo)
+career_roleplay.db
+career_roleplay.db-journal

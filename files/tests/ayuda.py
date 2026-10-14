@@ -1,0 +1,105 @@
+"""
+Lo comun a todas las pruebas:
+
+- Qt sin ventana (QT_QPA_PLATFORM=offscreen).
+- Una base SQLite temporal por prueba: nunca se toca career_roleplay.db.
+- Gemini bloqueado: si una prueba llega a llamar a la API de verdad, falla.
+- Dialogos modales mudos (si no, cuelgan la prueba).
+"""
+
+import os
+import subprocess
+import sys
+import tempfile
+import time
+import unittest
+from pathlib import Path
+from unittest import mock
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+RAIZ = Path(__file__).resolve().parent.parent
+if str(RAIZ) not in sys.path:
+    sys.path.insert(0, str(RAIZ))
+
+from roleplay import config, database, gemini  # noqa: E402
+
+
+def _gemini_prohibido(*_args, **_kwargs):
+    raise AssertionError("Una prueba intento llamar a Gemini de verdad: mockeala.")
+
+
+gemini._cliente = _gemini_prohibido
+
+
+def qapp():
+    from PySide6.QtWidgets import QApplication
+
+    return QApplication.instance() or QApplication([])
+
+
+def esperar_tareas(segundos: float = 5.0) -> None:
+    """Espera a que terminen los hilos lanzados con ejecutar_en_hilo y
+    entrega sus senales (completado / error) en el hilo de la interfaz."""
+    from roleplay.ui.comun import tareas_vivas
+
+    app = qapp()
+    limite = time.monotonic() + segundos
+    while tareas_vivas().cantidad() and time.monotonic() < limite:
+        app.processEvents()
+        time.sleep(0.01)
+    app.processEvents()
+    if tareas_vivas().cantidad():
+        raise AssertionError("Quedaron hilos corriendo despues de esperar.")
+
+
+def correr_aislado(codigo: str, segundos: float = 30.0) -> subprocess.CompletedProcess:
+    """Corre `codigo` en otro proceso de Python (con tests/ayuda importado).
+    Para escenarios que, si fallan, cierran el proceso entero: asi la
+    prueba falla con un mensaje en vez de tumbar toda la bateria."""
+    preambulo = f"import sys; sys.path.insert(0, {str(RAIZ / 'tests')!r}); import ayuda\n"
+    return subprocess.run(
+        [sys.executable, "-c", preambulo + codigo],
+        cwd=RAIZ,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=segundos,
+        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+    )
+
+
+class PruebaConBase(unittest.TestCase):
+    """Cada prueba arranca con una base vacia en una carpeta temporal."""
+
+    def setUp(self):
+        carpeta = tempfile.TemporaryDirectory()
+        self.addCleanup(carpeta.cleanup)
+        parche = mock.patch.object(config, "DB_PATH", Path(carpeta.name) / "prueba.db")
+        parche.start()
+        self.addCleanup(parche.stop)
+        database.init_db()
+
+
+class PruebaDeInterfaz(PruebaConBase):
+    """Ademas: QApplication y dialogos mudos (quedan grabados para revisar)."""
+
+    def setUp(self):
+        super().setUp()
+        qapp()
+        from PySide6.QtWidgets import QMessageBox
+
+        self.avisos = mock.MagicMock()
+        for nombre in ("information", "warning"):
+            parche = mock.patch.object(QMessageBox, nombre, self.avisos)
+            parche.start()
+            self.addCleanup(parche.stop)
+        self.addCleanup(esperar_tareas)
+
+
+def texto_visible(html: str) -> str:
+    """Lo que de verdad se ve de un texto con formato en un QLabel."""
+    from PySide6.QtGui import QTextDocument
+
+    documento = QTextDocument()
+    documento.setHtml(html)
+    return documento.toPlainText()
