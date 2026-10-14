@@ -18,15 +18,17 @@ from PySide6.QtWidgets import (
 )
 
 from roleplay.database import (
+    actualizar_club,
     get_reputacion_actual,
     get_seguidores,
     load_latest_profile,
     load_match_interviews,
     load_noticias_prensa,
 )
+from roleplay.servicios.partida_real import resumen_temporada
 from roleplay.servicios.prensa import calcular_estadisticas_acumuladas
 from roleplay.ui import estilos
-from roleplay.ui.comun import con_scroll, esc, miles
+from roleplay.ui.comun import con_scroll, ejecutar_en_hilo, esc, miles
 from roleplay.ui.componentes import (
     CartaJugador,
     FondoEstadio,
@@ -34,6 +36,7 @@ from roleplay.ui.componentes import (
     Tarjeta,
     agregar_noticia,
     boton,
+    chip,
     compacto,
     icono,
     limpiar_layout,
@@ -56,9 +59,12 @@ class PaginaResumen(QWidget):
     """Vistazo del personaje: su carta, los numeros de la carrera, la
     historia, las tramas abiertas y las ultimas noticias."""
 
-    def __init__(self, on_crear_personaje):
+    def __init__(self, on_crear_personaje, on_club_cambiado=None):
         super().__init__()
         self._on_crear_personaje = on_crear_personaje
+        self._on_club_cambiado = on_club_cambiado  # para que la barra lateral se entere
+        self._perfil = None
+        self._leyendo_temporada = False
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 34, 40, 34)
@@ -129,6 +135,21 @@ class PaginaResumen(QWidget):
         arriba.addLayout(derecha, 1)
         contenido.addLayout(arriba)
 
+        # ---- la temporada real (partida de FC 26) ----
+        self.temporada = Tarjeta("Tu temporada en FC 26", destacada=True)
+        self.temporada_label = texto_suave()
+        self.temporada.cuerpo.addWidget(self.temporada_label)
+        self.temporada_competiciones = QVBoxLayout()
+        self.temporada_competiciones.setSpacing(4)
+        self.temporada.cuerpo.addLayout(self.temporada_competiciones)
+        self.temporada_ultimos = QHBoxLayout()
+        self.temporada_ultimos.setSpacing(6)
+        self.temporada.cuerpo.addLayout(self.temporada_ultimos)
+        self.temporada_proximo = texto_suave()
+        self.temporada.cuerpo.addWidget(self.temporada_proximo)
+        self.temporada.hide()
+        contenido.addWidget(self.temporada)
+
         self.tramas = Tarjeta("Tramas abiertas")
         self.tramas_layout = QVBoxLayout()
         self.tramas_layout.setSpacing(6)
@@ -155,6 +176,7 @@ class PaginaResumen(QWidget):
             self.stats_label.setText("Todavia no creaste ningun personaje.")
             return
 
+        self._perfil = perfil
         reputacion = get_reputacion_actual(perfil.id)
         seguidores = get_seguidores(perfil.id)
         club = perfil.club_actual or "sin club definido"
@@ -165,30 +187,21 @@ class PaginaResumen(QWidget):
             f"<b>{esc(club)}</b> · Reputacion {reputacion}/100 · {miles(seguidores)} seguidores en Instagram"
         )
 
-        rating = f"{carrera['rating_promedio']:.1f}" if carrera["partidos_jugados"] else "-"
-        self.carta.mostrar(
-            perfil.nombre_jugador,
-            perfil.club_actual,
-            reputacion,
-            [
-                ("PJ", str(carrera["partidos_jugados"])),
-                ("GOL", str(carrera["goles_totales"])),
-                ("AST", str(carrera["asistencias_totales"])),
-                ("RAT", rating),
-                ("FIG", str(carrera["figuras"])),
-                ("SEG", compacto(seguidores)),
-            ],
+        # Mientras no se lea la partida (o si no hay), los numeros son los de
+        # los partidos registrados en la app.
+        self._mostrar_numeros(
+            perfil, reputacion, seguidores,
+            partidos=carrera["partidos_jugados"], goles=carrera["goles_totales"],
+            asistencias=carrera["asistencias_totales"], figura=carrera["figuras"],
+            nota=carrera["rating_promedio"] if carrera["partidos_jugados"] else None,
         )
         self.carta.setToolTip(
             f"Carta {nivel_carta(reputacion).nombre.lower()}: el color sube con la reputacion "
             "(bronce, plata desde 45, oro desde 70, elite desde 85)."
         )
-        self.mosaicos["partidos"].poner(carrera["partidos_jugados"])
-        self.mosaicos["goles"].poner(carrera["goles_totales"])
-        self.mosaicos["asistencias"].poner(carrera["asistencias_totales"])
-        self.mosaicos["rating"].poner(rating)
-        self.mosaicos["figuras"].poner(carrera["figuras"])
-        self.mosaicos["seguidores"].poner(miles(seguidores))
+        if not self._leyendo_temporada:
+            self._leyendo_temporada = True
+            ejecutar_en_hilo(resumen_temporada, al_completar=self._on_temporada, al_fallar=self._on_temporada_error)
 
         self.backstory_label.setText(esc(perfil.backstory_generado) or "(sin historia todavia)")
 
@@ -199,6 +212,83 @@ class PaginaResumen(QWidget):
             self.tramas_layout.addWidget(trama)
         self.tramas.setVisible(bool(perfil.ganchos_narrativos))
 
+        self._cargar_noticias(perfil)
+
+    def _mostrar_numeros(self, perfil, reputacion, seguidores, partidos, goles, asistencias, figura, nota):
+        rating = f"{nota:.1f}" if nota is not None else "-"
+        self.carta.mostrar(
+            perfil.nombre_jugador,
+            perfil.club_actual,
+            reputacion,
+            [
+                ("PJ", str(partidos)),
+                ("GOL", str(goles)),
+                ("AST", str(asistencias)),
+                ("RAT", rating),
+                ("FIG", str(figura)),
+                ("SEG", compacto(seguidores)),
+            ],
+        )
+        self.mosaicos["partidos"].poner(partidos)
+        self.mosaicos["goles"].poner(goles)
+        self.mosaicos["asistencias"].poner(asistencias)
+        self.mosaicos["rating"].poner(rating)
+        self.mosaicos["figuras"].poner(figura)
+        self.mosaicos["seguidores"].poner(miles(seguidores))
+
+    def _on_temporada(self, resumen):
+        self._leyendo_temporada = False
+        if resumen is None or self._perfil is None:
+            self.temporada.hide()
+            return
+        perfil = self._perfil
+        if resumen.club != perfil.club_actual:
+            # el club de la partida es el de verdad (cambia con los traspasos)
+            actualizar_club(perfil.id, resumen.club)
+            perfil.club_actual = resumen.club
+            if self._on_club_cambiado:
+                self._on_club_cambiado()
+            self.stats_label.setText(
+                f"<b>{esc(resumen.club)}</b> · Reputacion {get_reputacion_actual(perfil.id)}/100 · "
+                f"{miles(get_seguidores(perfil.id))} seguidores en Instagram"
+            )
+        totales = resumen.totales
+        self._mostrar_numeros(
+            perfil, get_reputacion_actual(perfil.id), get_seguidores(perfil.id),
+            partidos=totales["partidos"], goles=totales["goles"], asistencias=totales["asistencias"],
+            figura=totales["figura"], nota=totales["nota"],
+        )
+        self.carta.setToolTip(self.carta.toolTip() + "\nNumeros de tu partida de FC 26.")
+        self.temporada_label.setText(
+            f"<b>{esc(resumen.club)}</b> · {esc(resumen.posicion) or 'sin liga'} · "
+            f"partida \"{esc(resumen.partida)}\" al {resumen.fecha}"
+        )
+        limpiar_layout(self.temporada_competiciones)
+        for nombre, partidos, goles, asistencias, nota in resumen.por_competicion:
+            linea = QLabel(
+                f"<span style='color:{estilos.ACENTO}'>▸</span>&nbsp; <b>{esc(nombre)}</b> · {partidos} PJ · "
+                f"{goles} goles · {asistencias} asist." + (f" · nota {nota}" if nota is not None else "")
+            )
+            self.temporada_competiciones.addWidget(linea)
+        limpiar_layout(self.temporada_ultimos)
+        colores = {"G": estilos.POSITIVO, "E": estilos.MIXTO, "P": estilos.NEGATIVO}
+        for letra, marcador_texto, competicion in resumen.ultimos:
+            ficha = chip(letra, colores[letra])
+            ficha.setToolTip(f"{marcador_texto} ({competicion})")
+            self.temporada_ultimos.addWidget(ficha)
+        if resumen.ultimos:
+            ultimo = texto_suave(f"Ultimo: {esc(resumen.ultimos[-1][1])}", ajustar=False)
+            self.temporada_ultimos.addWidget(ultimo)
+        self.temporada_ultimos.addStretch()
+        self.temporada_proximo.setText(f"Proximo partido: {esc(resumen.proximo)}" if resumen.proximo else "")
+        self.temporada.show()
+
+    def _on_temporada_error(self, _mensaje: str):
+        # sin la partida el Resumen funciona igual, con los numeros de la app
+        self._leyendo_temporada = False
+        self.temporada.hide()
+
+    def _cargar_noticias(self, perfil):
         limpiar_layout(self.noticias_layout)
         noticias = load_noticias_prensa(perfil.id, limite=NOTICIAS_EN_RESUMEN)
         if not noticias:
@@ -240,7 +330,7 @@ class MainMenuWindow(QMainWindow):
         lateral_layout.addSpacing(28)
 
         # ---- paginas: (texto, icono, pagina) ----
-        self.pagina_resumen = PaginaResumen(self._abrir_wizard_personaje)
+        self.pagina_resumen = PaginaResumen(self._abrir_wizard_personaje, self._refrescar_jugador)
         self.pagina_entrevistas = InterviewWindow()
         self.pagina_instagram = InstagramWindow()
         self._paginas = [

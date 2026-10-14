@@ -50,7 +50,13 @@ def describir_partido(stats: MatchStats) -> str:
     return ", ".join(partes)
 
 
-def _build_prompt(perfil: PlayerProfile, stats: MatchStats) -> str:
+def _contexto(contexto_real: str) -> str:
+    if not contexto_real:
+        return ""
+    return f"\n{contexto_real}\n(Datos reales de su partida: podes usarlos, no los contradigas.)\n"
+
+
+def _build_prompt(perfil: PlayerProfile, stats: MatchStats, contexto_real: str = "") -> str:
     return f"""
 Sos un periodista deportivo en un modo carrera roleplay de EAFC 26.
 Genera 2 a 4 preguntas de entrevista en espanol para el jugador, luego de
@@ -58,14 +64,14 @@ este partido.
 
 {ficha_jugador(perfil, backstory=True, ganchos=True)}
 Resultado del partido: {describir_partido(stats)}
-
+{_contexto(contexto_real)}
 Al menos una pregunta debe referirse al partido (goles, rating, tarjetas,
 etc.). Otra puede usar alguno de los ganchos narrativos.
 """.strip()
 
 
 def _build_prompt_evaluacion(
-    perfil: PlayerProfile, stats: MatchStats, respuestas: list[tuple[str, str]]
+    perfil: PlayerProfile, stats: MatchStats, respuestas: list[tuple[str, str]], contexto_real: str = ""
 ) -> str:
     qa_texto = "\n\n".join(f"P: {pregunta}\nR: {respuesta}" for pregunta, respuesta in respuestas)
 
@@ -75,7 +81,7 @@ despues de un partido, en un modo carrera roleplay de EAFC 26.
 
 {ficha_jugador(perfil, ganchos=True)}
 Resultado del partido: {describir_partido(stats)}
-
+{_contexto(contexto_real)}
 Estas son las preguntas que le hiciste y las respuestas reales que dio:
 
 {qa_texto}
@@ -97,10 +103,10 @@ Genera:
 
 
 def generar_entrevista(
-    perfil: PlayerProfile, stats: MatchStats, api_key: Optional[str] = None
+    perfil: PlayerProfile, stats: MatchStats, contexto_real: str = "", api_key: Optional[str] = None
 ) -> list[str]:
     entrevista = generar_json(
-        _build_prompt(perfil, stats),
+        _build_prompt(perfil, stats, contexto_real),
         Entrevista,
         "Esperate un poco y apreta 'Generar entrevista' de nuevo.",
         api_key=api_key,
@@ -112,11 +118,12 @@ def evaluar_respuestas(
     perfil: PlayerProfile,
     stats: MatchStats,
     respuestas: list[tuple[str, str]],
+    contexto_real: str = "",
     api_key: Optional[str] = None,
 ) -> ReaccionPrensa:
     """Reaccion de prensa + impacto en reputacion (ya acotado)."""
     resultado = generar_json(
-        _build_prompt_evaluacion(perfil, stats, respuestas),
+        _build_prompt_evaluacion(perfil, stats, respuestas, contexto_real),
         ReaccionPrensa,
         "Esperate un poco y volve a enviar las respuestas.",
         api_key=api_key,

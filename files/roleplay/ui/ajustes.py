@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from roleplay import ajustes
 from roleplay.gemini import get_gemini_api_keys, guardar_clave, probar_clave, usa_lista_de_claves
+from roleplay.partida import lector
 from roleplay.servicios.accesos import crear_accesos
 from roleplay.servicios.juego import abrir_juego, elegir_a_mano, juego_configurado, olvidar_eleccion
 from roleplay.ui import estilos
@@ -166,6 +167,22 @@ class DialogoAjustes(QDialog):
         juego.cuerpo.addLayout(fila(None, detectar, elegir))
         layout.addWidget(juego)
 
+        partida = Tarjeta("Tu partida de FC 26")
+        partida.cuerpo.addWidget(
+            texto_suave(
+                "La sala de prensa y el Resumen leen tu partida de Carrera Jugador (resultados, "
+                "quien hizo los goles, tus numeros). Solo se lee: el juego no se toca."
+            )
+        )
+        self.partida_label = texto_suave()
+        partida.cuerpo.addWidget(self.partida_label)
+        reciente = boton("Usar la mas reciente")
+        reciente.clicked.connect(self._on_partida_reciente)
+        elegir_partida = boton("Elegir otra...")
+        elegir_partida.clicked.connect(self._on_elegir_partida)
+        partida.cuerpo.addLayout(fila(None, reciente, elegir_partida))
+        layout.addWidget(partida)
+
         iconos = Tarjeta("Iconos del escritorio")
         iconos.cuerpo.addWidget(
             texto_suave(
@@ -207,6 +224,14 @@ class DialogoAjustes(QDialog):
             self.clave_label.setText(f"Configurada (termina en …{esc(claves[0][-4:])}).")
         else:
             self.clave_label.setText("Sin clave: la IA no funciona hasta que pongas una.")
+        elegida = lector.guardado_elegido()
+        if elegida is None:
+            self.partida_label.setText(
+                f"No encontre partidas de Carrera Jugador en {esc(str(lector.CARPETA_GUARDADOS))}."
+            )
+        else:
+            cual = "elegida a mano" if ajustes.leer().get("partida") else "la mas reciente"
+            self.partida_label.setText(f"<b>{esc(elegida.name)}</b> ({cual})")
         juego = juego_configurado()
         self.juego_label.setText(
             f"<b>{esc(juego.describir())}</b><br>{esc(juego.comando)}" if juego
@@ -223,6 +248,18 @@ class DialogoAjustes(QDialog):
             elegir_juego_a_mano(self)
         except ValueError as exc:
             QMessageBox.warning(self, "No se pudo elegir", str(exc))
+        self._refrescar()
+
+    def _on_elegir_partida(self):
+        ruta, _ = QFileDialog.getOpenFileName(
+            self, "Elegi tu partida de Carrera Jugador", str(lector.CARPETA_GUARDADOS), "Carrera jugador (CmPlr*)"
+        )
+        if ruta:
+            ajustes.guardar(partida=ruta)
+        self._refrescar()
+
+    def _on_partida_reciente(self):
+        ajustes.guardar(partida=None)
         self._refrescar()
 
     def _on_detectar(self):

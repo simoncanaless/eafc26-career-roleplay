@@ -26,11 +26,20 @@ INSTALAR
      - EA FC 26 + Roleplay   el mismo juego, y ademas esta app
 
 
+SI JUGAS CARRERA JUGADOR
+------------------------
+La app lee tu partida guardada de FC 26 (solo la lee, no la cambia): tu ultimo
+partido se carga solo en la Sala de prensa, la prensa escribe sobre lo que paso de
+verdad (resultados, quien hizo los goles) y el Resumen muestra tu temporada real.
+
+
 JUGAR
 -----
 - Abri "EA FC 26 + Roleplay". La app se queda en la Sala de prensa.
-- Al terminar un partido, en la pantalla de estadisticas: "Capturar
-  pantalla" (o escribi los numeros a mano), "Generar entrevista" y responde.
+- Al terminar un partido (y que el juego guarde): "Cargar de mi partida",
+  "Generar entrevista" y responde, escribiendo o por voz. Si no jugas Carrera
+  Jugador: "Capturar pantalla" en la pantalla de estadisticas, o escribi los
+  numeros a mano.
 - Para que la captura funcione con el juego abierto, usa el juego en
   "Ventana sin bordes" (Ajustes de pantalla del FC 26).
 

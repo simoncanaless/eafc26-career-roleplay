@@ -162,14 +162,22 @@ class NoticiaIA(BaseModel):
     tono: str  # "positiva" | "negativa" | "mixta" | "neutral"
 
 
-def _build_prompt_noticia_jugador(perfil: PlayerProfile, stats: dict, hitos: list[dict]) -> str:
+def _bloque_real(contexto_real: str) -> str:
+    if not contexto_real:
+        return ""
+    return f"\n{contexto_real}\n(Estos datos son reales de su partida: usalos y no los contradigas.)\n"
+
+
+def _build_prompt_noticia_jugador(
+    perfil: PlayerProfile, stats: dict, hitos: list[dict], contexto_real: str = ""
+) -> str:
     return f"""
 Sos un periodista deportivo escribiendo una noticia espontanea (no una
 entrevista) sobre {perfil.nombre_jugador}, en un modo carrera roleplay
 de EAFC 26.
 
 {ficha_jugador(perfil, backstory=True)}
-
+{_bloque_real(contexto_real)}
 Datos acumulados de su carrera hasta ahora:
 - Partidos jugados: {stats['partidos_jugados']}
 - Goles totales: {stats['goles_totales']}
@@ -209,6 +217,22 @@ carrera. Clasifica el tono como "positiva", "negativa" o "neutral".
 """.strip()
 
 
+def _build_prompt_noticia_real(perfil: PlayerProfile, hecho: str, contexto_real: str) -> str:
+    return f"""
+Sos un periodista deportivo. Escribi una noticia corta (titular + 2-4
+frases, en espanol) sobre este hecho REAL del modo carrera de EAFC 26 en
+el que juega {perfil.nombre_jugador} (no es el protagonista):
+
+{hecho}
+{_bloque_real(contexto_real)}
+Reglas: los resultados, goles y posiciones son exactamente esos. Nombra
+solo a los jugadores que aparecen con nombre en el hecho; si aparece "el
+delantero del X", no le inventes un nombre. Podes agregar color (reaccion
+de los hinchas, lo que significa para la tabla) sin inventar otros datos.
+Clasifica el tono como "positiva", "negativa" o "neutral".
+""".strip()
+
+
 def _redactar(prompt: str, api_key: Optional[str]) -> NoticiaIA:
     return generar_json(
         prompt, NoticiaIA, "No se pudo generar la noticia esta vez.", api_key=api_key
@@ -221,9 +245,15 @@ def revisar_prensa(
     estado_prensa: dict,
     api_key: Optional[str] = None,
     incluir_general: bool = True,
+    contexto_real: str = "",
+    hechos_reales: Optional[list[str]] = None,
 ) -> dict:
     """Busca hitos nuevos en el historial y, a veces, agrega una noticia
     general de ambiente.
+
+    Con la partida de FC 26 (servicios/partida_real.py): `contexto_real` va
+    a la noticia sobre el jugador, y si hay `hechos_reales` la noticia del
+    mundo es sobre el primero (siempre), en vez de una inventada al azar.
 
     Devuelve {"noticias": list[NoticiaPrensa] (sin guardar),
               "hitos": list[dict],
@@ -237,7 +267,7 @@ def revisar_prensa(
     noticias: list[NoticiaPrensa] = []
 
     if hitos:
-        redactada = _redactar(_build_prompt_noticia_jugador(perfil, stats, hitos), api_key)
+        redactada = _redactar(_build_prompt_noticia_jugador(perfil, stats, hitos, contexto_real), api_key)
         noticias.append(
             NoticiaPrensa(
                 player_id=perfil.id,
@@ -249,9 +279,16 @@ def revisar_prensa(
             )
         )
 
-    if incluir_general and random.random() < PROBABILIDAD_NOTICIA_GENERAL:
+    if hechos_reales:
+        prompt_general = _build_prompt_noticia_real(perfil, hechos_reales[0], contexto_real)
+    elif incluir_general and random.random() < PROBABILIDAD_NOTICIA_GENERAL:
+        prompt_general = _build_prompt_noticia_general(perfil)
+    else:
+        prompt_general = None
+
+    if prompt_general:
         try:
-            redactada = _redactar(_build_prompt_noticia_general(perfil), api_key)
+            redactada = _redactar(prompt_general, api_key)
         except RuntimeError:
             if not noticias:
                 raise

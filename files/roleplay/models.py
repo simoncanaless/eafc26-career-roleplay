@@ -114,6 +114,8 @@ class MatchInterviewRecord:
     respuestas_jugador: list[str] = field(default_factory=list)  # paralela a preguntas
     reaccion_prensa: str = ""
     delta_reputacion: int = 0
+    origen: str = ""  # "partida" (leido del guardado de FC 26), "captura" o "manual"
+    fecha_juego: str = ""  # fecha del partido dentro del juego (AAAA-MM-DD), si se sabe
 
 
 @dataclass

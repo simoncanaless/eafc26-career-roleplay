@@ -21,6 +21,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # Toda la bateria (y los procesos que lanza) usa una carpeta de datos propia:
 # nada de lo que se pruebe escribe en la carpeta del proyecto.
 os.environ["EAFC_ROLEPLAY_DATOS"] = tempfile.mkdtemp(prefix="eafc_pruebas_")
+# ...y una carpeta de guardados de FC 26 vacia: nunca se lee la partida real
+os.environ["EAFC_FC26_GUARDADOS"] = tempfile.mkdtemp(prefix="eafc_guardados_")
 RAIZ = Path(__file__).resolve().parent.parent
 if str(RAIZ) not in sys.path:
     sys.path.insert(0, str(RAIZ))

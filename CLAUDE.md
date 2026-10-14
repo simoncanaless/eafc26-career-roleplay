@@ -67,6 +67,11 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 | `roleplay/servicios/juego.py` | Encontrar FC 26 (elegido a mano > Steam > EA app > Epic; registro inyectable) y abrirlo con `os.startfile` por su plataforma |
 | `roleplay/servicios/accesos.py` | Los dos iconos del escritorio (.url para URLs, .lnk via WScript.Shell por PowerShell) |
 | `roleplay/servicios/audio.py` | Voz: `listar_microfonos` (solo la API de audio por defecto), `GrabadorMicrofono` (WAV mono 16 kHz, tope 120 s, `crear_stream` inyectable), `transcribir(wav, pregunta)` |
+| `roleplay/partida/formato.py` | Bytes del guardado de FC 26 -> registros (bases de datos de EA, secciones `teams`/`stagadv`/`stndgs`/`compavg`). Valida todo; si algo no calza, `FormatoDesconocido` |
+| `roleplay/partida/carrera.py` | `construir(datos) -> Carrera`: equipos, competiciones, partidos, `actuaciones_en(partido)` (quien jugo/marco, de los ultimos 5 partidos de cada jugador), `tabla()` calculada con los resultados, `goleadores()`, `ficha(jugador)`. Los codigos de tablas/campos de FC 26 estan arriba del archivo |
+| `roleplay/partida/lector.py` | `carrera_actual()`: el `CmPlr*` mas reciente (o el elegido en Ajustes) de `%LOCALAPPDATA%\EA SPORTS FC 26\settings`, con cache por fecha/tamano. Solo lee. `EAFC_FC26_GUARDADOS` cambia la carpeta |
+| `roleplay/servicios/partida_real.py` | Lo que la app hace con la partida: `ultimo_partido()` (stats del ultimo partido; asistencias/tarjetas/figura por diferencia con la lectura anterior, `estado_json.partida`), `contexto_temporada()` (para los prompts), `hechos_destacados()` (hat-trick > goleada > choque de punta, elegidos por codigo), `revisar_prensa_con_partida()`, `resumen_temporada()`, `leer_para_entrevista()` |
+| `roleplay/servicios/identificar.py` | La IA pone nombre a jugadores (por su ficha: club, posicion, seleccion, nacimiento) y copas (por sus equipos). Sin seguridad -> nombre vacio. Cache en la tabla `nombre_conocido` |
 | `roleplay/ui/comun.py` | `ejecutar_en_hilo`, `esc` (escape HTML), `miles`, `fecha_corta`, `con_scroll` (pagina transparente) |
 | `roleplay/ui/estilos.py` | Tema oscuro estilo EA FC: colores (unico lugar), `fuente_titulo()`, QSS, paleta forzada |
 | `roleplay/ui/componentes.py` | `icono()` (SVG propios coloreados), `titulo_pagina`, `titulo_seccion`, `Tarjeta`, `Mosaico`, `chip`/`chip_tono`, `chip_alternable`, `fila` (None = estirable), `CartaJugador` (carta FUT pintada; nivel por reputacion: bronce <45, plata, oro >=70, elite >=85), `Avatar`, `FondoEstadio`, `agregar_noticia`, `limpiar_layout` |
@@ -83,6 +88,10 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 
 ## Convenciones (respetarlas)
 
+- **La partida de FC 26 se LEE, nunca se escribe** (y no se toca el juego). Los numeros
+  (resultados, goles, tablas, quien es noticia) los decide el codigo; la IA solo pone
+  nombres que la partida no trae (con cache) y redacta. Un nombre dudoso va vacio y el
+  jugador se describe ("el delantero centro del Arsenal"): nunca inventar.
 - **El juego nunca se toca**: ni archivos, ni memoria, ni inyeccion. Se abre por su
   plataforma (`os.startfile` de la URL/acceso) y la app solo lee la pantalla. Por eso no
   lo rompe, las actualizaciones del juego no la rompen y se puede jugar online.
@@ -131,7 +140,11 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 
 ## Testing
 
-`.venv\Scripts\python.exe -m unittest discover -s tests` (77 pruebas, ~6 s). `tests/ayuda.py`:
+`.venv\Scripts\python.exe -m unittest discover -s tests` (101 pruebas, ~8 s). `tests/ayuda.py`:
+- Fija `EAFC_FC26_GUARDADOS` a una carpeta vacia: las pruebas no leen la partida real.
+  `tests/fabrica_partida.py` arma un guardado FALSO con el mismo formato (para todo lo de
+  `roleplay/partida`). `TestPartidaRealDelPC` lee la partida real si existe (solo lectura,
+  exige que >90% de los marcadores cuadren con los goles de los jugadores); si no, se salta.
 - Fija `EAFC_ROLEPLAY_DATOS` a una carpeta temporal ANTES de importar `roleplay`: ni las
   pruebas ni sus subprocesos escriben en la carpeta del proyecto.
 - `PruebaConBase`: base temporal por prueba (`config.DB_PATH` parcheado).
@@ -189,7 +202,8 @@ Hecho:
 6. Lanzador .exe + icono + acceso directo; pruebas automaticas (unittest)
 
 Hecho tambien: iconos "EA FC 26" / "EA FC 26 + Roleplay", boton JUGAR, Ajustes con
-diagnostico, y el paquete para amigos (cada uno con su clave y sus datos en APPDATA).
+diagnostico, el paquete para amigos (cada uno con su clave y sus datos en APPDATA) y
+la lectura de la partida de FC 26 (ver arriba).
 
 Siguiente (decidido con Simon el 2026-10-14):
 - **Overlay mientras se juega**: ventana sin marco, siempre encima y semitransparente,
@@ -197,7 +211,13 @@ Siguiente (decidido con Simon el 2026-10-14):
   bordes" (en pantalla completa exclusiva ninguna ventana se puede dibujar encima sin
   engancharse al render del juego, que es justo lo que vigila el anticheat: no hacerlo).
   Se hace despues de que el resto este estable, reusando `componentes.py`.
-- **Datos del juego sin captura (opcional, decision de Simon)**: script Lua para el
+- **Leer la partida guardada: HECHO el 2026-10-14** (`roleplay/partida/`). La sala de
+  prensa carga sola el ultimo partido, el Resumen muestra la temporada real y sincroniza
+  el club, la prensa escribe sobre hechos reales con nombres reconocidos. Formato y
+  hallazgos en `files/docs/partida-fc26.md`. Ideas que siguen: hitos de prensa con los
+  totales reales (no solo con las entrevistas), traspasos (tablas `YMgA`/`NgwF`/`TtHG`
+  sin confirmar), contexto real en Instagram.
+- **Datos del juego via Live Editor (descartado por ahora)**: script Lua para el
   "FC 26 Live Editor" de xAranaktu que exporte stats de partidos a un JSON que la app
   lee. Solo carrera offline: el Live Editor funciona desactivando el anticheat de EA
   (riesgo de cuenta si se entra online con el inyectado; contra los terminos de EA).

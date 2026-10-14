@@ -44,6 +44,22 @@ def revisar() -> list[tuple[bool, str]]:
     anotar(juego is not None, f"Juego: {juego.describir() + ' -> ' + juego.comando if juego else 'NO ENCONTRADO (Ajustes > El juego)'}")
 
     try:
+        from roleplay.partida.lector import carrera_actual
+
+        carrera = carrera_actual()
+        if carrera is None:
+            anotar(True, "Partida de FC 26: no hay partidas de Carrera Jugador (es opcional)")
+        else:
+            jugador = carrera.nombre_editado(carrera.usuario_id) if carrera.usuario_id is not None else None
+            anotar(
+                jugador is not None,
+                f"Partida de FC 26: \"{carrera.partida}\" · {len(carrera.partidos)} partidos · "
+                f"jugador: {jugador or 'NO ENCONTRADO'} · club: {carrera.equipo(carrera.equipo_usuario())}",
+            )
+    except Exception as exc:  # noqa: BLE001
+        anotar(False, f"Partida de FC 26: no se pudo leer ({exc})")
+
+    try:
         from roleplay.servicios.audio import listar_microfonos
 
         microfonos = listar_microfonos()

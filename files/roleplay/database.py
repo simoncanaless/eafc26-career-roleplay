@@ -60,7 +60,19 @@ CREATE TABLE IF NOT EXISTS partido_entrevista (
     respuestas_jugador TEXT,     -- JSON list, paralela a preguntas_entrevista
     reaccion_prensa TEXT,
     delta_reputacion INTEGER,
+    origen TEXT DEFAULT '',
+    fecha_juego TEXT DEFAULT '',
     FOREIGN KEY(player_id) REFERENCES player_profile(id)
+);
+
+-- Nombres que la partida de FC 26 no trae (jugadores, copas), reconocidos
+-- una vez por la IA y guardados para siempre. nombre '' = no lo reconocio.
+CREATE TABLE IF NOT EXISTS nombre_conocido (
+    tipo TEXT NOT NULL,      -- 'jugador' | 'competicion'
+    id INTEGER NOT NULL,     -- id de EA
+    nombre TEXT,
+    seguro INTEGER,
+    PRIMARY KEY (tipo, id)
 );
 
 CREATE TABLE IF NOT EXISTS noticia_prensa (
@@ -91,6 +103,8 @@ CREATE TABLE IF NOT EXISTS instagram_post (
 # (tabla, columna, definicion). init_db las crea si faltan.
 COLUMNAS_AGREGADAS = [
     ("player_profile", "club_actual", "TEXT DEFAULT ''"),
+    ("partido_entrevista", "origen", "TEXT DEFAULT ''"),
+    ("partido_entrevista", "fecha_juego", "TEXT DEFAULT ''"),
 ]
 
 TABLAS = {
@@ -348,3 +362,41 @@ def save_instagram_post(post: InstagramPost) -> int:
 
 def load_instagram_posts(player_id: int, limite: int = 50) -> list[InstagramPost]:
     return _cargar_de_jugador(InstagramPost, player_id, limite)
+
+
+# ---- nombres reconocidos (jugadores y copas de la partida de FC 26) ----
+
+
+def get_nombres_conocidos(tipo: str, ids) -> dict[int, tuple[str, bool]]:
+    """{id: (nombre, seguro)} de los que ya se preguntaron (incluye los que
+    la IA no reconocio, con nombre '', para no volver a preguntar)."""
+    ids = list(ids)
+    if not ids:
+        return {}
+    with conectar() as conn:
+        filas = conn.execute(
+            f"SELECT id, nombre, seguro FROM nombre_conocido WHERE tipo = ? AND id IN ({','.join('?' * len(ids))})",
+            (tipo, *ids),
+        ).fetchall()
+    return {fila["id"]: (fila["nombre"] or "", bool(fila["seguro"])) for fila in filas}
+
+
+def guardar_nombres_conocidos(tipo: str, nombres: dict) -> None:
+    """nombres: {id: (nombre, seguro)}"""
+    with conectar() as conn:
+        conn.executemany(
+            "INSERT OR REPLACE INTO nombre_conocido (tipo, id, nombre, seguro) VALUES (?, ?, ?, ?)",
+            [(tipo, ident, nombre, int(seguro)) for ident, (nombre, seguro) in nombres.items()],
+        )
+
+
+def get_estado_partida(player_id: int) -> dict:
+    """Lo que se leyo de la partida de FC 26 la ultima vez (totales del
+    jugador por competicion, ultimo partido cargado): estado_json.partida."""
+    leido = _leer_estado(player_id)
+    return leido[0].get("partida", {}) if leido else {}
+
+
+def set_estado_partida(player_id: int, estado_partida: dict) -> None:
+    with _editar_estado(player_id) as (estado, _):
+        estado["partida"] = estado_partida

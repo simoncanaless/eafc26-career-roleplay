@@ -54,6 +54,23 @@ Para abrir un modulo suelto:
 .venv\Scripts\python.exe app.py instagram
 ```
 
+## Lee tu partida de FC 26
+
+Si jugas Carrera Jugador, la app lee tu partida guardada (solo la lee: el juego no se
+toca) y todo se vuelve real:
+
+- **Sala de prensa**: "Tu ultimo partido: Man Utd 5-3 Sunderland" y un boton que llena
+  el marcador, tus goles, tu nota y tus minutos. Las asistencias, tarjetas y figura salen
+  comparando con la lectura anterior (el juego solo guarda totales).
+- **Prensa**: noticias sobre lo que paso de verdad en tu mundo, con nombres: "Hat-trick
+  de Grealish afianza al Manchester City en la cima de la Premier League". Que es noticia
+  lo decide el codigo (hat-tricks, goleadas, choques de punta); Gemini reconoce a los
+  jugadores por su ficha (club, posicion, seleccion, nacimiento) y redacta.
+- **Resumen**: tu temporada real (partidos, goles, asistencias, nota por competicion, la
+  tabla, la racha y el proximo rival) y tu club al dia.
+
+Como funciona por dentro: `docs/partida-fc26.md`.
+
 ## Que hace cada modulo
 
 1. **Personaje.** Un quiz (origen, contexto, personalidad, motivacion, vida
@@ -90,6 +107,9 @@ roleplay/
     audio.py                grabar el microfono y transcribir
     juego.py                encontrar FC 26 (Steam/EA app/Epic) y abrirlo por su plataforma
     accesos.py              los dos iconos del escritorio
+    partida_real.py         la partida de FC 26 en la app (ultimo partido, contexto, hechos)
+    identificar.py          la IA pone nombre a jugadores y copas que la partida no nombra
+  partida/                  leer el guardado de FC 26 (formato, carrera, lector)
   ui/                       pantallas (PySide6), estilo EA FC
     estilos.py              colores, tipografias y hoja de estilos (unico lugar)
     componentes.py          carta FUT, tarjetas, mosaicos, chips, iconos, fondo

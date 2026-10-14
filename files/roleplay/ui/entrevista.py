@@ -38,12 +38,14 @@ from roleplay.database import (
     load_match_interviews,
     save_match_interview,
     save_noticia_prensa,
+    set_estado_partida,
     set_estado_prensa,
 )
 from roleplay.models import MatchInterviewRecord, PlayerProfile
 from roleplay.servicios.audio import MINIMO_SEGUNDOS, GrabadorMicrofono, listar_microfonos, transcribir
 from roleplay.servicios.captura import capturar_pantalla
 from roleplay.servicios.entrevista import evaluar_respuestas, generar_entrevista
+from roleplay.servicios.partida_real import leer_para_entrevista, revisar_prensa_con_partida
 from roleplay.servicios.prensa import revisar_prensa
 from roleplay.servicios.vision import MatchStats, extraer_stats_partido
 from roleplay.ui import estilos
@@ -99,7 +101,7 @@ class InterviewWindow(QWidget):
         # mientras Gemini responde.
         self._capturando = False
         self._generando = False
-        self._evaluando: tuple[PlayerProfile, MatchStats, list[tuple[str, str]]] | None = None
+        self._evaluando: tuple[PlayerProfile, MatchStats, list[tuple[str, str]], str, str] | None = None
         self._prensa_en_curso = False
         self._prensa_manual = False
         self._prensa_player_id: int | None = None
@@ -108,6 +110,12 @@ class InterviewWindow(QWidget):
         self._transcribiendo: int | None = None
         self._microfonos_cargados = False
         self._sin_microfono: str | None = None  # el motivo, si no se puede grabar
+        # partida de FC 26: lo leido (LecturaPartida) y de donde salieron las
+        # stats del formulario ("partida", "captura" o "manual")
+        self._lectura = None
+        self._leyendo_partida = False
+        self._origen = "manual"
+        self._fecha_juego = ""
         self._reloj = QTimer(self)
         self._reloj.setInterval(200)
         self._reloj.timeout.connect(self._tic_grabacion)
@@ -149,15 +157,24 @@ class InterviewWindow(QWidget):
     def _tarjeta_partido(self) -> Tarjeta:
         tarjeta = Tarjeta("1 · El partido", espaciado=14)
 
-        self.capturar_btn = boton(TEXTO_CAPTURAR, icono_nombre="captura")
-        self.capturar_btn.clicked.connect(self._on_capturar_clicked)
-        tarjeta.cuerpo.addLayout(
-            fila(
-                texto_suave("Captura la pantalla de stats al terminar el partido, o escribilas a mano.", ajustar=False),
-                None,
-                self.capturar_btn,
-            )
+        self.partida_label = texto_suave("Buscando tu partida de FC 26...")
+        self.cargar_partida_btn = boton("Cargar de mi partida", primario=True, icono_nombre="jugar")
+        self.cargar_partida_btn.setToolTip(
+            "Lee tu ultimo partido del guardado de la carrera (sin tocar el juego)"
         )
+        self.cargar_partida_btn.clicked.connect(self._on_cargar_partida_clicked)
+        self.capturar_btn = boton(TEXTO_CAPTURAR, icono_nombre="captura")
+        self.capturar_btn.setToolTip("O captura la pantalla de estadisticas al terminar el partido")
+        self.capturar_btn.clicked.connect(self._on_capturar_clicked)
+        fila_partida = QHBoxLayout()
+        fila_partida.setSpacing(10)
+        fila_partida.addWidget(self.partida_label, 1)
+        fila_partida.addWidget(self.cargar_partida_btn)
+        fila_partida.addWidget(self.capturar_btn)
+        tarjeta.cuerpo.addLayout(fila_partida)
+        self.partida_nota = texto_suave()
+        self.partida_nota.hide()
+        tarjeta.cuerpo.addWidget(self.partida_nota)
 
         # marcador
         self.goles_equipo_spin = self._spin_marcador()
@@ -306,6 +323,7 @@ class InterviewWindow(QWidget):
         self.club_edit.setText(self.perfil.club_actual)
         self.equipo_propio_label.setText((self.perfil.club_actual or "Tu equipo").upper())
         self._refrescar_reputacion()
+        self._leer_partida()
 
     def _refrescar_botones(self):
         """Habilita cada boton segun lo que haya en curso. Es el unico lugar
@@ -321,6 +339,9 @@ class InterviewWindow(QWidget):
             hay_perfil and bool(self._preguntas) and not ocupado_con_preguntas
         )
         self.revisar_prensa_btn.setEnabled(hay_perfil and not self._prensa_en_curso)
+        self.cargar_partida_btn.setEnabled(
+            hay_perfil and self._lectura is not None and self._lectura.ultimo is not None
+        )
 
         hay_microfono = self._sin_microfono is None
         self.microfono_combo.setEnabled(hay_microfono and self._grabacion is None)
@@ -413,6 +434,8 @@ class InterviewWindow(QWidget):
         self._refrescar_botones()
         self.capturar_btn.setText("VOLVER A CAPTURAR")
         self._cargar_stats_en_formulario(stats)
+        self._origen, self._fecha_juego = "captura", ""
+        self.partida_nota.hide()
         if stats.confianza_baja:
             QMessageBox.information(
                 self,
@@ -438,6 +461,7 @@ class InterviewWindow(QWidget):
             generar_entrevista,
             self.perfil,
             self._leer_stats_desde_formulario(),
+            self._contexto_real(),
             al_completar=self._on_entrevista_completada,
             al_fallar=self._on_entrevista_error,
         )
@@ -566,7 +590,7 @@ class InterviewWindow(QWidget):
 
         stats = self._leer_stats_desde_formulario()
         pares = list(zip(self._preguntas, respuestas))
-        self._evaluando = (self.perfil, stats, pares)
+        self._evaluando = (self.perfil, stats, pares, self._origen, self._fecha_juego)
         self._refrescar_botones()
         self.enviar_respuestas_btn.setText("EVALUANDO...")
 
@@ -575,12 +599,13 @@ class InterviewWindow(QWidget):
             self.perfil,
             stats,
             pares,
+            self._contexto_real(),
             al_completar=self._on_evaluacion_completada,
             al_fallar=self._on_evaluacion_error,
         )
 
     def _on_evaluacion_completada(self, resultado):
-        perfil, stats, pares = self._evaluando
+        perfil, stats, pares, origen, fecha_juego = self._evaluando
         self._evaluando = None
         self._refrescar_botones()
         self.enviar_respuestas_btn.setText(TEXTO_ENVIAR.upper())
@@ -602,8 +627,12 @@ class InterviewWindow(QWidget):
                 respuestas_jugador=[respuesta for _, respuesta in pares],
                 reaccion_prensa=resultado.reaccion_prensa,
                 delta_reputacion=resultado.delta_reputacion,
+                origen=origen,
+                fecha_juego=fecha_juego,
             )
         )
+        if origen == "partida":
+            self._leer_partida()  # para que diga "ya lo entrevistaste"
 
         delta = resultado.delta_reputacion
         color = estilos.POSITIVO if delta > 0 else estilos.NEGATIVO if delta < 0 else estilos.NEUTRO
@@ -630,6 +659,68 @@ class InterviewWindow(QWidget):
         self._refrescar_botones()
         self.enviar_respuestas_btn.setText(TEXTO_ENVIAR.upper())
         QMessageBox.warning(self, "Error al evaluar las respuestas", mensaje)
+
+    # ---- partida de FC 26 ----
+
+    def _contexto_real(self) -> str:
+        return self._lectura.contexto if self._lectura is not None else ""
+
+    def _leer_partida(self):
+        """Lee el guardado mas reciente en otro hilo (la primera vez tarda
+        ~1 s; despues, si el archivo no cambio, sale de la cache)."""
+        if self._leyendo_partida or self.perfil is None:
+            return
+        self._leyendo_partida = True
+        ejecutar_en_hilo(
+            leer_para_entrevista,
+            self.perfil.id,
+            al_completar=self._on_partida_leida,
+            al_fallar=self._on_partida_error,
+        )
+
+    def _on_partida_leida(self, lectura):
+        self._leyendo_partida = False
+        self._lectura = lectura
+        if lectura is None:
+            self.partida_label.setText(
+                "No encontre una partida de Carrera Jugador de FC 26 en este PC. "
+                "Captura la pantalla de stats o escribilas a mano."
+            )
+        elif lectura.ultimo is None:
+            self.partida_label.setText(f"Tu partida \"{esc(lectura.carrera.partida)}\" todavia no tiene partidos jugados.")
+        else:
+            ya = (
+                f" · <span style='color:{estilos.ACENTO}'>ya lo entrevistaste</span>"
+                if lectura.ya_entrevistado else ""
+            )
+            self.partida_label.setText(f"<b>Tu ultimo partido:</b> {esc(lectura.ultimo.resumen)}{ya}")
+        self._refrescar_botones()
+
+    def _on_partida_error(self, mensaje: str):
+        self._leyendo_partida = False
+        self._lectura = None
+        self.partida_label.setText(f"No pude leer tu partida de FC 26 ({esc(mensaje)}). Captura la pantalla o escribi las stats.")
+        self._refrescar_botones()
+
+    def _on_cargar_partida_clicked(self):
+        ultimo = self._lectura.ultimo
+        self._cargar_stats_en_formulario(ultimo.stats)
+        club = self._lectura.carrera.equipo(ultimo.equipo)
+        if club != self.perfil.club_actual:
+            actualizar_club(self.perfil.id, club)
+            self.perfil.club_actual = club
+            self.club_edit.setText(club)
+            self.equipo_propio_label.setText(club.upper())
+        set_estado_partida(self.perfil.id, ultimo.estado)
+        self._origen, self._fecha_juego = "partida", ultimo.partido.fecha.isoformat()
+        if ultimo.exacto:
+            self.partida_nota.setText("Cargado de tu partida, con asistencias, tarjetas y figura del partido.")
+        else:
+            self.partida_nota.setText(
+                "Cargado de tu partida. Las asistencias, tarjetas y figura de este partido revisalas a mano: "
+                "el juego solo guarda los totales, asi que salen solas recien desde el proximo partido que cargues."
+            )
+        self.partida_nota.show()
 
     # ---- club ----
 
@@ -658,11 +749,15 @@ class InterviewWindow(QWidget):
         self._refrescar_botones()
         self.revisar_prensa_btn.setText("REVISANDO...")
 
+        argumentos = [self.perfil, load_match_interviews(self.perfil.id), get_estado_prensa(self.perfil.id)]
+        if self._lectura is not None:
+            # con la partida: contexto real y noticias de hechos reales
+            funcion, argumentos = revisar_prensa_con_partida, [*argumentos, self._lectura.carrera]
+        else:
+            funcion = revisar_prensa
         ejecutar_en_hilo(
-            revisar_prensa,
-            self.perfil,
-            load_match_interviews(self.perfil.id),
-            get_estado_prensa(self.perfil.id),
+            funcion,
+            *argumentos,
             al_completar=self._on_prensa_completada,
             al_fallar=self._on_prensa_error,
         )
