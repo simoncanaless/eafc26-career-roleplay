@@ -44,6 +44,7 @@ from roleplay.ui.componentes import (
     boton,
     chip,
     compacto,
+    etiqueta_campo,
     icono,
     limpiar_layout,
     nivel_carta,
@@ -168,6 +169,15 @@ class PaginaResumen(QWidget):
         self.vitrina.hide()
         contenido.addWidget(self.vitrina)
 
+        # ---- las temporadas que ya terminaron ----
+        self.trayectoria = Tarjeta("Trayectoria")
+        self.trayectoria_grilla = QGridLayout()
+        self.trayectoria_grilla.setHorizontalSpacing(18)
+        self.trayectoria_grilla.setVerticalSpacing(6)
+        self.trayectoria.cuerpo.addLayout(self.trayectoria_grilla)
+        self.trayectoria.hide()
+        contenido.addWidget(self.trayectoria)
+
         self.tramas = Tarjeta("Tramas abiertas")
         self.tramas_layout = QVBoxLayout()
         self.tramas_layout.setSpacing(6)
@@ -230,12 +240,34 @@ class PaginaResumen(QWidget):
             self.tramas_layout.addWidget(trama)
         self.tramas.setVisible(bool(perfil.ganchos_narrativos))
 
-        self._cargar_vitrina(perfil)
+        estado_prensa = get_estado_prensa(perfil.id)
+        self._cargar_vitrina(estado_prensa)
+        self._cargar_trayectoria(estado_prensa)
         self._cargar_noticias(perfil)
 
-    def _cargar_vitrina(self, perfil):
+    def _cargar_trayectoria(self, estado_prensa: dict):
+        limpiar_layout(self.trayectoria_grilla)
+        temporadas = estado_prensa.get("trayectoria", [])
+        if temporadas:
+            for columna, rotulo in enumerate(("Temporada", "Club", "PJ", "Goles", "Asist.", "Nota", "Liga", "Titulos")):
+                self.trayectoria_grilla.addWidget(etiqueta_campo(rotulo), 0, columna)
+        for fila_n, t in enumerate(reversed(temporadas), start=1):  # la ultima arriba
+            liga = f"{t['posicion']}° {t['liga']}" if t.get("posicion") else "-"
+            valores = (
+                t["temporada"], t["club"], t["partidos"], t["goles"], t["asistencias"],
+                t["nota"] if t.get("nota") is not None else "-", liga, ", ".join(t.get("titulos", [])) or "-",
+            )
+            for columna, valor in enumerate(valores):
+                celda = QLabel(esc(valor))
+                if columna == 0:
+                    celda.setStyleSheet(f"color: {estilos.ACENTO}; font-weight: 700;")
+                self.trayectoria_grilla.addWidget(celda, fila_n, columna)
+        self.trayectoria_grilla.setColumnStretch(7, 1)
+        self.trayectoria.setVisible(bool(temporadas))
+
+    def _cargar_vitrina(self, estado_prensa: dict):
         limpiar_layout(self.vitrina_layout)
-        premios = get_estado_prensa(perfil.id).get("vitrina", [])
+        premios = estado_prensa.get("vitrina", [])
         for premio in reversed(premios):  # el mas nuevo arriba
             linea = QLabel(
                 f"<span style='color:{estilos.MIXTO}'>★</span>&nbsp; <b>{esc(premio['premio'])}</b> · "

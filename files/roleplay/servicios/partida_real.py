@@ -344,6 +344,7 @@ def revisar_prensa_con_partida(
     ][:1]
 
     premio, estado_mes = premio_del_mes(carrera, estado_prensa.get("mes"))
+    terminada, en_curso = archivar_temporada(carrera, estado_prensa.get("temporada_en_curso"))
     anteriores = database.get_clubes_vistos(carrera.partida)
     traspasos = mercado.detectar_traspasos(carrera, anteriores)[: mercado.TRASPASOS_EN_LA_NOTICIA]
     propio = mercado.traspaso_del_usuario(carrera, anteriores)
@@ -353,6 +354,8 @@ def revisar_prensa_con_partida(
             ids |= {e.jugador for e in carrera.goleadores(c, 3)}
     nombres = nombres_de_jugadores(carrera, ids)
     hitos_reales, estado_reales = detectar_hitos_reales(carrera, estado_prensa.get("reales"))
+    if terminada is not None:
+        hitos_reales.append({"tipo": "fin_de_temporada", "valor": describir_temporada(terminada)})
     if propio is not None:
         hitos_reales.append({
             "tipo": "nuevo_club", "valor": f"del {carrera.equipo(propio[0])} al {carrera.equipo(propio[1])}",
@@ -387,6 +390,11 @@ def revisar_prensa_con_partida(
             vitrina.append({"premio": PREMIOS_DE_VITRINA[hito["tipo"]], "detalle": hito["valor"],
                             "temporada": temporada_de(carrera.fecha_actual())})
     resultado["estado_prensa"]["vitrina"] = vitrina
+    if en_curso:
+        resultado["estado_prensa"]["temporada_en_curso"] = en_curso
+    if terminada is not None:
+        terminada["titulos"] = [p["premio"] for p in vitrina if p.get("temporada") == terminada["temporada"]]
+        resultado["estado_prensa"]["trayectoria"] = list(estado_prensa.get("trayectoria", [])) + [terminada]
     if traspasos:
         hoy = carrera.fecha_actual()
         nuevos = [
@@ -702,3 +710,59 @@ def describir_premio(carrera: Carrera, premio: PremioMes, nombres: dict[int, str
         f"jugador del mes de {premio.mes.split(' de ')[0]} en la {premio.liga}: marco "
         f"{cantidad(premio.goles, 'gol', 'goles')} en el mes."
     )
+
+
+# ---- la trayectoria: cada temporada, al terminar ----
+
+
+def resumen_de_la_temporada(carrera: Carrera) -> Optional[dict]:
+    """Lo que se archiva de la temporada en curso del usuario (club, sus
+    numeros y como va su club en la liga). None sin club o sin partidos."""
+    hoy, equipo = carrera.fecha_actual(), carrera.equipo_usuario()
+    if hoy is None or equipo is None or carrera.usuario_id is None:
+        return None
+    totales = totales_usuario(carrera)
+    partidos = sum(t["partidos"] for t in totales.values())
+    nota_total = sum(e.nota_total for e in carrera.estadisticas_de(carrera.usuario_id))
+    resumen = {
+        "temporada": temporada_de(hoy),
+        "club": carrera.equipo(equipo),
+        "partidos": partidos,
+        "goles": sum(t["goles"] for t in totales.values()),
+        "asistencias": sum(t["asistencias"] for t in totales.values()),
+        "figura": sum(t["figura"] for t in totales.values()),
+        "nota": round(nota_total / partidos / 10, 1) if partidos else None,
+        "liga": "",
+        "posicion": None,
+        "hasta": hoy.isoformat(),
+    }
+    ligas = [c for c in competiciones_del_usuario(carrera) if carrera.competiciones[c].es_liga]
+    if ligas:
+        resumen["liga"] = carrera.competicion(ligas[0])
+        resumen["posicion"] = carrera.posicion_en(ligas[0], equipo)
+    return resumen
+
+
+def archivar_temporada(carrera: Carrera, en_curso: Optional[dict]) -> tuple[Optional[dict], Optional[dict]]:
+    """(temporada que termino, resumen de la que esta en curso). `en_curso`
+    es el resumen guardado la vez anterior (estado_prensa): si el juego ya
+    paso a otra temporada, ese es el balance de la que termino (hasta lo
+    ultimo que la app alcanzo a ver)."""
+    actual = resumen_de_la_temporada(carrera)
+    if actual is None:
+        return None, en_curso
+    if en_curso and en_curso.get("temporada") != actual["temporada"]:
+        return dict(en_curso), actual
+    return None, actual
+
+
+def describir_temporada(t: dict) -> str:
+    texto = (
+        f"temporada {t['temporada']} con {t['club']}: {cantidad(t['partidos'], 'partido', 'partidos')}, "
+        f"{cantidad(t['goles'], 'gol', 'goles')}, {cantidad(t['asistencias'], 'asistencia', 'asistencias')}"
+    )
+    if t.get("nota") is not None:
+        texto += f", nota media {t['nota']}"
+    if t.get("posicion"):
+        texto += f"; su club termino {t['posicion']}° en la {t['liga']}"
+    return texto

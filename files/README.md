@@ -72,6 +72,10 @@ toca) y todo se vuelve real:
   (vos incluido), tus resultados y lo que viene, y la ultima fecha. Una pestana por cada
   competicion que juega tu club (liga, Champions, copas).
 
+**Trayectoria**: cuando el juego pasa a la temporada siguiente, la prensa publica el balance
+de tu temporada y queda archivada en el Resumen (club, partidos, goles, asistencias, nota,
+posicion de tu club y titulos).
+
 **Mercado de fichajes**: la app guarda en que club esta cada jugador de tu partida y, cuando
 alguien cambia de club, es un traspaso: si toca a tu club, si es una estrella (media 82+) o
 de tu liga, la prensa lo cuenta y aparece en TEMPORADA > Mercado de fichajes. Si el que

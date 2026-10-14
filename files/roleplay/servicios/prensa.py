@@ -46,6 +46,7 @@ DESCRIPCIONES_HITOS = {
     "maximo_goleador": "termino la temporada como maximo goleador de la {valor}",
     "jugador_del_mes": "fue elegido jugador del mes: {valor}",
     "nuevo_club": "fue transferido {valor} (dato real de su partida: es su nuevo club)",
+    "fin_de_temporada": "termino la {valor}. Escribi el balance de su temporada",
 }
 
 # Los premios y logros reales tambien mueven la reputacion (la sala de

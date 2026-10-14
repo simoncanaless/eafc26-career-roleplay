@@ -157,7 +157,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 
 ## Testing
 
-`.venv\Scripts\python.exe -m unittest discover -s tests` (164 pruebas, ~12 s). `tests/ayuda.py`:
+`.venv\Scripts\python.exe -m unittest discover -s tests` (172 pruebas, ~12 s). `tests/ayuda.py`:
 - Fija `EAFC_FC26_GUARDADOS` a una carpeta vacia: las pruebas no leen la partida real.
   `tests/fabrica_partida.py` arma un guardado FALSO con el mismo formato (para todo lo de
   `roleplay/partida`). `TestPartidaRealDelPC` lee la partida real si existe (solo lectura,
@@ -231,6 +231,11 @@ Siguiente (decidido con Simon el 2026-10-14):
   Falta probarlo encima del juego real (requiere FC 26 en "ventana sin bordes").
 - **Instagram con contexto real + "Sugerir post": HECHO el 2026-10-14**.
 - **Pagina Temporada (tabla, goleadores, tus partidos, ultima fecha): HECHO el 2026-10-14**.
+- **Trayectoria: HECHO el 2026-10-14**. Cada revision de prensa con la partida guarda
+  `estado_prensa.temporada_en_curso` (`resumen_de_la_temporada()`); cuando el juego pasa a otra temporada,
+  `archivar_temporada()` la mueve a `estado_prensa.trayectoria` (con los titulos de la vitrina), sale el hito
+  `fin_de_temporada` (balance en la prensa) y el Resumen muestra la tarjeta "Trayectoria". La partida no guarda
+  las temporadas pasadas de forma legible (`cPet`/`NgwF` tienen pistas, sin confirmar): se archiva desde ahora.
 - **Mercado de fichajes real: HECHO el 2026-10-14** (`servicios/mercado.py`; formato en `docs/partida-fc26.md`:
   `qdZF` liga de cada equipo, `CZUM` media/potencial/genero/posicion). Hasta 2 noticias del mundo por revision
   (`prensa.MAXIMO_NOTICIAS_MUNDO`), por importancia: el premio que gano otro, el mercado, el partido destacado.
