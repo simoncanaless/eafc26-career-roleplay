@@ -374,6 +374,7 @@ class LecturaPartida:
     ultimo: Optional[UltimoPartido]
     contexto: str
     ya_entrevistado: bool
+    previa: object = None  # PreviaPartido del proximo partido (servicios/previa.py), si hay
 
 
 def leer_para_entrevista(player_id: int) -> Optional[LecturaPartida]:
@@ -384,7 +385,10 @@ def leer_para_entrevista(player_id: int) -> Optional[LecturaPartida]:
     carrera = carrera_actual()
     if carrera is None:
         return None
-    ultimo = ultimo_partido(carrera, database.get_estado_partida(player_id))
+    from roleplay.servicios.previa import previa_del_proximo  # (previa importa este modulo)
+
+    estado = database.get_estado_partida(player_id)
+    ultimo = ultimo_partido(carrera, estado)
     nombrar_competiciones(carrera, competiciones_del_usuario(carrera))  # una vez; despues, cache
     historial = database.load_match_interviews(player_id)
     return LecturaPartida(
@@ -392,6 +396,7 @@ def leer_para_entrevista(player_id: int) -> Optional[LecturaPartida]:
         ultimo=ultimo,
         contexto=contexto_temporada(carrera),
         ya_entrevistado=bool(ultimo and ya_entrevistado(ultimo, historial)),
+        previa=previa_del_proximo(carrera, estado_partida=estado),
     )
 
 

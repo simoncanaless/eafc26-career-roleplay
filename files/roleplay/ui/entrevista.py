@@ -9,10 +9,15 @@ Sala de prensa (entrevista post-partido). Flujo:
 4. Gemini evalua las respuestas: reaccion de prensa, cambio de
    reputacion y, a veces, un gancho narrativo nuevo. Se guarda todo y se
    revisa si el partido disparo algun hito de prensa.
+
+Con la partida de FC 26 hay ademas un segundo modo: la conferencia PREVIA
+al proximo partido (servicios/previa.py). Mismas preguntas, voz y envio;
+no se guarda como partido: deja una noticia y mueve la reputacion.
 """
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QComboBox,
     QDoubleSpinBox,
     QFrame,
@@ -46,6 +51,7 @@ from roleplay.servicios.audio import MINIMO_SEGUNDOS, GrabadorMicrofono, listar_
 from roleplay.servicios.captura import capturar_pantalla
 from roleplay.servicios.entrevista import evaluar_respuestas, generar_entrevista
 from roleplay.servicios.partida_real import leer_para_entrevista, revisar_prensa_con_partida
+from roleplay.servicios.previa import evaluar_previa, generar_previa, noticia_de_previa
 from roleplay.servicios.prensa import revisar_prensa
 from roleplay.servicios.vision import MatchStats, extraer_stats_partido
 from roleplay.ui import estilos
@@ -71,6 +77,8 @@ from roleplay.ui.estilos import fuente_titulo
 TEXTO_CAPTURAR = "Capturar pantalla"
 TEXTO_GENERAR = "Generar entrevista con IA"
 TEXTO_REGENERAR = "Regenerar entrevista"
+TEXTO_GENERAR_PREVIA = "Generar conferencia previa"
+TEXTO_REGENERAR_PREVIA = "Regenerar conferencia"
 TEXTO_ENVIAR = "Enviar respuestas"
 TEXTO_PRENSA = "Revisar prensa ahora"
 TEXTO_VOZ = "Responder por voz"
@@ -121,6 +129,9 @@ class InterviewWindow(QWidget):
         self._leyendo_partida = False
         self._origen = "manual"
         self._fecha_juego = ""
+        # "post": entrevista despues del partido; "previa": conferencia antes
+        # del proximo (solo con la partida de FC 26)
+        self._modo = "post"
         self._reloj = QTimer(self)
         self._reloj.setInterval(200)
         self._reloj.timeout.connect(self._tic_grabacion)
@@ -150,7 +161,8 @@ class InterviewWindow(QWidget):
         club.cuerpo.addLayout(fila(etiqueta_campo("Club actual"), self.club_edit, self.guardar_club_btn, espaciado=14))
         layout.addWidget(club)
 
-        layout.addWidget(self._tarjeta_partido())
+        self.tarjeta_partido = self._tarjeta_partido()
+        layout.addWidget(self.tarjeta_partido)
         layout.addWidget(self._tarjeta_entrevista())
         layout.addWidget(self._tarjeta_prensa())
         layout.addStretch()
@@ -247,6 +259,21 @@ class InterviewWindow(QWidget):
 
     def _tarjeta_entrevista(self) -> Tarjeta:
         tarjeta = Tarjeta("2 · La entrevista", espaciado=14)
+        self.titulo_entrevista = tarjeta.cuerpo.itemAt(0).widget()
+
+        self.modo_post_btn = chip_alternable("Despues del partido")
+        self.modo_post_btn.setChecked(True)
+        self.modo_previa_btn = chip_alternable("Previa del proximo")
+        self.modo_previa_btn.setToolTip("Conferencia de prensa antes de tu proximo partido (sale de tu partida de FC 26)")
+        self._grupo_modo = QButtonGroup(self)
+        self._grupo_modo.setExclusive(True)
+        for boton_modo, modo in ((self.modo_post_btn, "post"), (self.modo_previa_btn, "previa")):
+            self._grupo_modo.addButton(boton_modo)
+            boton_modo.clicked.connect(lambda _=False, m=modo: self._poner_modo(m))
+        tarjeta.cuerpo.addLayout(fila(self.modo_post_btn, self.modo_previa_btn, espaciado=8, estirar_al_final=True))
+        self.previa_label = texto_suave()
+        self.previa_label.hide()
+        tarjeta.cuerpo.addWidget(self.previa_label)
 
         self.generar_entrevista_btn = boton(TEXTO_GENERAR, primario=True, icono_nombre="chispa")
         self.generar_entrevista_btn.clicked.connect(self._on_generar_entrevista_clicked)
@@ -283,6 +310,7 @@ class InterviewWindow(QWidget):
 
     def _tarjeta_prensa(self) -> Tarjeta:
         tarjeta = Tarjeta("3 · La prensa", espaciado=10)
+        self.titulo_prensa = tarjeta.cuerpo.itemAt(0).widget()
         self.revisar_prensa_btn = boton(TEXTO_PRENSA, icono_nombre="prensa")
         self.revisar_prensa_btn.clicked.connect(self._on_revisar_prensa_clicked)
         tarjeta.cuerpo.addLayout(
@@ -324,7 +352,7 @@ class InterviewWindow(QWidget):
             self.equipo_propio_label.setText("TU EQUIPO")
             return
 
-        self.header_label.setText(f"Entrevista post-partido de {esc(self.perfil.nombre_jugador)}")
+        self.header_label.setText(self._texto_cabecera())
         self.club_edit.setText(self.perfil.club_actual)
         self.equipo_propio_label.setText((self.perfil.club_actual or "Tu equipo").upper())
         self._refrescar_reputacion()
@@ -347,6 +375,10 @@ class InterviewWindow(QWidget):
         self.cargar_partida_btn.setEnabled(
             hay_perfil and self._lectura is not None and self._lectura.ultimo is not None
         )
+        # cambiar de modo descarta las preguntas: no con algo en curso o respuestas escritas
+        cambiar = hay_perfil and not self.ocupada()
+        self.modo_post_btn.setEnabled(cambiar)
+        self.modo_previa_btn.setEnabled(cambiar and self._previa() is not None)
 
         hay_microfono = self._sin_microfono is None
         self.microfono_combo.setEnabled(hay_microfono and self._grabacion is None)
@@ -412,7 +444,7 @@ class InterviewWindow(QWidget):
             respuesta_edit = QTextEdit()
             respuesta_edit.setPlaceholderText("Tu respuesta... (escribila o grabala)")
             respuesta_edit.setFixedHeight(76)
-            respuesta_edit.textChanged.connect(self.cambio.emit)
+            respuesta_edit.textChanged.connect(self._refrescar_botones)  # (emite cambio)
             caja_layout.addWidget(respuesta_edit)
 
             boton_voz = boton(TEXTO_VOZ, icono_nombre="microfono")
@@ -460,29 +492,40 @@ class InterviewWindow(QWidget):
     # ---- 2. generar preguntas ----
 
     def _on_generar_entrevista_clicked(self):
+        if self._modo == "previa":
+            funcion, argumentos = generar_previa, (self.perfil, self._previa(), self._contexto_real())
+        else:
+            funcion, argumentos = generar_entrevista, (
+                self.perfil, self._leer_stats_desde_formulario(), self._contexto_real()
+            )
         self._generando = True
         self._refrescar_botones()
         self.generar_entrevista_btn.setText("GENERANDO...")
         self.reaccion_tarjeta.hide()
         ejecutar_en_hilo(
-            generar_entrevista,
-            self.perfil,
-            self._leer_stats_desde_formulario(),
-            self._contexto_real(),
+            funcion,
+            *argumentos,
             al_completar=self._on_entrevista_completada,
             al_fallar=self._on_entrevista_error,
         )
+
+    def _texto_generar(self) -> str:
+        if self._modo == "previa":
+            texto = TEXTO_REGENERAR_PREVIA if self._preguntas else TEXTO_GENERAR_PREVIA
+        else:
+            texto = TEXTO_REGENERAR if self._preguntas else TEXTO_GENERAR
+        return texto.upper()
 
     def _on_entrevista_completada(self, preguntas: list):
         self._generando = False
         self._mostrar_preguntas(preguntas)
         self._refrescar_botones()
-        self.generar_entrevista_btn.setText(TEXTO_REGENERAR.upper())
+        self.generar_entrevista_btn.setText(self._texto_generar())
 
     def _on_entrevista_error(self, mensaje: str):
         self._generando = False
         self._refrescar_botones()
-        self.generar_entrevista_btn.setText((TEXTO_REGENERAR if self._preguntas else TEXTO_GENERAR).upper())
+        self.generar_entrevista_btn.setText(self._texto_generar())
         QMessageBox.warning(self, "Error al generar la entrevista", mensaje)
 
     # ---- 3a. responder por voz ----
@@ -596,16 +639,23 @@ class InterviewWindow(QWidget):
             )
             return
 
-        stats = self._leer_stats_desde_formulario()
         pares = list(zip(self._preguntas, respuestas))
-        self._evaluando = (self.perfil, stats, pares, self._origen, self._fecha_juego)
+        if self._modo == "previa":
+            # en el lugar de las stats va la previa, y "previa" como origen
+            previa = self._previa()
+            self._evaluando = (self.perfil, previa, pares, "previa", previa.clave)
+            funcion = evaluar_previa
+        else:
+            stats = self._leer_stats_desde_formulario()
+            self._evaluando = (self.perfil, stats, pares, self._origen, self._fecha_juego)
+            funcion = evaluar_respuestas
         self._refrescar_botones()
         self.enviar_respuestas_btn.setText("EVALUANDO...")
 
         ejecutar_en_hilo(
-            evaluar_respuestas,
+            funcion,
             self.perfil,
-            stats,
+            self._evaluando[1],
             pares,
             self._contexto_real(),
             al_completar=self._on_evaluacion_completada,
@@ -617,6 +667,9 @@ class InterviewWindow(QWidget):
         self._evaluando = None
         self._refrescar_botones()
         self.enviar_respuestas_btn.setText(TEXTO_ENVIAR.upper())
+        if origen == "previa":
+            self._registrar_previa(perfil, stats, resultado)
+            return
 
         nueva_reputacion = aplicar_delta_reputacion(
             perfil.id,
@@ -642,14 +695,18 @@ class InterviewWindow(QWidget):
         if origen == "partida":
             self._leer_partida()  # para que diga "ya lo entrevistaste"
 
+        self._mostrar_reaccion(resultado, nueva_reputacion, esc(resultado.reaccion_prensa))
+        if self.perfil is not None and self.perfil.id == perfil.id:
+            self._refrescar_reputacion()
+            self._iniciar_revision_prensa(manual=False)
+
+    def _mostrar_reaccion(self, resultado, nueva_reputacion: int, texto: str):
         delta = resultado.delta_reputacion
         color = estilos.POSITIVO if delta > 0 else estilos.NEGATIVO if delta < 0 else estilos.NEUTRO
         limpiar_layout(self.reaccion_chips)
         self.reaccion_chips.addWidget(chip(f"{'+' if delta >= 0 else ''}{delta} reputacion", color))
         self.reaccion_chips.addWidget(chip(f"Ahora {nueva_reputacion}/100", estilos.TEXTO_SUAVE))
         self.reaccion_chips.addStretch()
-
-        texto = esc(resultado.reaccion_prensa)
         if resultado.nuevo_gancho_narrativo:
             texto += (
                 f"<br><br><span style='color:{estilos.ACENTO}'>Nueva trama:</span> "
@@ -659,9 +716,29 @@ class InterviewWindow(QWidget):
         self.reaccion_tarjeta.show()
         self.cambio.emit()
 
+    def _registrar_previa(self, perfil, previa, resultado):
+        """La conferencia previa no es un partido: mueve la reputacion, deja
+        su noticia y marca la previa como hecha."""
+        nueva_reputacion = aplicar_delta_reputacion(
+            perfil.id, resultado.delta_reputacion, motivo=f"Conferencia previa vs {previa.rival}"
+        )
+        if resultado.nuevo_gancho_narrativo:
+            agregar_gancho_narrativo(perfil.id, resultado.nuevo_gancho_narrativo)
+            perfil.ganchos_narrativos.append(resultado.nuevo_gancho_narrativo)
+        noticia = noticia_de_previa(perfil, previa, resultado)
+        save_noticia_prensa(noticia)
+        set_estado_partida(perfil.id, {"previa": previa.clave})
+        previa.ya_hecha = True
+
+        self.ultimas_noticias = [noticia]
+        limpiar_layout(self.noticias_layout)
+        agregar_noticia(self.noticias_layout, noticia)
+        self._mostrar_reaccion(
+            resultado, nueva_reputacion, f"<b>{esc(resultado.titular)}</b><br>{esc(resultado.reaccion_prensa)}"
+        )
         if self.perfil is not None and self.perfil.id == perfil.id:
             self._refrescar_reputacion()
-            self._iniciar_revision_prensa(manual=False)
+            self._mostrar_previa()
 
     def _on_evaluacion_error(self, mensaje: str):
         self._evaluando = None
@@ -703,6 +780,9 @@ class InterviewWindow(QWidget):
                 if lectura.ya_entrevistado else ""
             )
             self.partida_label.setText(f"<b>Tu ultimo partido:</b> {esc(lectura.ultimo.resumen)}{ya}")
+        if self._modo == "previa" and self._previa() is None and not self.ocupada():
+            self._poner_modo("post")  # ya no hay proximo partido (fin de temporada)
+        self._mostrar_previa()
         self._refrescar_botones()
 
     def _on_partida_error(self, mensaje: str):
@@ -727,6 +807,7 @@ class InterviewWindow(QWidget):
         self._on_partida_leida(lectura)
         if self.perfil is None or self.ocupada() or lectura.ultimo is None:
             return False
+        self._poner_modo("post")
         self._on_cargar_partida_clicked()
         if preparar_preguntas:
             self._on_generar_entrevista_clicked()
@@ -751,6 +832,60 @@ class InterviewWindow(QWidget):
                 "el juego solo guarda los totales, asi que salen solas recien desde el proximo partido que cargues."
             )
         self.partida_nota.show()
+
+    # ---- conferencia previa ----
+
+    def _previa(self):
+        return self._lectura.previa if self._lectura is not None else None
+
+    def _texto_cabecera(self) -> str:
+        nombre = esc(self.perfil.nombre_jugador) if self.perfil is not None else ""
+        if self._modo == "previa":
+            return f"Conferencia previa de {nombre}"
+        return f"Entrevista post-partido de {nombre}"
+
+    def texto_contexto(self) -> str:
+        """Lo que la sala flotante muestra arriba: el partido o la previa."""
+        previa = self._previa()
+        if self._modo == "previa" and previa is not None:
+            return f"<b>Previa:</b> {esc(previa.resumen)}"
+        return self.partida_label.text()
+
+    def _mostrar_previa(self):
+        previa = self._previa()
+        if self._modo != "previa" or previa is None:
+            self.previa_label.hide()
+            return
+        ya = f" · <span style='color:{estilos.ACENTO}'>ya diste esta conferencia</span>" if previa.ya_hecha else ""
+        lineas = [f"<b style='color:{estilos.TEXTO}'>Proximo partido:</b> {esc(previa.resumen)}{ya}"]
+        lineas += [f"<span style='color:{estilos.ACENTO}'>▸</span> {esc(dato)}" for dato in previa.datos]
+        self.previa_label.setText("<br>".join(lineas))
+        self.previa_label.show()
+
+    def _poner_modo(self, modo: str):
+        if modo == self._modo:
+            return
+        if self.ocupada() or (modo == "previa" and self._previa() is None):
+            # (los botones ya lo impiden; por las dudas, se deja todo como estaba)
+            self.modo_post_btn.setChecked(self._modo == "post")
+            self.modo_previa_btn.setChecked(self._modo == "previa")
+            return
+        self._modo = modo
+        self.modo_post_btn.setChecked(modo == "post")
+        self.modo_previa_btn.setChecked(modo == "previa")
+        # las preguntas del otro modo se descartan (sin cargar los microfonos)
+        limpiar_layout(self.qa_layout)
+        self._preguntas, self._respuesta_edits, self._botones_voz = [], [], []
+        self.reaccion_tarjeta.hide()
+        self.tarjeta_partido.setVisible(modo == "post")
+        # en la previa no esta la tarjeta del partido: se renumera
+        self.titulo_entrevista.setText("2 · LA ENTREVISTA" if modo == "post" else "1 · LA CONFERENCIA")
+        self.titulo_prensa.setText("3 · LA PRENSA" if modo == "post" else "2 · LA PRENSA")
+        if self.perfil is not None:
+            self.header_label.setText(self._texto_cabecera())
+        self.generar_entrevista_btn.setText(self._texto_generar())
+        self._mostrar_previa()
+        self._refrescar_botones()
 
     # ---- club ----
 

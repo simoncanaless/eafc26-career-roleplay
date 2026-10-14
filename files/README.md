@@ -72,6 +72,11 @@ toca) y todo se vuelve real:
   (vos incluido), tus resultados y lo que viene, y la ultima fecha. Una pestana por cada
   competicion que juega tu club (liga, Champions, copas).
 
+**Conferencia previa**: en la sala de prensa, "Previa del proximo" arma una conferencia
+antes de tu proximo partido con datos reales (los dos en la tabla, las rachas, si ya se
+enfrentaron, el goleador rival). Respondes igual (escrito o por voz); la prensa saca un
+titular con lo que dijiste y tu reputacion se mueve. No cuenta como partido jugado.
+
 **Sala flotante**: un panel semitransparente encima del juego para hacer la entrevista
 sin salir del partido (responder por voz, enviar, ver la reaccion y los titulares). Se
 abre y se cierra con **Ctrl+Shift+F12** (funciona aunque el juego tenga el foco), desde el

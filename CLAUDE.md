@@ -78,6 +78,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 | `roleplay/ui/comun.py` | `ejecutar_en_hilo`, `esc` (escape HTML), `miles`, `fecha_corta`, `con_scroll` (pagina transparente) |
 | `roleplay/ui/estilos.py` | Tema oscuro estilo EA FC: colores (unico lugar), `fuente_titulo()`, QSS, paleta forzada |
 | `roleplay/ui/componentes.py` | `icono()` (SVG propios coloreados), `titulo_pagina`, `titulo_seccion`, `Tarjeta`, `Mosaico`, `chip`/`chip_tono`, `chip_alternable`, `fila` (None = estirable), `CartaJugador` (carta FUT pintada; nivel por reputacion: bronce <45, plata, oro >=70, elite >=85), `Avatar`, `FondoEstadio`, `agregar_noticia`, `limpiar_layout` |
+| `roleplay/servicios/previa.py` | Conferencia PREVIA al proximo partido: `previa_del_proximo(carrera)` arma los datos reales (tabla de los dos, rachas, ultimo partido del rival, cruces de la temporada, goleador rival; `ya_hecha` con `estado_json.partida.previa`), `generar_previa` / `evaluar_previa` (delta acotado a ±10) y `noticia_de_previa`. NO se guarda como partido (no suma PJ ni goles) |
 | `roleplay/servicios/temporada.py` | `vista_temporada(carrera, competicion)`: lo que muestra la pagina Temporada (tabla con el club marcado, goleadores con el jugador del usuario marcado, resultados y proximos del club, la ultima fecha). Liga primero; una competicion ajena cae en la del club |
 | `roleplay/ui/temporada.py` | `PaginaTemporada`: chips para elegir competicion, tabla (QGridLayout de QLabel; la fila del club lleva un QFrame resaltado DEBAJO, en la misma celda), goleadores, tus partidos y la ultima fecha. Si se cambia de competicion mientras lee, vuelve a leer al terminar |
 | `roleplay/ui/menu.py` | `MainMenuWindow(pagina_inicial)` (lateral con JUGAR FC 26 y AJUSTES + `FondoEstadio`) + `PaginaResumen` (carta, mosaicos, historia, tramas, central de noticias) |
@@ -155,7 +156,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 
 ## Testing
 
-`.venv\Scripts\python.exe -m unittest discover -s tests` (129 pruebas, ~10 s). `tests/ayuda.py`:
+`.venv\Scripts\python.exe -m unittest discover -s tests` (141 pruebas, ~11 s). `tests/ayuda.py`:
 - Fija `EAFC_FC26_GUARDADOS` a una carpeta vacia: las pruebas no leen la partida real.
   `tests/fabrica_partida.py` arma un guardado FALSO con el mismo formato (para todo lo de
   `roleplay/partida`). `TestPartidaRealDelPC` lee la partida real si existe (solo lectura,
@@ -229,6 +230,7 @@ Siguiente (decidido con Simon el 2026-10-14):
   Falta probarlo encima del juego real (requiere FC 26 en "ventana sin bordes").
 - **Instagram con contexto real + "Sugerir post": HECHO el 2026-10-14**.
 - **Pagina Temporada (tabla, goleadores, tus partidos, ultima fecha): HECHO el 2026-10-14**.
+- **Conferencia previa al proximo partido: HECHO el 2026-10-14** (modo de la sala de prensa: `InterviewWindow._modo` "post"/"previa"; la sala flotante lo refleja con `texto_contexto()`).
 - **Leer la partida guardada: HECHO el 2026-10-14** (`roleplay/partida/`). La sala de
   prensa carga sola el ultimo partido, el Resumen muestra la temporada real y sincroniza
   el club, la prensa escribe sobre hechos reales con nombres reconocidos. Formato y

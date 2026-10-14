@@ -176,13 +176,13 @@ class SalaFlotante(QWidget):
         if self._copiando:
             return
         sala = self.sala
-        self.partido_label.setText(sala.partida_label.text())
+        self.partido_label.setText(sala.texto_contexto())
         lectura = sala._lectura
         ya_cargado = (
             lectura is not None and lectura.ultimo is not None and sala._origen == "partida"
             and sala._fecha_juego == lectura.ultimo.partido.fecha.isoformat()
         )
-        self.cargar_btn.setVisible(sala.cargar_partida_btn.isEnabled() and not ya_cargado)
+        self.cargar_btn.setVisible(sala.cargar_partida_btn.isEnabled() and not ya_cargado and sala._modo == "post")
         self.generar_btn.setEnabled(sala.generar_entrevista_btn.isEnabled())
         self.generar_btn.setText(sala.generar_entrevista_btn.text())
 
