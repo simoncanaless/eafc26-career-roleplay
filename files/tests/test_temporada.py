@@ -12,6 +12,22 @@ from roleplay.partida.carrera import construir
 from roleplay.servicios import partida_real
 from roleplay.servicios.temporada import vista_temporada
 
+SERIE_A = 999
+
+
+def con_otra_liga(c):
+    """La partida con una liga mas que el club del usuario no juega."""
+    from datetime import date
+
+    from roleplay.partida.carrera import Competicion, Partido
+
+    c.competiciones[SERIE_A] = Competicion(SERIE_A, "C31", "Serie A", es_liga=True, continental=False)
+    c.partidos += [
+        Partido(date(2027, 1, 10), SERIE_A, f.NAPOLI, f.LIVERPOOL, 2, 0, True),
+        Partido(date(2027, 1, 24), SERIE_A, f.LIVERPOOL, f.NAPOLI, None, None, False),
+    ]
+    return c
+
 
 class TestVistaTemporada(ayuda.PruebaConBase):
     def setUp(self):
@@ -70,6 +86,18 @@ class TestVistaTemporada(ayuda.PruebaConBase):
 
     def test_una_competicion_ajena_muestra_la_del_club(self):
         self.assertEqual(vista_temporada(self.c, 99999).competicion, f.LIGA)
+
+    def test_otras_competiciones_de_la_partida(self):
+        con_otra_liga(self.c)
+        v = vista_temporada(self.c)
+        self.assertEqual(v.otras, [(SERIE_A, "Serie A")])
+        self.assertTrue(v.es_propia)
+        otra = vista_temporada(self.c, SERIE_A)
+        self.assertFalse(otra.es_propia)
+        self.assertEqual([(fila.equipo, fila.pts) for fila in otra.tabla], [("SSC Napoli", 3), ("Liverpool", 0)])
+        self.assertIsNone(otra.posicion)
+        self.assertEqual((otra.resultados, otra.proximos), ([], []))
+        self.assertEqual([(p.local, p.marcador) for p in otra.ultima_fecha], [("SSC Napoli", "2-0")])
 
     def test_sin_ia_se_ve_igual(self):
         self.ia_jugadores.side_effect = RuntimeError("sin cuota")
@@ -163,6 +191,26 @@ class TestPaginaTemporada(ayuda.PruebaDeInterfaz):
         self.assertEqual(textos[0], "16/01")
         self.assertIn("Un lateral derecho (media 80) paso de Spurs a Man Utd", textos)
         self.assertIn("TU CLUB", textos)
+
+    def test_mirar_otra_competicion(self):
+        from roleplay.ui import temporada as ui
+
+        c = con_otra_liga(construir(f.construir_bytes()))
+        with mock.patch.object(ui, "leer_temporada", lambda comp=None: vista_temporada(c, comp, preguntar=False)):
+            self.pagina.actualizar()
+            ayuda.esperar_tareas()
+            combo = self.pagina.otras_combo
+            self.assertTrue(combo.isVisibleTo(self.pagina))
+            self.assertEqual([combo.itemText(i) for i in range(combo.count())], ["Otras competiciones...", "Serie A"])
+            combo.setCurrentIndex(1)
+            combo.activated.emit(1)
+            ayuda.esperar_tareas()
+        self.assertEqual(self.pagina.vista.competicion, SERIE_A)
+        self.assertFalse(self.pagina.club_tarjeta.isVisibleTo(self.pagina))  # el club no la juega
+        self.assertTrue(self.pagina.tabla_tarjeta.isVisibleTo(self.pagina))
+        self.assertFalse(any(b.isChecked() for b in self.pagina._grupo.buttons()))
+        self.assertIn("mirando Serie A", self.pagina.subtitulo_label.text())
+        self.assertEqual(self.pagina.otras_combo.currentIndex(), 1)
 
     def test_esta_en_el_menu(self):
         from roleplay.ui.menu import MainMenuWindow

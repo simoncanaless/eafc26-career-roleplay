@@ -158,7 +158,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 
 ## Testing
 
-`.venv\Scripts\python.exe -m unittest discover -s tests` (183 pruebas, ~13 s). `tests/ayuda.py`:
+`.venv\Scripts\python.exe -m unittest discover -s tests` (186 pruebas, ~13 s). `tests/ayuda.py`:
 - Fija `EAFC_FC26_GUARDADOS` a una carpeta vacia: las pruebas no leen la partida real.
   `tests/fabrica_partida.py` arma un guardado FALSO con el mismo formato (para todo lo de
   `roleplay/partida`). `TestPartidaRealDelPC` lee la partida real si existe (solo lectura,
@@ -232,6 +232,8 @@ Siguiente (decidido con Simon el 2026-10-14):
   Falta probarlo encima del juego real (requiere FC 26 en "ventana sin bordes").
 - **Instagram con contexto real + "Sugerir post": HECHO el 2026-10-14**.
 - **Pagina Temporada (tabla, goleadores, tus partidos, ultima fecha): HECHO el 2026-10-14**.
+- **Temporada: otras competiciones de la partida (otras ligas, copas, Mundial): HECHO el 2026-10-14**
+  (`VistaTemporada.otras` / `es_propia`; combo "Otras competiciones...").
 - **Metas de temporada: HECHO el 2026-10-14** (tarjeta en el Resumen; `meta_cumplida` +4 / `meta_fallida` -4 de
   reputacion via `prensa.BONOS_REPUTACION`).
 - **Trayectoria: HECHO el 2026-10-14**. Cada revision de prensa con la partida guarda

@@ -8,7 +8,7 @@ Todo sale de la partida (servicios/temporada.py), que se lee en un hilo.
 """
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QButtonGroup, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from roleplay.database import get_estado_prensa, load_latest_profile
 from roleplay.servicios.temporada import leer_temporada
@@ -78,7 +78,13 @@ class PaginaTemporada(QWidget):
 
         self.competiciones_layout = QHBoxLayout()
         self.competiciones_layout.setSpacing(8)
-        layout.addLayout(self.competiciones_layout)
+        # el resto del mundo de la partida: otras ligas, copas de otros paises, selecciones
+        self.otras_combo = QComboBox()
+        self.otras_combo.setMinimumWidth(240)
+        self.otras_combo.setToolTip("Las demas competiciones que simula tu partida")
+        self.otras_combo.activated.connect(self._on_otra)
+        self.otras_combo.hide()
+        layout.addLayout(fila(self.competiciones_layout, None, self.otras_combo))
 
         # ---- sin partida ----
         self.vacio = Tarjeta("Sin partida de Carrera Jugador", destacada=True)
@@ -154,6 +160,11 @@ class PaginaTemporada(QWidget):
         self._leyendo = True
         ejecutar_en_hilo(leer_temporada, self._competicion, al_completar=self._on_vista, al_fallar=self._on_error)
 
+    def _on_otra(self, indice: int):
+        competicion = self.otras_combo.itemData(indice)
+        if competicion is not None:
+            self._elegir(competicion)
+
     def _elegir(self, competicion: int):
         if competicion != self._competicion:
             self._competicion = competicion
@@ -194,7 +205,12 @@ class PaginaTemporada(QWidget):
         self.vacio.hide()
         self.contenido.show()
         self.titulo_label.setText(f"TEMPORADA {esc(vista.temporada)}")
-        lugar = f" · {vista.posicion}° en la {esc(vista.nombre_competicion)}" if vista.posicion else ""
+        if vista.posicion:
+            lugar = f" · {vista.posicion}° en la {esc(vista.nombre_competicion)}"
+        elif not vista.es_propia:
+            lugar = f" · mirando {esc(vista.nombre_competicion)}"
+        else:
+            lugar = ""
         self.subtitulo_label.setText(
             f"<b>{esc(vista.club)}</b>{lugar} · partida \"{esc(vista.partida)}\" al {esc(vista.fecha)}"
         )
@@ -210,13 +226,22 @@ class PaginaTemporada(QWidget):
         limpiar_layout(self.competiciones_layout)
         for boton in self._grupo.buttons():
             self._grupo.removeButton(boton)
+        # mirando otra competicion, ninguna de las del club queda marcada
+        self._grupo.setExclusive(vista.es_propia)
         for competicion, nombre in vista.competiciones:
             boton = chip_alternable(nombre)
             boton.setChecked(competicion == vista.competicion)
             boton.clicked.connect(lambda _=False, c=competicion: self._elegir(c))
             self._grupo.addButton(boton)
             self.competiciones_layout.addWidget(boton)
-        self.competiciones_layout.addStretch()
+        self._grupo.setExclusive(True)
+
+        self.otras_combo.clear()
+        self.otras_combo.addItem("Otras competiciones...", None)
+        for competicion, nombre in vista.otras:
+            self.otras_combo.addItem(nombre, competicion)
+        self.otras_combo.setCurrentIndex(max(0, self.otras_combo.findData(vista.competicion)))
+        self.otras_combo.setVisible(bool(vista.otras))
 
     def _mostrar_tabla(self, vista):
         limpiar_layout(self.tabla_grilla)
@@ -308,6 +333,7 @@ class PaginaTemporada(QWidget):
 
     def _mostrar_partidos(self, vista):
         limpiar_layout(self.club_layout)
+        self.club_tarjeta.setVisible(vista.es_propia)
         if vista.resultados:
             self.club_layout.addWidget(etiqueta_campo("Resultados"))
             for p in vista.resultados:

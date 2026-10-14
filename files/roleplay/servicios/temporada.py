@@ -71,6 +71,8 @@ class VistaTemporada:
     competicion: int
     nombre_competicion: str
     es_liga: bool
+    otras: list = field(default_factory=list)  # (id, nombre) del resto del mundo de la partida
+    es_propia: bool = True  # la juega el club del usuario
     posicion: Optional[int] = None  # del club en la tabla, si es liga
     tabla: list = field(default_factory=list)  # FilaTablaVista
     goleadores: list = field(default_factory=list)  # GoleadorVista
@@ -99,10 +101,10 @@ def _partido(carrera: Carrera, p: Partido, equipo_usuario: Optional[int]) -> Par
     )
 
 
-def _ordenar_competiciones(carrera: Carrera, propias: list[int]) -> list[int]:
-    """La liga primero; despues las demas, la que tiene mas partidos antes."""
+def _ordenar_competiciones(carrera: Carrera, ids) -> list[int]:
+    """Las ligas primero; despues las demas, la que tiene mas partidos antes."""
     return sorted(
-        propias,
+        ids,
         key=lambda c: (
             not carrera.competiciones[c].es_liga,
             -sum(1 for p in carrera.partidos if p.competicion == c),
@@ -115,15 +117,18 @@ def vista_temporada(
     carrera: Carrera, competicion: Optional[int] = None, preguntar: bool = True
 ) -> Optional[VistaTemporada]:
     """None si la partida no tiene un club del usuario o no se jugo nada.
-    Si `competicion` no es una de las del club, se muestra la primera."""
+    `competicion` puede ser cualquiera de la partida (otras ligas, copas de
+    otros paises, el Mundial); si no esta, se muestra la liga del club."""
     equipo = carrera.equipo_usuario()
     hoy = carrera.fecha_actual()
     propias = [c for c in competiciones_del_usuario(carrera) if c in carrera.competiciones]
     if equipo is None or hoy is None or not propias:
         return None
-    nombrar_competiciones(carrera, propias, preguntar=preguntar)
+    todas = {p.competicion for p in carrera.partidos if p.competicion in carrera.competiciones}
+    nombrar_competiciones(carrera, todas, preguntar=preguntar)  # una vez; despues, cache
     orden = _ordenar_competiciones(carrera, propias)
-    if competicion not in orden:
+    otras = _ordenar_competiciones(carrera, todas - set(propias))
+    if competicion not in orden and competicion not in otras:
         competicion = orden[0]
     comp = carrera.competiciones[competicion]
 
@@ -136,6 +141,8 @@ def vista_temporada(
         competicion=competicion,
         nombre_competicion=carrera.competicion(competicion),
         es_liga=comp.es_liga,
+        otras=[(c, carrera.competicion(c)) for c in otras],
+        es_propia=competicion in orden,
     )
     if comp.es_liga:
         vista.tabla = [
