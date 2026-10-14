@@ -68,6 +68,9 @@ toca) y todo se vuelve real:
   jugadores por su ficha (club, posicion, seleccion, nacimiento) y redacta.
 - **Resumen**: tu temporada real (partidos, goles, asistencias, nota por competicion, la
   tabla, la racha y el proximo rival) y tu club al dia.
+- **Temporada**: la tabla de posiciones completa con tu club marcado, los goleadores
+  (vos incluido), tus resultados y lo que viene, y la ultima fecha. Una pestana por cada
+  competicion que juega tu club (liga, Champions, copas).
 
 **Sala flotante**: un panel semitransparente encima del juego para hacer la entrevista
 sin salir del partido (responder por voz, enviar, ver la reaccion y los titulares). Se

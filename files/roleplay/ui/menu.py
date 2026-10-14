@@ -1,6 +1,6 @@
 """
 Menu principal: barra lateral + una pagina por modulo (Resumen,
-Entrevistas, Instagram), sobre el fondo de estadio. Cada pagina va dentro
+Temporada, Entrevistas, Instagram), sobre el fondo de estadio. Cada pagina va dentro
 de un scroll.
 """
 
@@ -54,6 +54,7 @@ from roleplay.ui.componentes import (
 from roleplay.ui.entrevista import InterviewWindow
 from roleplay.ui.estilos import fuente_titulo
 from roleplay.ui.instagram import InstagramWindow
+from roleplay.ui.temporada import PaginaTemporada
 from roleplay.ui.ajustes import DialogoAjustes, abrir_juego_o_preguntar
 from roleplay.ui.personaje import CharacterWizard
 from roleplay.ui.atajo import ATAJO_TEXTO, AtajoGlobal
@@ -312,7 +313,7 @@ class PaginaResumen(QWidget):
 
 
 class MainMenuWindow(QMainWindow):
-    PAGINA_RESUMEN, PAGINA_ENTREVISTAS, PAGINA_INSTAGRAM = range(3)
+    PAGINA_RESUMEN, PAGINA_TEMPORADA, PAGINA_ENTREVISTAS, PAGINA_INSTAGRAM = range(4)
 
     def __init__(self, pagina_inicial: int = 0):
         super().__init__()
@@ -339,10 +340,12 @@ class MainMenuWindow(QMainWindow):
 
         # ---- paginas: (texto, icono, pagina) ----
         self.pagina_resumen = PaginaResumen(self._abrir_wizard_personaje, self._refrescar_jugador)
+        self.pagina_temporada = PaginaTemporada()
         self.pagina_entrevistas = InterviewWindow()
         self.pagina_instagram = InstagramWindow()
         self._paginas = [
             ("Resumen", "inicio", self.pagina_resumen),
+            ("Temporada", "trofeo", self.pagina_temporada),
             ("Entrevistas", "microfono", self.pagina_entrevistas),
             ("Instagram", "camara", self.pagina_instagram),
         ]
@@ -491,6 +494,8 @@ class MainMenuWindow(QMainWindow):
     def _on_partida_actualizada(self, _lectura):
         if self.stack.currentIndex() == self.PAGINA_RESUMEN:
             self.pagina_resumen.actualizar()
+        elif self.stack.currentIndex() == self.PAGINA_TEMPORADA:
+            self.pagina_temporada.actualizar()
         self._refrescar_jugador()
 
     def _abrir_ajustes(self):

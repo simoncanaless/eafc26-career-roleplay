@@ -241,10 +241,14 @@ class TestPersonajeYMenu(ayuda.PruebaDeInterfaz):
         from roleplay.ui.menu import MainMenuWindow
 
         ventana = MainMenuWindow()
-        for indice in range(3):
+        ventana.vigilante.detener()
+        paginas = len(ventana._paginas)
+        self.assertEqual(ventana.stack.count(), paginas)
+        for indice in range(paginas):
             ventana._ir_a(indice)
             self.assertIsInstance(ventana.stack.currentWidget(), QScrollArea)
-            self.assertEqual([b.isChecked() for b in ventana._botones_nav], [i == indice for i in range(3)])
+            self.assertEqual([b.isChecked() for b in ventana._botones_nav], [i == indice for i in range(paginas)])
+        ayuda.esperar_tareas()
 
     def test_cada_modulo_abre_suelto(self):
         import app

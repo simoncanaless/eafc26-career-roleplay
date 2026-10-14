@@ -30,7 +30,8 @@ SI JUGAS CARRERA JUGADOR
 ------------------------
 La app lee tu partida guardada de FC 26 (solo la lee, no la cambia): tu ultimo
 partido se carga solo en la Sala de prensa, la prensa escribe sobre lo que paso de
-verdad (resultados, quien hizo los goles) y el Resumen muestra tu temporada real.
+verdad (resultados, quien hizo los goles), el Resumen muestra tu temporada real y
+TEMPORADA la tabla, los goleadores y tus proximos partidos de cada competicion.
 
 
 JUGAR
