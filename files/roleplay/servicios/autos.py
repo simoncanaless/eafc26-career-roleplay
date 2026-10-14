@@ -22,9 +22,10 @@ class Modelo:
     id: str
     marca: str
     nombre: str
-    carroceria: str  # deportivo | gt | suv (la silueta del dibujo)
+    carroceria: str  # la familia del dibujo (ui/configurador.py:SILUETAS)
     precio: int
     dias_entrega: int = 14  # dias del juego entre el pedido y la entrega
+    aleron: bool = False  # el dibujo lleva aleron trasero
 
     @property
     def nombre_completo(self) -> str:
@@ -32,28 +33,28 @@ class Modelo:
 
 
 MODELOS = [
-    Modelo("ferrari_296", "Ferrari", "296 GTB", "deportivo", 245_000, 28),
-    Modelo("ferrari_sf90", "Ferrari", "SF90 Stradale", "deportivo", 390_000, 35),
+    Modelo("ferrari_296", "Ferrari", "296 GTB", "super", 245_000, 28),
+    Modelo("ferrari_sf90", "Ferrari", "SF90 Stradale", "super", 390_000, 35),
     Modelo("ferrari_roma", "Ferrari", "Roma", "gt", 170_000, 28),
     Modelo("ferrari_purosangue", "Ferrari", "Purosangue", "suv", 315_000, 35),
-    Modelo("porsche_911", "Porsche", "911 Carrera", "deportivo", 95_000, 14),
-    Modelo("porsche_911_turbo", "Porsche", "911 Turbo S", "deportivo", 190_000, 21),
-    Modelo("porsche_gt3rs", "Porsche", "911 GT3 RS", "deportivo", 180_000, 28),
-    Modelo("porsche_taycan", "Porsche", "Taycan Turbo S", "gt", 150_000, 14),
+    Modelo("porsche_911", "Porsche", "911 Carrera", "911", 95_000, 14),
+    Modelo("porsche_911_turbo", "Porsche", "911 Turbo S", "911", 190_000, 21),
+    Modelo("porsche_gt3rs", "Porsche", "911 GT3 RS", "911", 180_000, 28, aleron=True),
+    Modelo("porsche_taycan", "Porsche", "Taycan Turbo S", "sedan", 150_000, 14),
     Modelo("porsche_cayenne", "Porsche", "Cayenne", "suv", 80_000, 14),
-    Modelo("lambo_huracan", "Lamborghini", "Huracan", "deportivo", 200_000, 28),
-    Modelo("lambo_revuelto", "Lamborghini", "Revuelto", "deportivo", 480_000, 42),
+    Modelo("lambo_huracan", "Lamborghini", "Huracan", "cuna", 200_000, 28),
+    Modelo("lambo_revuelto", "Lamborghini", "Revuelto", "cuna", 480_000, 42),
     Modelo("lambo_urus", "Lamborghini", "Urus", "suv", 190_000, 21),
-    Modelo("mclaren_750s", "McLaren", "750S", "deportivo", 240_000, 28),
-    Modelo("mclaren_artura", "McLaren", "Artura", "deportivo", 190_000, 21),
-    Modelo("amg_g63", "Mercedes-AMG", "G 63", "suv", 165_000, 21),
-    Modelo("amg_gt", "Mercedes-AMG", "GT 63", "gt", 150_000, 14),
-    Modelo("rolls_cullinan", "Rolls-Royce", "Cullinan", "suv", 300_000, 42),
+    Modelo("mclaren_750s", "McLaren", "750S", "super", 240_000, 28),
+    Modelo("mclaren_artura", "McLaren", "Artura", "super", 190_000, 21),
+    Modelo("amg_g63", "Mercedes-AMG", "G 63", "g", 165_000, 21),
+    Modelo("amg_gt", "Mercedes-AMG", "GT 63", "sedan", 150_000, 14),
+    Modelo("rolls_cullinan", "Rolls-Royce", "Cullinan", "suv_lujo", 300_000, 42),
     Modelo("rolls_spectre", "Rolls-Royce", "Spectre", "gt", 330_000, 42),
     Modelo("bentley_gt", "Bentley", "Continental GT", "gt", 200_000, 28),
     Modelo("aston_db12", "Aston Martin", "DB12", "gt", 190_000, 28),
-    Modelo("range_rover", "Range Rover", "Range Rover", "suv", 110_000, 14),
-    Modelo("bugatti_tourbillon", "Bugatti", "Tourbillon", "deportivo", 3_200_000, 90),
+    Modelo("range_rover", "Range Rover", "Range Rover", "suv_lujo", 110_000, 14),
+    Modelo("bugatti_tourbillon", "Bugatti", "Tourbillon", "hiper", 3_200_000, 90),
 ]
 POR_ID = {m.id: m for m in MODELOS}
 MARCAS = list(dict.fromkeys(m.marca for m in MODELOS))

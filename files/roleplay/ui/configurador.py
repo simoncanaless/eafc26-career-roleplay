@@ -4,6 +4,8 @@ por la app: siluetas propias por carroceria, pintadas con lo que se elige)
 y las opciones. El precio sale de servicios/autos.py.
 """
 
+from dataclasses import dataclass
+
 from PySide6.QtCore import QByteArray, QRectF, QSize, Qt
 from PySide6.QtGui import QPainter
 from PySide6.QtSvg import QSvgRenderer
@@ -29,38 +31,123 @@ from roleplay.ui.estilos import fuente_titulo
 
 # ---- el dibujo ----
 
-# carroceria -> (silueta, ventanas, ruedas (x, y, radio), parantes x, (techo y, base de la ventana y))
+@dataclass(frozen=True)
+class Silueta:
+    """Una familia de autos, de costado (viewBox 400 x 170, mirando a la
+    izquierda). Dibujos propios que recuerdan la forma de cada tipo, como
+    hace GTA: parecidos, nunca copias."""
+
+    cuerpo: str  # el contorno de la carroceria
+    ventana: str
+    ruedas: tuple  # ((x, y, radio), ...)
+    techo: float  # y del punto mas alto (arriba del degradado de la pintura)
+    base_ventana: float
+    asiento: tuple  # (x, y) del respaldo que se ve por la ventana
+    parantes: tuple = ()  # x de los parantes de la ventana
+    puertas: tuple = ()  # x de las lineas de puerta
+    faro: str = '<ellipse cx="40" cy="96" rx="11" ry="3" fill="#F4F6F8"/>'
+    luz: str = '<rect x="374" y="88" width="9" height="4.5" rx="1.5" fill="#E0242F"/>'
+    detalles: str = ""  # tomas de aire, linea en C, rueda de auxilio ({vidrio}, {oscuro}, {cromo})
+    cola: float = 384  # x de la parte de atras, abajo (el escape)
+    aleron: str = ""  # si el modelo lo lleva
+
+
 # El renderizador SVG de Qt no hace clip-path: lo que va "adentro" de la
 # carroceria (franjas, fibra de carbono) va en el degradado de la pintura, y
 # los parantes se dibujan solo entre el techo y la base de la ventana.
 SILUETAS = {
-    "deportivo": (
-        "M 18 118 L 20 104 Q 22 94 40 90 L 120 80 Q 160 52 205 48 L 240 48 Q 300 52 345 76 "
-        "L 376 82 Q 386 86 384 100 L 382 118 L 330 118 A 28 28 0 0 0 274 118 L 126 118 A 28 28 0 0 0 70 118 Z",
-        "M 134 79 Q 166 57 206 53 L 238 53 Q 288 57 328 75 Z",
-        ((98, 121, 23), (302, 121, 23)),
-        (232,),
-        (48, 78),
+    # Lamborghini: cuna baja y angulosa, arcos hexagonales, toma de aire
+    "cuna": Silueta(
+        "M 14 112 L 16 106 L 60 96 L 132 86 L 186 60 L 236 58 L 330 76 L 380 82 L 386 92 L 384 116 L 330 118 "
+        "L 326 98 L 312 91 L 288 91 L 274 98 L 270 118 L 126 118 L 122 98 L 108 91 L 84 91 L 70 98 L 66 118 L 18 118 Z",
+        "M 142 84 L 188 63 L 232 61 L 292 75 Z",
+        ((96, 121, 23), (300, 121, 23)), 58, 84, (204, 66), puertas=(240,),
+        faro='<path d="M 22 105 L 54 98 L 56 101 L 26 108 Z" fill="#F4F6F8"/>',
+        luz='<rect x="370" y="86" width="14" height="3" fill="#E0242F"/>',
+        detalles='<path d="M 250 99 L 292 88 L 288 108 L 254 108 Z" fill="{vidrio}"/>',
     ),
-    "gt": (
-        "M 18 118 L 20 102 Q 24 92 46 88 L 128 80 Q 168 50 214 45 L 262 45 Q 318 50 352 74 "
-        "L 378 80 Q 388 84 386 100 L 384 118 L 332 118 A 28 28 0 0 0 276 118 L 126 118 A 28 28 0 0 0 70 118 Z",
-        "M 142 79 Q 174 56 215 51 L 260 51 Q 306 55 338 73 Z",
-        ((98, 121, 23), (304, 121, 23)),
-        (238,),
-        (45, 77),
+    # Porsche 911: el techo cae redondeado hasta la cola, faro redondo, barra de luz
+    "911": Silueta(
+        "M 18 116 L 20 102 Q 24 92 44 90 Q 70 84 116 80 Q 150 56 190 51 Q 236 47 284 62 Q 346 82 382 100 "
+        "L 384 118 L 330 118 A 28 28 0 0 0 272 118 L 124 118 A 28 28 0 0 0 68 118 Z",
+        "M 130 79 Q 160 59 192 56 Q 236 53 272 64 Z",
+        ((96, 121, 23), (301, 121, 23)), 50, 79, (200, 63), parantes=(222,), puertas=(226,),
+        faro='<ellipse cx="54" cy="91" rx="9" ry="5" fill="#F4F6F8"/>',
+        luz='<path d="M 344 86 L 378 99 L 378 102 L 344 89 Z" fill="#E0242F"/>',
+        aleron='<path d="M 326 76 L 328 58 M 350 84 L 352 58" stroke="{oscuro}" stroke-width="3"/>'
+               '<path d="M 310 56 L 370 53 L 372 60 L 312 62 Z" fill="{oscuro}"/>',
     ),
-    "suv": (
-        "M 16 118 L 16 90 Q 18 78 40 75 L 112 70 Q 140 40 176 37 L 330 37 Q 352 39 362 62 "
-        "L 380 68 Q 388 72 386 92 L 384 118 L 334 118 A 30 30 0 0 0 274 118 L 130 118 A 30 30 0 0 0 70 118 Z",
-        "M 124 69 Q 148 45 180 43 L 326 43 Q 344 45 352 64 Z",
-        ((100, 121, 25), (304, 121, 25)),
-        (230, 292),
-        (37, 68),
+    # Ferrari 296/SF90, McLaren: cabina adelantada y toma de aire detras de la puerta
+    "super": Silueta(
+        "M 16 114 L 18 104 Q 22 96 42 94 L 110 86 Q 150 56 196 52 L 230 52 Q 290 56 336 78 L 378 84 "
+        "Q 386 88 384 100 L 382 118 L 328 118 A 28 28 0 0 0 272 118 L 126 118 A 28 28 0 0 0 70 118 Z",
+        "M 124 85 Q 156 60 198 56 L 228 56 Q 262 60 286 71 Z",
+        ((98, 121, 23), (300, 121, 23)), 52, 85, (194, 64), puertas=(232,),
+        faro='<ellipse cx="40" cy="98" rx="12" ry="2.6" fill="#F4F6F8"/>',
+        luz='<rect x="374" y="90" width="9" height="4" rx="1.5" fill="#E0242F"/>',
+        detalles='<path d="M 246 97 Q 262 85 292 84 L 294 104 Q 270 105 246 97 Z" fill="{vidrio}"/>',
+    ),
+    # Bugatti: largo y redondo, con la linea en C cromada
+    "hiper": Silueta(
+        "M 16 112 Q 18 98 40 94 Q 90 84 128 80 Q 166 52 210 48 L 244 48 Q 300 52 342 76 Q 380 84 386 100 "
+        "L 384 118 L 328 118 A 29 29 0 0 0 270 118 L 128 118 A 29 29 0 0 0 70 118 Z",
+        "M 140 79 Q 172 56 210 52 L 242 52 Q 286 56 318 72 Z",
+        ((99, 121, 24), (299, 121, 24)), 48, 79, (212, 60),
+        luz='<rect x="366" y="92" width="16" height="3" rx="1.5" fill="#E0242F"/>',
+        detalles='<path d="M 264 82 Q 226 82 224 99 Q 226 114 264 114" fill="none" stroke="{cromo}" stroke-width="3"/>',
+    ),
+    # Aston Martin, Bentley, Roma, Spectre: capo largo, cola corta
+    "gt": Silueta(
+        "M 16 116 L 18 102 Q 22 92 44 89 L 150 78 Q 188 52 226 48 L 262 48 Q 316 52 350 74 L 380 80 "
+        "Q 388 84 386 98 L 384 118 L 334 118 A 28 28 0 0 0 278 118 L 120 118 A 28 28 0 0 0 64 118 Z",
+        "M 162 77 Q 194 56 228 52 L 260 52 Q 304 56 336 72 Z",
+        ((92, 121, 23), (306, 121, 23)), 48, 77, (224, 60), parantes=(250,), puertas=(252,),
+        faro='<ellipse cx="40" cy="95" rx="12" ry="3.2" fill="#F4F6F8"/>',
+        luz='<rect x="374" y="86" width="9" height="4.5" rx="1.5" fill="#E0242F"/>',
+    ),
+    # Taycan, AMG GT 63: cuatro puertas, bajo y liso, barra de luz atras
+    "sedan": Silueta(
+        "M 16 114 L 18 102 Q 22 94 42 91 L 118 82 Q 156 54 200 49 L 268 48 Q 320 52 354 76 L 380 82 "
+        "Q 388 86 386 100 L 384 118 L 332 118 A 28 28 0 0 0 276 118 L 124 118 A 28 28 0 0 0 68 118 Z",
+        "M 130 81 Q 162 58 202 54 L 266 53 Q 308 56 340 74 Z",
+        ((96, 121, 23), (304, 121, 23)), 48, 81, (188, 62), parantes=(214, 278), puertas=(216, 280),
+        luz='<rect x="350" y="84" width="32" height="3" rx="1.5" fill="#E0242F"/>',
+    ),
+    # Urus, Purosangue, Cayenne: SUV con el techo que cae
+    "suv": Silueta(
+        "M 16 118 L 16 92 Q 18 80 40 77 L 116 70 Q 146 42 184 38 L 290 38 Q 336 42 360 64 L 380 70 "
+        "Q 388 74 386 92 L 384 118 L 334 118 A 30 30 0 0 0 274 118 L 130 118 A 30 30 0 0 0 70 118 Z",
+        "M 128 69 Q 152 46 186 43 L 288 43 Q 326 46 346 64 Z",
+        ((100, 121, 25), (304, 121, 25)), 38, 69, (194, 50), parantes=(222, 286), puertas=(224, 288),
+        faro='<path d="M 18 86 L 42 80 L 44 84 L 20 90 Z" fill="#F4F6F8"/>',
+        luz='<rect x="376" y="74" width="9" height="5" rx="1.5" fill="#E0242F"/>',
+    ),
+    # Cullinan, Range Rover: alto y recto, de frente vertical
+    "suv_lujo": Silueta(
+        "M 14 118 L 14 84 Q 14 70 30 68 L 100 64 Q 124 36 150 32 L 352 32 Q 368 32 374 46 L 384 64 L 386 118 "
+        "L 336 118 A 31 31 0 0 0 274 118 L 132 118 A 31 31 0 0 0 70 118 Z",
+        "M 112 63 Q 132 40 154 37 L 348 37 Q 362 38 368 52 L 372 62 Z",
+        ((101, 121, 26), (305, 121, 26)), 32, 63, (174, 47), parantes=(206, 290), puertas=(208, 292),
+        faro='<rect x="15" y="73" width="18" height="6" rx="2" fill="#F4F6F8"/>',
+        luz='<rect x="378" y="68" width="6" height="18" rx="1.5" fill="#E0242F"/>',
+        cola=386,
+    ),
+    # G 63: una caja, parabrisas recto y la rueda de auxilio atras
+    "g": Silueta(
+        "M 18 118 L 18 76 L 26 70 L 108 68 L 122 34 L 356 34 L 362 40 L 364 118 L 334 118 "
+        "A 31 31 0 0 0 274 118 L 132 118 A 31 31 0 0 0 70 118 Z",
+        "M 126 66 L 137 40 L 352 40 L 354 64 Z",
+        ((101, 121, 26), (305, 121, 26)), 34, 66, (174, 50), parantes=(204, 282), puertas=(206, 284),
+        faro='<circle cx="28" cy="80" r="6" fill="#F4F6F8"/>',
+        luz='<rect x="356" y="70" width="5" height="12" rx="1" fill="#E0242F"/>',
+        detalles='<circle cx="372" cy="84" r="17" fill="#121315"/><circle cx="372" cy="84" r="10" fill="{oscuro}"/>',
+        cola=364,
     ),
 }
 PISO = 118  # la parte de abajo de la carroceria
 INTERIOR = {"negro": "#1C1C1E", "tostado": "#A0703C", "rojo": "#9E1B22", "blanco": "#E8E2D6"}
+VIDRIO = "#0E141B"
+CROMO = "#D9DCE0"
 
 
 def _mezclar(color: str, con: str, cuanto: float) -> str:
@@ -126,8 +213,9 @@ def _rueda(x: int, y: int, r: int, llanta: str, color_llanta: str, color_pinza: 
 def svg_auto(config: Configuracion) -> str:
     """El auto configurado, de costado, como SVG (400 x 170)."""
     modelo = autos.POR_ID[config.modelo]
-    silueta, ventana, ruedas, parantes, (techo, base_ventana) = SILUETAS[modelo.carroceria]
+    forma = SILUETAS[modelo.carroceria]
     base = autos.opcion("color", config.color).color
+    colores = {"vidrio": VIDRIO, "oscuro": _mezclar(base, "#000000", 0.45), "cromo": CROMO}
     color_franja = autos.opcion("color", config.color_franja).color
     bandas = [(y, y + alto, color_franja)
               for y, alto in {"lateral": ((97, 6),), "doble": ((95, 3), (101, 3))}.get(config.franja, ())]
@@ -136,29 +224,32 @@ def svg_auto(config: Configuracion) -> str:
     linea = _mezclar(base, "#000000", 0.5)
     partes = [
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 170">',
-        f'<defs>{_pintura(base, config.acabado, techo, bandas)}</defs>',
+        f'<defs>{_pintura(base, config.acabado, forma.techo, bandas)}</defs>',
         '<ellipse cx="200" cy="145" rx="185" ry="7" fill="#000000" fill-opacity="0.45"/>',
-        f'<path d="{silueta}" fill="url(#pintura)" stroke="{linea}" stroke-width="1.2"/>',
-        f'<path d="{ventana}" fill="#0E141B" stroke="{linea}" stroke-width="1"/>',
-        # el asiento se ve por la ventana: el color del interior
-        f'<rect x="{parantes[0] - 26}" y="{base_ventana - 16}" width="11" height="14" rx="3" '
+    ]
+    if modelo.aleron and forma.aleron:
+        partes.append(forma.aleron.format(**colores))
+    partes += [
+        f'<path d="{forma.cuerpo}" fill="url(#pintura)" stroke="{linea}" stroke-width="1.2"/>',
+        f'<path d="{forma.ventana}" fill="{VIDRIO}" stroke="{linea}" stroke-width="1"/>',
+        # el respaldo se ve por la ventana: el color del interior
+        f'<rect x="{forma.asiento[0]}" y="{forma.asiento[1]}" width="11" height="14" rx="3" '
         f'fill="{INTERIOR.get(config.interior, "#1C1C1E")}"/>',
     ]
-    for x in parantes:  # solo dentro de la ventana
-        partes.append(f'<line x1="{x}" y1="{techo + 5}" x2="{x - 3}" y2="{base_ventana - 1}" '
+    for x in forma.parantes:  # solo dentro de la ventana
+        partes.append(f'<line x1="{x}" y1="{forma.techo + 5}" x2="{x - 3}" y2="{forma.base_ventana - 1}" '
                       f'stroke="{_mezclar(base, "#000000", 0.35)}" stroke-width="5"/>')
-    partes += [
-        f'<line x1="{parantes[0] - 4}" y1="{base_ventana + 4}" x2="{parantes[0] - 1}" y2="114" '
-        f'stroke="{linea}" stroke-width="1"/>',
-        '<ellipse cx="38" cy="96" rx="11" ry="3.2" fill="#F4F6F8"/>',  # faro
-        '<rect x="374" y="86" width="9" height="4.5" rx="1.5" fill="#E0242F"/>',  # luz trasera
-    ]
+    for x in forma.puertas:
+        partes.append(f'<line x1="{x - 4}" y1="{forma.base_ventana + 4}" x2="{x - 1}" y2="114" '
+                      f'stroke="{linea}" stroke-width="1"/>')
+    partes += [forma.detalles.format(**colores), forma.faro, forma.luz]
     if "escape" in config.extras:
-        partes += ['<rect x="376" y="111" width="12" height="4" rx="2" fill="#6B6E73"/>',
-                   '<rect x="376" y="105" width="12" height="4" rx="2" fill="#6B6E73"/>']
+        x = forma.cola - 8
+        partes += [f'<rect x="{x}" y="111" width="12" height="4" rx="2" fill="#6B6E73"/>',
+                   f'<rect x="{x}" y="105" width="12" height="4" rx="2" fill="#6B6E73"/>']
     llanta = autos.opcion("llantas", config.llantas)
     pinza = autos.opcion("pinzas", config.pinzas)
-    for x, y, r in ruedas:
+    for x, y, r in forma.ruedas:
         partes.append(_rueda(x, y, r, llanta.id, llanta.color, pinza.color))
     if config.patente:
         partes.append('<rect x="290" y="152" width="96" height="16" rx="3" fill="#F1F1EE" stroke="#1C1C1C"/>')

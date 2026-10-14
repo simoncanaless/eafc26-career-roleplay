@@ -68,6 +68,21 @@ class TestDibujo(ayuda.PruebaDeInterfaz):
             self.assertNotIn("clip-path", svg)  # Qt no lo dibuja
         self.assertNotIn("<text", svg_auto(Configuracion("ferrari_296")))  # sin patente, sin chapa
 
+    def test_cada_familia_con_lo_suyo(self):
+        from PySide6.QtCore import QByteArray
+        from PySide6.QtSvg import QSvgRenderer
+
+        from roleplay.ui.configurador import CROMO, SILUETAS, svg_auto
+
+        for modelo in autos.MODELOS:  # todos se dibujan
+            self.assertTrue(QSvgRenderer(QByteArray(svg_auto(Configuracion(modelo.id)).encode())).isValid(), modelo.id)
+        self.assertEqual({m.carroceria for m in autos.MODELOS}, set(SILUETAS))  # y ninguna familia sobra
+        aleron = 'M 310 56'
+        self.assertIn(aleron, svg_auto(Configuracion("porsche_gt3rs")))
+        self.assertNotIn(aleron, svg_auto(Configuracion("porsche_911")))
+        self.assertIn(CROMO, svg_auto(Configuracion("bugatti_tourbillon")))  # la linea en C
+        self.assertIn('cx="372" cy="84" r="17"', svg_auto(Configuracion("amg_g63")))  # la rueda de auxilio
+
 
 class TestConfigurador(ayuda.PruebaDeInterfaz):
     def test_elegir_cambia_precio_y_dibujo(self):
