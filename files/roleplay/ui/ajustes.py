@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 from roleplay import ajustes
 from roleplay.gemini import get_gemini_api_keys, guardar_clave, probar_clave, usa_lista_de_claves
 from roleplay.partida import lector
+from roleplay.ui.atajo import ATAJO_TEXTO
 from roleplay.servicios.accesos import crear_accesos
 from roleplay.servicios.juego import abrir_juego, elegir_a_mano, juego_configurado, olvidar_eleccion
 from roleplay.ui import estilos
@@ -196,9 +197,17 @@ class DialogoAjustes(QDialog):
         self.vigilar_check.setChecked(actuales.get("vigilar", True))
         self.preguntas_check = QCheckBox("Dejar la entrevista lista (cargar el partido y generar las preguntas)")
         self.preguntas_check.setChecked(actuales.get("preguntas_solas", True))
-        for casilla in (self.vigilar_check, self.preguntas_check):
+        self.flotante_check = QCheckBox("Mostrar la sala flotante encima del juego al terminar un partido")
+        self.flotante_check.setChecked(actuales.get("flotante", True))
+        for casilla in (self.vigilar_check, self.preguntas_check, self.flotante_check):
             casilla.toggled.connect(self._on_en_vivo)
             en_vivo.cuerpo.addWidget(casilla)
+        en_vivo.cuerpo.addWidget(
+            texto_suave(
+                f"La sala flotante se abre y se cierra con {ATAJO_TEXTO}, aunque estes jugando. "
+                "Para que se vea encima del juego, usa FC 26 en \"Ventana sin bordes\"."
+            )
+        )
         layout.addWidget(en_vivo)
 
         iconos = Tarjeta("Iconos del escritorio")
@@ -272,8 +281,10 @@ class DialogoAjustes(QDialog):
         ajustes.guardar(en_vivo={
             "vigilar": self.vigilar_check.isChecked(),
             "preguntas_solas": self.preguntas_check.isChecked(),
+            "flotante": self.flotante_check.isChecked(),
         })
         self.preguntas_check.setEnabled(self.vigilar_check.isChecked())
+        self.flotante_check.setEnabled(self.vigilar_check.isChecked())
 
     def _on_elegir_partida(self):
         ruta, _ = QFileDialog.getOpenFileName(

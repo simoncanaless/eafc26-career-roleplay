@@ -69,6 +69,11 @@ toca) y todo se vuelve real:
 - **Resumen**: tu temporada real (partidos, goles, asistencias, nota por competicion, la
   tabla, la racha y el proximo rival) y tu club al dia.
 
+**Sala flotante**: un panel semitransparente encima del juego para hacer la entrevista
+sin salir del partido (responder por voz, enviar, ver la reaccion y los titulares). Se
+abre y se cierra con **Ctrl+Shift+F12** (funciona aunque el juego tenga el foco), desde el
+icono de la bandeja, o solo al terminar un partido. Necesita FC 26 en "ventana sin bordes".
+
 **Modo en vivo**: con la app abierta mientras juegas, cuando el juego guarda un partido
 nuevo te llega una notificacion de Windows ("Partido nuevo: Man Utd 2-1 Arsenal. Tu
 entrevista te espera"), la sala de prensa ya tiene el partido cargado y las preguntas

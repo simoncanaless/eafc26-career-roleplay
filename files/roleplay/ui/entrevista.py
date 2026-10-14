@@ -11,7 +11,7 @@ Sala de prensa (entrevista post-partido). Flujo:
    revisa si el partido disparo algun hito de prensa.
 """
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
@@ -87,6 +87,10 @@ def _repintar(widget: QWidget) -> None:
 
 
 class InterviewWindow(QWidget):
+    # algo cambio (preguntas, respuestas, botones, reaccion): la sala
+    # flotante (ui/overlay.py) se redibuja con esto
+    cambio = Signal()
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("EAFC 26 Roleplay - Sala de prensa")
@@ -105,6 +109,7 @@ class InterviewWindow(QWidget):
         self._prensa_en_curso = False
         self._prensa_manual = False
         self._prensa_player_id: int | None = None
+        self.ultimas_noticias: list = []  # las de la ultima revision (la sala flotante las muestra)
         # voz: (grabador, numero de pregunta) y la pregunta que se transcribe
         self._grabacion: tuple[GrabadorMicrofono, int] | None = None
         self._transcribiendo: int | None = None
@@ -354,6 +359,7 @@ class InterviewWindow(QWidget):
                 and self._grabacion is None
             )
             boton_voz.setEnabled(hay_microfono and (grabando_esta or libre))
+        self.cambio.emit()
 
     def _refrescar_reputacion(self):
         self.reputacion_mosaico.poner(get_reputacion_actual(self.perfil.id))
@@ -406,6 +412,7 @@ class InterviewWindow(QWidget):
             respuesta_edit = QTextEdit()
             respuesta_edit.setPlaceholderText("Tu respuesta... (escribila o grabala)")
             respuesta_edit.setFixedHeight(76)
+            respuesta_edit.textChanged.connect(self.cambio.emit)
             caja_layout.addWidget(respuesta_edit)
 
             boton_voz = boton(TEXTO_VOZ, icono_nombre="microfono")
@@ -525,6 +532,7 @@ class InterviewWindow(QWidget):
         grabador, numero = self._grabacion
         segundos = int(grabador.segundos)
         self._botones_voz[numero].setText(f"DETENER · {segundos // 60}:{segundos % 60:02d}")
+        self.cambio.emit()
         if grabador.lleno:
             self._terminar_grabacion()
 
@@ -649,6 +657,7 @@ class InterviewWindow(QWidget):
             )
         self.reaccion_label.setText(texto)
         self.reaccion_tarjeta.show()
+        self.cambio.emit()
 
         if self.perfil is not None and self.perfil.id == perfil.id:
             self._refrescar_reputacion()
@@ -793,6 +802,9 @@ class InterviewWindow(QWidget):
         set_estado_prensa(self._prensa_player_id, resultado["estado_prensa"])
         for noticia in resultado["noticias"]:
             save_noticia_prensa(noticia)
+        if resultado["noticias"]:
+            self.ultimas_noticias = list(resultado["noticias"])
+            self.cambio.emit()
 
         if resultado["noticias"]:
             limpiar_layout(self.noticias_layout)

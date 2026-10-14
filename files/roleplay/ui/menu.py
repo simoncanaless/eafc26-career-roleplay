@@ -5,10 +5,11 @@ de un scroll.
 """
 
 from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
+    QMenu,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -55,7 +56,9 @@ from roleplay.ui.estilos import fuente_titulo
 from roleplay.ui.instagram import InstagramWindow
 from roleplay.ui.ajustes import DialogoAjustes, abrir_juego_o_preguntar
 from roleplay.ui.personaje import CharacterWizard
-from roleplay.ui.vigilante import VigilantePartida, preparar_entrevista_sola
+from roleplay.ui.atajo import ATAJO_TEXTO, AtajoGlobal
+from roleplay.ui.overlay import SalaFlotante
+from roleplay.ui.vigilante import VigilantePartida, mostrar_flotante_sola, preparar_entrevista_sola
 
 NOTICIAS_EN_RESUMEN = 5
 
@@ -394,13 +397,29 @@ class MainMenuWindow(QMainWindow):
         layout_principal.addWidget(fondo, 1)
         self.setCentralWidget(contenedor)
 
+        # ---- sala flotante (encima del juego) y su atajo global ----
+        self.sala_flotante = SalaFlotante(self.pagina_entrevistas)
+        self.atajo = AtajoGlobal(self)
+        if self.atajo.registrar():
+            self.atajo.presionado.connect(self.sala_flotante.alternar)
+
         # ---- modo en vivo: avisos de partidos nuevos ----
         self.bandeja = None
         if QSystemTrayIcon.isSystemTrayAvailable():
             self.bandeja = QSystemTrayIcon(QIcon(str(config.ICONO_APP)), self)
             self.bandeja.setToolTip("EAFC 26 Roleplay")
             self.bandeja.messageClicked.connect(self._abrir_sala_de_prensa)
-            self.bandeja.activated.connect(lambda _motivo: self._traer_al_frente())
+            self.bandeja.activated.connect(self._on_bandeja_activada)
+            menu = QMenu(self)
+            for texto, accion in (
+                (f"Sala flotante ({ATAJO_TEXTO})", self.sala_flotante.alternar),
+                ("Abrir la app", self._traer_al_frente),
+                ("Salir", QApplication.quit),
+            ):
+                item = QAction(texto, menu)
+                item.triggered.connect(accion)
+                menu.addAction(item)
+            self.bandeja.setContextMenu(menu)
             self.bandeja.show()
         self.vigilante = VigilantePartida(self)
         self.vigilante.partido_nuevo.connect(self._on_partido_nuevo)
@@ -435,6 +454,17 @@ class MainMenuWindow(QMainWindow):
         texto = self._paginas[self.PAGINA_ENTREVISTAS][0].upper()
         self._botones_nav[self.PAGINA_ENTREVISTAS].setText(f"  {texto}" + ("   ●" if pendiente else ""))
 
+    def _on_bandeja_activada(self, motivo):
+        if motivo == QSystemTrayIcon.ActivationReason.Trigger:  # click izquierdo
+            self._traer_al_frente()
+
+    def closeEvent(self, evento):
+        self.atajo.liberar()
+        self.sala_flotante.close()
+        if self.bandeja is not None:
+            self.bandeja.hide()
+        super().closeEvent(evento)
+
     def _traer_al_frente(self):
         self.showNormal()
         self.raise_()
@@ -451,6 +481,8 @@ class MainMenuWindow(QMainWindow):
             sala._iniciar_revision_prensa(manual=False)  # la prensa reacciona al partido
         if self.stack.currentIndex() != self.PAGINA_ENTREVISTAS:
             self._marcar_entrevistas(True)
+        if mostrar_flotante_sola():
+            self.sala_flotante.mostrar()  # encima del juego, sin quitarle el foco
         mensaje = lectura.ultimo.resumen + (". Tu entrevista te espera." if cargado else ".")
         if self.bandeja is not None:
             self.bandeja.showMessage("Partido nuevo", mensaje, QSystemTrayIcon.MessageIcon.Information, 10000)

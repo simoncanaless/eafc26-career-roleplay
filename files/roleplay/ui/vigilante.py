@@ -32,6 +32,10 @@ def preparar_entrevista_sola() -> bool:
     return ajustes.leer().get("en_vivo", {}).get("preguntas_solas", True)
 
 
+def mostrar_flotante_sola() -> bool:
+    return ajustes.leer().get("en_vivo", {}).get("flotante", True)
+
+
 class VigilantePartida(QObject):
     partido_nuevo = Signal(object)  # LecturaPartida con un partido que no se habia avisado
     partida_actualizada = Signal(object)  # LecturaPartida, ante cualquier guardado nuevo
