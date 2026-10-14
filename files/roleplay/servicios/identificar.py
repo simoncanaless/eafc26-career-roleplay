@@ -48,7 +48,11 @@ EA SPORTS FC 26 (modo carrera). El campo "id" es el id de EA del jugador
 el nombre con el que es conocido (ej. "Erling Haaland", "Vinicius Jr.").
 
 Reglas:
-- Usa todas las pistas: club, posicion, seleccion, fecha de nacimiento.
+- Usa todas las pistas: club, posicion, seleccion, fecha de nacimiento y
+  "media" (su valoracion general en FC 26).
+- El club puede no ser el de la vida real: en el modo carrera hubo
+  traspasos ("Agentes libres" = sin club). Si el club no calza, guiate por
+  el id, la fecha de nacimiento, la seleccion y la posicion.
 - Si no lo reconoces con seguridad, devolve nombre "" y seguro=false.
   Es mucho peor un nombre equivocado que uno vacio: no adivines.
 - Devolve un elemento por cada id.
