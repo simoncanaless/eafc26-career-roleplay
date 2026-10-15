@@ -82,7 +82,8 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 | `roleplay/servicios/autos.py` | El concesionario: modelos de marcas REALES (solo el nombre como texto; decision de Simon: la app es entre amigos; nunca logos ni modelos 3D de las marcas), precio base aproximado, opciones con recargo (`precio()`), `describir()` y `Configuracion` (se guarda como dict en el pedido) |
 | `roleplay/ui/configurador.py` | `Configurador` (QDialog) y `svg_auto(config)`. `SILUETAS`: 14 carrocerias **calcadas a mano de fotos reales de perfil** (Wikimedia Commons; el archivo de origen va en un comentario arriba de cada una), con sus detalles (tomas de aire, linea en C, rueda de auxilio, aleron si `Modelo.aleron`). Solo el contorno: nunca logos, escudos ni modelos 3D de las marcas ni de GTA. Las primeras, dibujadas a ojo, "estaban horribles" (Simon): no volver a inventarlas. **QtSvg no soporta clip-path**: franjas y fibra van como cortes del degradado de la pintura (`_pintura`), y los parantes se cortan contra el borde de la ventana (`_ventana_en`). `VistaAuto` dibuja el SVG |
 | `scripts/trazar_silueta.py` + `docs/siluetas.md` | Como se calca un auto nuevo: buscar la foto de perfil en Commons, medirla en el navegador (`medirAuto` automatico o la rejilla `ver()` a mano), y `trazar_silueta.py medidas.json --puntos --insertar <modelo> --fuente "..."` la pega en `SILUETAS`. Endereza la perspectiva (`perspectiva`, `ejes_sobre_radio`) y achica la escala si el auto es mas alto que el dibujo (G 63). Las medidas de cada auto quedan en `docs/siluetas/*.json` |
-| `roleplay/ui/vida.py` | `PaginaVida`: saldo, sueldo neto, gastos fijos, patrimonio; tienda por categoria, lo que tenes (vender al 70%), filantropia y movimientos. `acreditar_con(carrera)` la llama el menu en cada autoguardado. Los botones se identifican por la propiedad `articulo` (el objectName es el del estilo) |
+| `roleplay/servicios/eventos.py` | Eventos inesperados, buenos y malos (multa con su auto, choque, robo en su casa, fiesta filtrada en el yate, gripe, molestias, multa del club, polemica en redes, hinchas que lo increpan; campana publicitaria, video viral, visita a un hospital, TV, jugador del mes, la camiseta a un nene). `revisar()` sortea una vez por SEMANA del juego (30%, semilla jugador+semana: la misma partida da los mismos eventos), a lo sumo uno por revision, con reglas (`requiere`: auto/casa/yate/mala_racha/buena_racha/reputacion:N; `pesos` por personalidad; no repite los ultimos 4). El codigo decide reputacion, seguidores (la escala de la hinchada) y plata (semanas de sueldo neto); `repercusion()` (hilo) escribe noticia y comentarios, con respaldo sin IA. Algunos traen un `reto` de roleplay (arrancar en el banco, no jugar el proximo): la app no toca el juego, es una propuesta. `estado_json.eventos` |
+| `roleplay/ui/vida.py` | `PaginaVida`: saldo, sueldo neto, gastos fijos, patrimonio; tienda por categoria, lo que tenes (vender al 70%), filantropia y movimientos. `acreditar_con(carrera)` la llama el menu en cada autoguardado (cobra, entrega autos y sortea los eventos inesperados: tarjeta "Lo que te paso" y aviso en la bandeja con `evento_inesperado`). Los botones se identifican por la propiedad `articulo` (el objectName es el del estilo) |
 | `roleplay/servicios/metas.py` | Metas de temporada que se propone el usuario (`estado_json.metas`: goles, goles en liga, asistencias, top N de la liga). `evaluar_metas()` las decide con la partida (contables apenas se llega; el puesto al terminar la liga; las de una temporada pasada fallan) y `texto_para_prompt()` las pone en el contexto de entrevistas y prensa. La prensa devuelve `resultado["metas"]` y la sala lo guarda con `database.actualizar_metas` (que no revive una meta borrada) |
 | `roleplay/servicios/mercado.py` | Fichajes reales: `clubes_de_jugadores(carrera)` (hombres, club de hoy) contra la foto anterior de la misma partida (tabla `club_visto`, `database.get/guardar_clubes_vistos`) -> `detectar_traspasos()` (noticia: tu club, media >= 82, o tu liga con media >= 75), `traspaso_del_usuario()` (hito `nuevo_club`). La foto se guarda recien despues de que la IA redacto: si falla, se detectan de nuevo |
 | `roleplay/servicios/previa.py` | Conferencia PREVIA al proximo partido: `previa_del_proximo(carrera)` arma los datos reales (tabla de los dos, rachas, ultimo partido del rival, cruces de la temporada, goleador rival; `ya_hecha` con `estado_json.partida.previa`), `generar_previa` / `evaluar_previa` (delta acotado a ±10) y `noticia_de_previa`. NO se guarda como partido (no suma PJ ni goles) |
@@ -170,7 +171,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 
 ## Testing
 
-`.venv\Scripts\python.exe -m unittest discover -s tests` (234 pruebas, ~28 s). `tests/ayuda.py`:
+`.venv\Scripts\python.exe -m unittest discover -s tests` (249 pruebas, ~27 s). `tests/ayuda.py`:
 - Fija `EAFC_FC26_GUARDADOS` a una carpeta vacia: las pruebas no leen la partida real.
   `tests/fabrica_partida.py` arma un guardado FALSO con el mismo formato (para todo lo de
   `roleplay/partida`). `TestPartidaRealDelPC` lee la partida real si existe (solo lectura,
@@ -250,6 +251,7 @@ Siguiente (decidido con Simon el 2026-10-14):
   en la bandeja. Los autos genericos viejos quedan en `economia.ANTERIORES` (solo para garages ya existentes).
   Las siluetas de los 22 modelos se calcaron de fotos reales el 2026-10-14 (ver `docs/siluetas.md`); el Cullinan
   comparte la del Range Rover y los McLaren la del 12C (misma linea).
+- **Eventos inesperados: HECHO el 2026-10-14** (`servicios/eventos.py`). Las lesiones de la partida no se leen (no se encontro donde las guarda FC 26): las "lesiones" son eventos del roleplay con un reto.
 - **Vida y patrimonio (economia + filantropia): HECHO el 2026-10-14** (`servicios/economia.py`, `ui/vida.py`).
   Sueldo real verificado: `cmGX` correlaciona 0,89 con la media en los contratos del plantel (`DvsP`).
 - **Prensa en cada autoguardado e Instagram que se mueve solo: HECHO el 2026-10-14** (`dia_nuevo`,
@@ -292,7 +294,7 @@ Siguiente (decidido con Simon el 2026-10-14):
 Pendiente (ideas del usuario):
 - Reputacion por club + eventos de decision (quedarse/irse tras una polemica, clubes que no te quieren por tu historial)
 - ~~Economia / lifestyle~~ y ~~filantropia~~: hechos (ver arriba)
-- Eventos inesperados (lesiones, accidentes, enfermedades; buenos y malos)
+- ~~Eventos inesperados~~: hechos (ver arriba)
 - Vida sentimental: novia real vs posibilidad de relacion con una famosa, con tramas
 
 ## Como trabajar con Simon

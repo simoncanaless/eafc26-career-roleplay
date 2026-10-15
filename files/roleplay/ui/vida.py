@@ -10,6 +10,9 @@ noticia) y los hinchas la comentan en Instagram.
 Los autos van por el concesionario (marcas reales, servicios/autos.py): se
 configuran (ui/configurador.py), se pagan al pedir y llegan dias despues en
 el juego; lo que provocan pasa cuando llegan (acreditar_con los entrega).
+
+Con los dias del juego tambien pasan cosas sin que uno las compre: los
+eventos inesperados (servicios/eventos.py), en la tarjeta "Lo que te paso".
 """
 
 from PySide6.QtCore import Signal
@@ -17,15 +20,17 @@ from PySide6.QtWidgets import QButtonGroup, QDialog, QHBoxLayout, QLabel, QMessa
 
 from roleplay.database import (
     get_economia,
+    get_estado_eventos,
     get_reputacion_actual,
     get_seguidores,
     load_latest_profile,
     save_actividad_instagram,
     save_noticia_prensa,
     set_economia,
+    set_estado_eventos,
     sumar_reputacion_y_seguidores,
 )
-from roleplay.servicios import autos, economia
+from roleplay.servicios import autos, economia, eventos
 from roleplay.servicios.economia import CATALOGO, CATEGORIAS, POR_ID, dinero
 from roleplay.servicios.partida_real import contexto_temporada
 from roleplay.ui import estilos
@@ -46,6 +51,7 @@ from roleplay.ui.componentes import (
 )
 
 MOVIMIENTOS_VISIBLES = 12
+EVENTOS_VISIBLES = 6
 
 
 def _con_signo(numero: int) -> str:
@@ -55,6 +61,7 @@ def _con_signo(numero: int) -> str:
 class PaginaVida(QWidget):
     compra_hecha = Signal()  # la reputacion cambio: el menu refresca la barra lateral
     auto_entregado = Signal(str)  # llego un auto pedido: el menu avisa en la bandeja
+    evento_inesperado = Signal(str, str)  # (titulo, reto): el menu avisa en la bandeja
 
     def __init__(self):
         super().__init__()
@@ -106,6 +113,13 @@ class PaginaVida(QWidget):
         self.resultado.cuerpo.addWidget(self.resultado_label)
         self.resultado.hide()
         contenido.addWidget(self.resultado)
+
+        self.eventos = Tarjeta("Lo que te paso")
+        self.eventos_layout = QVBoxLayout()
+        self.eventos_layout.setSpacing(10)
+        self.eventos.cuerpo.addLayout(self.eventos_layout)
+        self.eventos.hide()
+        contenido.addWidget(self.eventos)
 
         tienda = Tarjeta("Tienda")
         self._grupo = QButtonGroup(self)
@@ -189,6 +203,8 @@ class PaginaVida(QWidget):
             if articulo is not None:
                 self._aplicar_y_repercutir(self.perfil, carrera, articulo, "Te llego tu")
                 self.auto_entregado.emit(articulo.nombre)
+        if self.perfil is not None and hoy is not None and carrera.sueldo_usuario:
+            self._revisar_eventos(carrera, hoy)
         self._mostrar()
 
     # ---- dibujo ----
@@ -221,6 +237,7 @@ class PaginaVida(QWidget):
         self.mosaico_sueldo.poner(dinero(e["sueldo"] * economia.NETO, moneda))
         self.mosaico_gastos.poner(dinero(economia.mantenimiento_semanal(e), moneda))
         self.mosaico_patrimonio.poner(dinero(economia.patrimonio(e), moneda))
+        self._mostrar_eventos()
         self._mostrar_tienda(e)
         self._mostrar_pedidos(e)
         self._mostrar_posesiones(e)
@@ -340,6 +357,67 @@ class PaginaVida(QWidget):
             fecha = texto_suave(f"{dia[8:10]}/{dia[5:7]}", ajustar=False)
             fecha.setFixedWidth(46)
             self.movimientos_layout.addLayout(fila(fecha, QLabel(esc(movimiento["concepto"])), None, cifra))
+
+    # ---- eventos inesperados ----
+
+    def _revisar_eventos(self, carrera, hoy):
+        perfil = self.perfil
+        estado, e, ocurridos = eventos.revisar(
+            perfil, get_estado_eventos(perfil.id), get_economia(perfil.id), carrera, hoy,
+            get_seguidores(perfil.id), get_reputacion_actual(perfil.id),
+        )
+        set_estado_eventos(perfil.id, estado)
+        set_economia(perfil.id, e)
+        for ocurrido in ocurridos:
+            sumar_reputacion_y_seguidores(perfil.id, ocurrido.reputacion, ocurrido.seguidores, motivo=ocurrido.titulo)
+            self.compra_hecha.emit()  # la reputacion cambio
+            self.evento_inesperado.emit(ocurrido.titulo, ocurrido.reto)
+            ejecutar_en_hilo(
+                eventos.repercusion, perfil, ocurrido, self._moneda(), contexto_temporada(carrera),
+                al_completar=lambda resultado, i=ocurrido.id: self._on_repercusion_evento(i, resultado),
+                al_fallar=self._on_repercusion_error,
+            )
+
+    def _on_repercusion_evento(self, evento_id: str, resultado):
+        noticia, actividad = resultado
+        save_noticia_prensa(noticia)
+        save_actividad_instagram(actividad)  # los seguidores ya se sumaron
+        if self.perfil is None:
+            return
+        estado = get_estado_eventos(self.perfil.id)
+        for ocurrido in estado.get("historial", []):
+            if ocurrido["id"] == evento_id:
+                ocurrido["prensa"] = noticia.titular
+                set_estado_eventos(self.perfil.id, estado)
+                self._mostrar_eventos()
+                break
+
+    def _mostrar_eventos(self):
+        limpiar_layout(self.eventos_layout)
+        historial = get_estado_eventos(self.perfil.id).get("historial", []) if self.perfil is not None else []
+        moneda = self._moneda()
+        for ocurrido in historial[:EVENTOS_VISIBLES]:
+            efectos = []
+            if ocurrido["reputacion"]:
+                efectos.append(f"reputacion {_con_signo(ocurrido['reputacion'])}")
+            if ocurrido["seguidores"]:
+                efectos.append(f"{_con_signo(ocurrido['seguidores'])} seguidores")
+            if ocurrido["dinero"]:
+                efectos.append(("+" if ocurrido["dinero"] > 0 else "") + dinero(ocurrido["dinero"], moneda))
+            color = {"positiva": estilos.POSITIVO, "negativa": estilos.NEGATIVO}.get(ocurrido["tono"], estilos.TEXTO_SUAVE)
+            dia = ocurrido["fecha"]
+            texto = (f"<b>{esc(ocurrido['titulo'])}</b> <span style='color:{estilos.TEXTO_SUAVE}'>"
+                     f"· {dia[8:10]}/{dia[5:7]}</span>")
+            if efectos:
+                texto += f"<br><span style='color:{color}'>{esc(' · '.join(efectos))}</span>"
+            if ocurrido.get("reto"):
+                texto += f"<br><span style='color:{estilos.ACENTO}'>Reto:</span> {esc(ocurrido['reto'])}"
+            if ocurrido.get("prensa"):
+                texto += f"<br><span style='color:{estilos.TEXTO_SUAVE}'>En la prensa: {esc(ocurrido['prensa'])}</span>"
+            etiqueta = QLabel(texto)
+            etiqueta.setWordWrap(True)
+            self.eventos_layout.addWidget(etiqueta)
+        self.eventos.setVisible(bool(historial))
 
     # ---- comprar y vender ----
 

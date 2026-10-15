@@ -374,7 +374,7 @@ class InstagramWindow(QWidget):
             color = estilos.POSITIVO if item.crecimiento_seguidores >= 0 else estilos.NEGATIVO
             dia = item.fecha_juego
             fecha = texto_suave(f"{dia[8:10]}/{dia[5:7]}" if len(dia) >= 10 else "", ajustar=False)
-            icono_tipo = {"partido": "⚽", "noticia": "📰", "compra": "🛍️", "donacion": "💚", "entrega": "🔑"}.get(item.tipo, "•")
+            icono_tipo = {"partido": "⚽", "noticia": "📰", "compra": "🛍️", "donacion": "💚", "entrega": "🔑", "evento": "⚡"}.get(item.tipo, "•")
             titulo = QLabel(f"{icono_tipo}&nbsp; <b>{esc(item.titulo)}</b>")
             titulo.setWordWrap(True)
             linea = QHBoxLayout()

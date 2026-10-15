@@ -85,6 +85,12 @@ un hospital, una escuela de futbol o tu propia fundacion. Lo que hagas mueve tus
 y tu reputacion: donar suma; presumir un jet en plena mala racha resta (mas si sos humilde).
 Si es noticia, sale en la prensa, y los hinchas lo comentan en tu Instagram.
 
+**Lo que te pasa**: a medida que pasan las semanas del juego te pasan cosas, buenas y malas: una
+multa por exceso de velocidad (si tenes auto), una gripe, una polemica en redes (mas si sos
+polemico), una campana publicitaria, un video viral... Mueven tu plata, tus seguidores y tu
+reputacion, salen en la prensa, y algunas traen un reto para el proximo partido (por ejemplo,
+arrancar en el banco). Estan en VIDA, en "Lo que te paso".
+
 **Metas de la temporada**: en el Resumen te propones metas (goles, goles en liga, asistencias,
 terminar entre los N primeros de la liga). Se siguen solas con tu partida, la prensa te
 pregunta por ellas en las entrevistas, y cumplirlas o fallarlas es noticia y mueve tu

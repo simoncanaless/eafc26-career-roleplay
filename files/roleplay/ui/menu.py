@@ -492,6 +492,7 @@ class MainMenuWindow(QMainWindow):
         self.pagina_vida = PaginaVida()
         self.pagina_vida.compra_hecha.connect(self._refrescar_jugador)
         self.pagina_vida.auto_entregado.connect(self._on_auto_entregado)
+        self.pagina_vida.evento_inesperado.connect(self._on_evento_inesperado)
         self._paginas = [
             ("Resumen", "inicio", self.pagina_resumen),
             ("Temporada", "trofeo", self.pagina_temporada),
@@ -658,6 +659,13 @@ class MainMenuWindow(QMainWindow):
             self.bandeja.showMessage(
                 "Te llego tu auto", f"{nombre}: la prensa y tus hinchas ya lo vieron.",
                 QSystemTrayIcon.MessageIcon.Information, 8000,
+            )
+
+    def _on_evento_inesperado(self, titulo: str, reto: str):
+        if self.bandeja is not None and not self.isActiveWindow():
+            self.bandeja.showMessage(
+                "Algo te paso", titulo + (f". Reto: {reto}" if reto else ". Mira la pagina Vida."),
+                QSystemTrayIcon.MessageIcon.Information, 10000,
             )
 
     def _on_noticias_publicadas(self, noticias: list, manual: bool):
