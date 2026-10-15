@@ -55,6 +55,17 @@ def generar_reaccion_post(
     )
 
 
+def post_de_compra(perfil: PlayerProfile, objeto: str, tienda: str = "") -> str:
+    """El post para presumir algo que se compro ("PRESUMIR EN INSTAGRAM", en
+    Vida), con la voz de su personalidad. Queda editable antes de publicar."""
+    from roleplay.servicios.hinchada import datos_de_redes
+
+    datos = {**datos_de_redes(perfil), "objeto": objeto.strip(), "tienda": tienda.strip()}
+    personalidad = perfil.personalidad if perfil.personalidad in ("reservado", "carismatico", "polemico", "humilde") else "reservado"
+    with narrador(perfil.id, "redes") as escritor:
+        return escritor.decir(f"presumir_{personalidad}", **datos)
+
+
 def sugerir_post(perfil: PlayerProfile, ultimo_partido: str = "") -> str:
     """Un texto de post con la voz del jugador (su personalidad), sobre su
     ultimo partido. Queda editable antes de publicar."""

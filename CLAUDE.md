@@ -269,9 +269,17 @@ despues de cada uno y actualizar este archivo):**
    boton CAPTURAR VISTA o la foto sola al PEDIR, vinculada en `pedido["foto"]` -> `posesion["foto"]`). La foto queda en `garage/<id>.jpg` (no en
    `autos_comprados/<id>.png` como decia el pedido). Los encabezados de seguridad NO se
    tocan (no hace falta: la web es la pagina principal, no un iframe).
-3. Tienda universal (`DialogoTiendaReal`: casas, relojes y joyas, moda, yates, aviones,
-   tecnologia, muebles con las webs oficiales; autocompletar nombre/precio por OpenGraph,
-   foto, COMPRAR por `economia`, "PRESUMIR EN INSTAGRAM"): pendiente.
+3. Tienda universal: **A MEDIAS (2026-10-15, se paro por el uso semanal de Simon)**. Hecha la
+   logica: `servicios/tiendas.py` (TIENDAS con las 14 webs oficiales verificadas en el navegador;
+   Xbox Design Lab es `xboxdesignlab.xbox.com`; NIVELES de precio; `SCRIPT_METADATOS` + `leer_metadatos`
+   lee JSON-LD/OpenGraph y convierte a la moneda del juego, probado a mano en JamesEdition y Secretlab),
+   `economia.articulo_libre` / `comprar(extra=)` / categorias tecnologia y muebles / `carpeta_de_foto`,
+   `instagram.post_de_compra` (corpus `presumir_<personalidad>`), y en `eventos.contar` el titular ya no
+   repite el apellido. FALTA: `ui/tienda.py` (DialogoTiendaReal, reusar la foto del configurador;
+   `guardar_foto` con carpeta `compras/` y `config.CARPETA_COMPRAS`; `Navegador.ir(url)` y
+   `runJavaScript`), en Vida el boton de las tiendas y "PRESUMIR EN INSTAGRAM" en "Lo que tenes",
+   `InstagramWindow.precargar` (+ `InstagramPost.foto`, columna en COLUMNAS_AGREGADAS), el menu, las
+   pruebas (`test_tiendas.py`) y la doc.
 4. Overlay bimodal (HUD que deja pasar los clicks con toasts + centro de mando con
    Ctrl+Shift+F12 que devuelve el foco al juego con `SetForegroundWindow`): pendiente.
 

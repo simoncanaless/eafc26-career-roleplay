@@ -12,12 +12,18 @@ Los autos se piden en el concesionario (servicios/autos.py, marcas reales):
 se pagan al pedir y llegan dias despues en el juego; lo que provocan
 (seguidores, reputacion, noticia) pasa cuando llegan y se muestran.
 
+Lo demas tambien se puede comprar de verdad en las webs oficiales
+(servicios/tiendas.py, ui/tienda.py): un articulo "libre", con el nombre y
+el precio que uno eligio, que se guarda con su tienda y su foto.
+
 El dinero vive en estado_json.economia:
 {"saldo", "hasta" (dia del juego hasta donde se cobro), "sueldo",
- "posesiones": [{"id", "articulo", "precio", "desde", ("config"), ("foto")}],
+ "posesiones": [{"id", "articulo", "precio", "desde", ("config"), ("foto"),
+                 ("nombre", "tienda", "url": los libres)}],
  "pedidos": [{"id", "modelo", "config", "precio", "pedido", "entrega", ("foto")}],
  "movimientos": [{"fecha", "concepto", "monto"}]}  (el mas nuevo primero)
-Un auto en posesiones tiene articulo "auto:<modelo>".
+Un auto en posesiones tiene articulo "auto:<modelo>" (su foto en garage/);
+uno libre, "libre:<categoria>" (su foto en compras/).
 """
 
 import copy
@@ -39,12 +45,13 @@ SEMANAS_PARA_SER_NOTICIA = 26  # algo que cuesta medio anio de sueldo es noticia
 @dataclass(frozen=True)
 class Articulo:
     id: str
-    categoria: str  # casa | auto | reloj | moda | yate | avion | donacion
+    categoria: str  # casa | auto | reloj | moda | yate | avion | tecnologia | muebles | donacion
     nombre: str
     precio: int
     mantenimiento: int = 0  # por semana
     ostentoso: bool = False
     detalle: str = ""  # como esta configurado (los autos del concesionario)
+    tienda: str = ""  # donde se compro (los libres: la web oficial)
 
     @property
     def es_donacion(self) -> bool:
@@ -58,6 +65,8 @@ CATEGORIAS = {
     "moda": "Moda",
     "yate": "Yates",
     "avion": "Aviones",
+    "tecnologia": "Tecnologia",
+    "muebles": "Muebles",
 }
 
 # Sin marcas: el roleplay no necesita nombres reales y asi nada parece publicidad.
@@ -73,6 +82,12 @@ CATALOGO = [
     Articulo("coleccion_moda", "moda", "Coleccion de alta costura", 400_000, 1_500, ostentoso=True),
     Articulo("yate", "yate", "Yate de 30 metros", 12_000_000, 40_000, ostentoso=True),
     Articulo("jet", "avion", "Jet privado", 45_000_000, 90_000, ostentoso=True),
+    Articulo("setup_gamer", "tecnologia", "Setup gamer de alta gama", 25_000),
+    Articulo("home_cinema", "tecnologia", "Sala de cine en casa", 150_000, 500),
+    Articulo("simulador", "tecnologia", "Simulador de carreras profesional", 400_000, 1_000, ostentoso=True),
+    Articulo("living", "muebles", "Living de disenador", 60_000),
+    Articulo("cocina", "muebles", "Cocina a medida", 180_000),
+    Articulo("arte", "muebles", "Coleccion de arte para la casa", 1_200_000, 2_000, ostentoso=True),
     Articulo("hospital", "donacion", "Donar a un hospital de ninos", 500_000),
     Articulo("damnificados", "donacion", "Ayudar a los damnificados de una catastrofe", 250_000),
     Articulo("escuela", "donacion", "Financiar una escuela de futbol en tu barrio de origen", 1_500_000),
@@ -86,6 +101,22 @@ ANTERIORES = [
     Articulo("hiperdeportivo", "auto", "Hiperdeportivo de edicion limitada", 2_800_000, 8_000, ostentoso=True),
 ]
 POR_ID = {a.id: a for a in CATALOGO + ANTERIORES}
+
+# lo libre (de una web oficial): desde cuanto es ostentoso y cuanto cuesta
+# mantenerlo por semana (una parte del precio), segun la categoria
+OSTENTOSO_LIBRE = {"casa": 5_000_000, "reloj": 100_000, "moda": 150_000, "yate": 0, "avion": 0,
+                   "tecnologia": 100_000, "muebles": 300_000}
+MANTENIMIENTO_LIBRE = {"casa": 0.0017, "yate": 0.0033, "avion": 0.002}
+LIBRE = "libre:"
+
+
+def articulo_libre(categoria: str, nombre: str, precio: int, tienda: str = "") -> Articulo:
+    """Lo que se eligio en una web oficial, con el nombre y el precio de ahi."""
+    return Articulo(
+        f"{LIBRE}{categoria}", categoria, nombre.strip(), int(precio),
+        round(precio * MANTENIMIENTO_LIBRE.get(categoria, 0)), precio >= OSTENTOSO_LIBRE.get(categoria, 200_000),
+        f"de {tienda}" if tienda else "", tienda,
+    )
 
 # moneda segun la liga del club (id de liga + 1, como en la base de EA)
 LIGAS_EN_LIBRAS = {13, 14, 50, 60, 61}  # Premier, Championship, Escocia, League One y Two
@@ -154,7 +185,10 @@ def acreditar(economia: Optional[dict], hoy: date, sueldo: int) -> dict:
 
 
 def articulo_de_posesion(posesion: dict) -> Optional[Articulo]:
-    """El articulo de algo que tiene: del catalogo, o un auto configurado."""
+    """El articulo de algo que tiene: del catalogo, un auto configurado o algo libre."""
+    if posesion["articulo"].startswith(LIBRE):
+        return articulo_libre(posesion["articulo"][len(LIBRE):], posesion.get("nombre", "Algo"), posesion["precio"],
+                              posesion.get("tienda", ""))
     if posesion["articulo"].startswith("auto:"):
         modelo = autos.POR_ID.get(posesion["articulo"][5:])
         if modelo is None:
@@ -187,7 +221,8 @@ class SinPlata(ValueError):
     pass
 
 
-def comprar(economia: dict, articulo: Articulo, hoy: date) -> dict:
+def comprar(economia: dict, articulo: Articulo, hoy: date, extra: Optional[dict] = None) -> dict:
+    """`extra`: lo que se guarda ademas en la posesion (lo libre: nombre, tienda, url, foto)."""
     if economia.get("saldo", 0) < articulo.precio:
         raise SinPlata(f"No te alcanza: cuesta {articulo.precio:,} y tenes {economia.get('saldo', 0):,}".replace(",", "."))
     e = copy.deepcopy(economia)
@@ -195,9 +230,12 @@ def comprar(economia: dict, articulo: Articulo, hoy: date) -> dict:
     if articulo.es_donacion:
         _movimiento(e, hoy, articulo.nombre, -articulo.precio)
     else:
-        e.setdefault("posesiones", []).append(
-            {"id": uuid.uuid4().hex[:8], "articulo": articulo.id, "precio": articulo.precio, "desde": hoy.isoformat()}
-        )
+        posesion = {"id": uuid.uuid4().hex[:8], "articulo": articulo.id, "precio": articulo.precio,
+                    "desde": hoy.isoformat()}
+        if articulo.id.startswith(LIBRE):
+            posesion.update({"nombre": articulo.nombre, "tienda": articulo.tienda})
+        posesion.update(extra or {})
+        e.setdefault("posesiones", []).append(posesion)
         _movimiento(e, hoy, f"Compra: {articulo.nombre}", -articulo.precio)
     return e
 
@@ -319,6 +357,8 @@ def _descripcion(perfil: PlayerProfile, articulo: Articulo, efecto_: Efecto, mon
         texto = f"{perfil.nombre_jugador} decidio {articulo.nombre[0].lower()}{articulo.nombre[1:]} ({precio})"
     elif articulo.id.startswith("auto:"):
         texto = f"{perfil.nombre_jugador} recibio su nuevo {articulo.nombre} ({articulo.detalle}; {precio})"
+    elif articulo.tienda:
+        texto = f"{perfil.nombre_jugador} se compro en {articulo.tienda}: {articulo.nombre} ({precio})"
     else:
         texto = f"{perfil.nombre_jugador} se compro: {articulo.nombre} ({precio})"
     return texto + (f", {efecto_.motivo}" if efecto_.motivo else "")
@@ -331,6 +371,8 @@ def _titulo(perfil: PlayerProfile, articulo: Articulo) -> str:
         return f"El gesto de {apellido}: {articulo.nombre[0].lower()}{articulo.nombre[1:]}"
     if articulo.id.startswith("auto:"):
         return f"{apellido} estrena su {articulo.nombre}"
+    if articulo.tienda:  # el nombre de una web oficial suele empezar con la marca: tal cual
+        return f"{apellido} se da un gusto: {articulo.nombre}"
     return f"{apellido} se da un gusto: {articulo.nombre[0].lower()}{articulo.nombre[1:]}"
 
 
@@ -356,6 +398,11 @@ def repercusion(
         crecimiento_seguidores=efecto_.seguidores, comentarios=comentar_eventos(perfil, [evento]).get(0, []),
     )
     return None, actividad
+
+
+def carpeta_de_foto(posesion: dict) -> str:
+    """Donde vive la foto de una posesion (o pedido), relativo a los datos de la app."""
+    return "garage" if posesion.get("config") or posesion.get("articulo", "").startswith("auto:") else "compras"
 
 
 def leer_partida_para_economia() -> Optional[Carrera]:

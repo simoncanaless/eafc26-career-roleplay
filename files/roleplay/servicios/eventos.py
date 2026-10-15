@@ -246,7 +246,9 @@ def contar(perfil: PlayerProfile, titulo: str, descripcion: str, tono: str, segu
     from roleplay.servicios.hinchada import EventoHinchada, comentar_eventos
 
     partes = perfil.nombre_jugador.split()
-    datos = {"titulo": titulo, "titulo_min": titulo[:1].lower() + titulo[1:], "apellido": partes[-1] if partes else ""}
+    apellido = partes[-1] if partes else ""
+    ya_lo_nombra = bool(apellido) and apellido.lower() in titulo.lower()
+    datos = {"titulo": titulo, "titulo_min": "" if ya_lo_nombra else titulo[:1].lower() + titulo[1:], "apellido": apellido}
     tono = tono if tono in ("positiva", "negativa", "mixta", "neutral") else "neutral"
     with narrador(perfil.id, "prensa") as escritor:
         titular = escritor.decir(f"t_vida_{tono}", **datos) or titulo
