@@ -75,7 +75,8 @@ toca) y todo se vuelve real:
 **Concesionario**: en VIDA > Autos estan los modelos de Ferrari, Porsche, Lamborghini, McLaren,
 Mercedes-AMG, Rolls-Royce, Bentley, Aston Martin, Range Rover y Bugatti. Los configuras (color y
 acabado, llantas, pinzas, franjas, interior, fibra de carbono, escape y patente personalizada)
-con una vista previa, lo pedis y llega unos dias despues en el juego: ahi lo ven la prensa y
+con una vista previa (la silueta de cada auto esta calcada de una foto real de perfil), lo pedis y
+llega unos dias despues en el juego: ahi lo ven la prensa y
 tus hinchas.
 
 **Vida**: tu sueldo es el de tu contrato real en la partida (lo cobras a medida que pasan las

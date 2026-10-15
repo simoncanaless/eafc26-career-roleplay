@@ -69,19 +69,50 @@ class TestDibujo(ayuda.PruebaDeInterfaz):
         self.assertNotIn("<text", svg_auto(Configuracion("ferrari_296")))  # sin patente, sin chapa
 
     def test_cada_familia_con_lo_suyo(self):
+        import re
+
         from PySide6.QtCore import QByteArray
         from PySide6.QtSvg import QSvgRenderer
 
         from roleplay.ui.configurador import CROMO, SILUETAS, svg_auto
 
         for modelo in autos.MODELOS:  # todos se dibujan
-            self.assertTrue(QSvgRenderer(QByteArray(svg_auto(Configuracion(modelo.id)).encode())).isValid(), modelo.id)
+            svg = svg_auto(Configuracion(modelo.id))
+            self.assertTrue(QSvgRenderer(QByteArray(svg.encode())).isValid(), modelo.id)
+            self.assertEqual(svg.count('fill="#0B0C0E"'), 2, modelo.id)  # los dos pasarruedas, tambien en un todoterreno
         self.assertEqual({m.carroceria for m in autos.MODELOS}, set(SILUETAS))  # y ninguna familia sobra
-        aleron = 'M 310 56'
+        aleron = 'M 318 52'
         self.assertIn(aleron, svg_auto(Configuracion("porsche_gt3rs")))
         self.assertNotIn(aleron, svg_auto(Configuracion("porsche_911")))
         self.assertIn(CROMO, svg_auto(Configuracion("bugatti_tourbillon")))  # la linea en C
-        self.assertIn('cx="372" cy="84" r="17"', svg_auto(Configuracion("amg_g63")))  # la rueda de auxilio
+        g = SILUETAS["g_real"]  # la rueda de auxilio va colgada detras de la carroceria
+        self.assertGreater(max(float(x) for x in re.findall(r"([\d.]+) [\d.]+", g.detalles)), g.cola + 10)
+
+    def test_ningun_auto_se_sale_del_dibujo(self):
+        """Un todoterreno es mas alto que ancho a esta escala: se achica, no se corta el techo."""
+        from PySide6.QtCore import QByteArray, QRectF
+        from PySide6.QtGui import QColor, QImage, QPainter
+        from PySide6.QtSvg import QSvgRenderer
+
+        from roleplay.ui.configurador import svg_auto
+
+        for modelo in autos.MODELOS:
+            img = QImage(400, 170, QImage.Format.Format_ARGB32)
+            img.fill(QColor(0, 0, 0, 0))
+            pintor = QPainter(img)
+            QSvgRenderer(QByteArray(svg_auto(Configuracion(modelo.id)).encode())).render(pintor, QRectF(0, 0, 400, 170))
+            pintor.end()
+            bordes = [(x, 0) for x in range(400)] + [(0, y) for y in range(140)] + [(399, y) for y in range(140)]
+            self.assertFalse(any(img.pixelColor(x, y).alpha() for x, y in bordes), modelo.id)
+
+    def test_el_parante_no_se_sale_de_la_ventana(self):
+        from roleplay.ui.configurador import _ventana_en
+
+        ventana = "M 100 50 L 200 40 L 210 80 L 100 80 Z"
+        arriba, abajo = _ventana_en(ventana, 150)
+        self.assertAlmostEqual(arriba, 45)
+        self.assertAlmostEqual(abajo, 80)
+        self.assertIsNone(_ventana_en("M 100 50 C 120 40 180 40 200 50 Z", 150))  # con curvas no adivina
 
 
 class TestConfigurador(ayuda.PruebaDeInterfaz):
