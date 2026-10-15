@@ -1,0 +1,108 @@
+{
+  "_que_es": "Backstory del personaje y sus ganchos narrativos (servicios/backstory.py), a partir de las respuestas del asistente. Sin tildes. Sin nombres de personas reales.",
+
+  "b_origen_humilde": [
+    "{nombre} nacio en {ciudad} en {anio}, hijo de padres de {pais_padres}, en una casa donde a fin de mes no sobraba nada. La primera pelota fue de trapo y la primera cancha, un potrero de tierra.",
+    "{nombre} crecio en un barrio humilde de {ciudad}. Sus padres, de {pais_padres}, trabajaron doble turno para que el pudiera ir a las pruebas de los clubes grandes.",
+    "En {ciudad}, a {nombre} lo conocian como el chico que jugaba descalzo hasta que oscurecia. La familia, con raices en {pais_padres}, hacia malabares para pagarle el pasaje a los entrenamientos.",
+    "{nombre} nacio en {anio} en un hogar humilde. De chico aprendio que cada par de botines costaba un mes de esfuerzo de sus padres.",
+    "{nombre} nacio en {ciudad} en {anio}, en una casa donde a fin de mes no sobraba nada. La primera pelota fue de trapo y la primera cancha, un potrero de tierra.",
+    "{nombre} crecio en un barrio humilde de {ciudad}. Sus padres trabajaron doble turno para que el pudiera ir a las pruebas de los clubes grandes."
+  ],
+  "b_origen_clase_media": [
+    "{nombre} nacio en {ciudad} en {anio}, en una familia de clase media con raices en {pais_padres}. El futbol era la excusa de cada domingo, y el pronto se volvio la estrella de las juntas familiares.",
+    "Hijo de padres de {pais_padres}, {nombre} crecio en {ciudad} entre el colegio y la escuela de futbol del barrio. Nunca le falto lo necesario, pero tampoco le regalaron nada.",
+    "{nombre} crecio en {ciudad}, en una familia de clase media. Su padre lo llevaba a todos los partidos y su madre guardaba cada recorte de diario con su nombre.",
+    "{nombre} nacio en {anio}. En su casa se hablaba de futbol en la mesa, y desde chico supo que queria vivir de esto.",
+    "{nombre} nacio en {ciudad} en {anio}, en una familia de clase media. El futbol era la excusa de cada domingo, y el pronto se volvio la estrella de las juntas familiares."
+  ],
+  "b_origen_acomodada": [
+    "{nombre} nacio en {ciudad} en {anio}, en una familia acomodada con raices en {pais_padres}. Tuvo las mejores academias a su alcance, y tambien la presion de demostrar que no estaba ahi por plata.",
+    "Criado en una familia acomodada de {ciudad}, {nombre} pudo elegir entre la universidad y el futbol. Eligio la pelota, contra el consejo de mas de uno.",
+    "{nombre} crecio sin carencias en {ciudad}. Muchos dudaron de su hambre de gloria; el se encargo de callarlos en cada cancha.",
+    "{nombre} nacio en {anio} en un hogar acomodado. Las mejores escuelas, los mejores entrenadores, y una sola obsesion: ser alguien por merito propio.",
+    "{nombre} nacio en {ciudad} en {anio}, en una familia acomodada. Tuvo las mejores academias a su alcance, y tambien la presion de demostrar que no estaba ahi por plata."
+  ],
+
+  "b_personalidad_reservado": [
+    "Fuera de la cancha es de pocas palabras: evita las camaras y prefiere que hablen sus partidos.",
+    "Es tranquilo y reservado. En el vestuario lo respetan por su trabajo silencioso mas que por sus discursos.",
+    "Detesta las entrevistas largas y casi no usa las redes. Su lugar en el mundo es el campo de juego."
+  ],
+  "b_personalidad_carismatico": [
+    "Es carismatico y mediatico: las camaras lo buscan y el las disfruta. Sus celebraciones ya son marca registrada.",
+    "Tiene una sonrisa que vende camisetas. Le encanta el contacto con la gente y nunca dice que no a una foto.",
+    "Las redes lo adoran: cada video suyo se vuelve viral, y el sabe exactamente como hablarle a la tribuna."
+  ],
+  "b_personalidad_polemico": [
+    "Es directo y polemico: no le teme a un titular y mas de una vez sus declaraciones encendieron la semana.",
+    "Dice lo que piensa, cueste lo que cueste. Eso le valio admiradores fieles y enemigos en cada estadio.",
+    "Tiene la lengua tan filosa como su pegada. La prensa lo ama y lo odia en partes iguales."
+  ],
+  "b_personalidad_humilde": [
+    "Es humilde y trabajador: el primero en llegar a los entrenamientos y el ultimo en irse.",
+    "Nunca se olvido de donde viene. Cada logro lo dedica al grupo y a su familia.",
+    "Valora el esfuerzo por sobre la fama. Sus companeros lo describen como el alma del vestuario."
+  ],
+
+  "b_motivacion_titulos": [
+    "Su obsesion son los titulos: dice que un trofeo vale mas que cualquier premio individual.",
+    "Juega para ganar, siempre. Perder, aunque sea en un entrenamiento, lo pone de mal humor por dias.",
+    "Su sueno es levantar copas, y no piensa conformarse con menos."
+  ],
+  "b_motivacion_mejor_del_mundo": [
+    "Su meta no es un secreto: quiere ser reconocido como el mejor jugador del mundo.",
+    "Mira los partidos de los mejores y anota todo. Quiere estar en esa conversacion, y pronto.",
+    "No le alcanza con ser bueno: quiere que su nombre quede entre los mas grandes de la historia."
+  ],
+  "b_motivacion_familia": [
+    "Juega por su familia: quiere devolverles cada sacrificio que hicieron por el.",
+    "Su motor es su familia. La primera casa que se compre, dice, va a ser para sus padres.",
+    "Cada gol lo celebra mirando al cielo y pensando en los suyos."
+  ],
+  "b_motivacion_legado": [
+    "Quiere dejar un legado en el futbol de su pais y ser un ejemplo para los chicos que vienen.",
+    "Su sueno es que algun dia un estadio o una escuela de futbol lleve su nombre.",
+    "No le interesa solo ganar: quiere que lo recuerden por lo que dejo."
+  ],
+
+  "b_relacion_novia_real": [
+    "En lo personal, comparte su vida con {pareja}, su gran apoyo desde los primeros pasos.",
+    "{pareja} lo acompana desde antes de la fama, y es la primera en recordarle quien es.",
+    "Fuera del futbol, su cable a tierra es {pareja}."
+  ],
+  "b_relacion_celebridad": [
+    "En lo sentimental esta soltero, aunque las revistas ya lo vinculan con mas de una figura del espectaculo.",
+    "Esta soltero, y la prensa del corazon lo tiene en la mira: cualquier cena puede ser tapa.",
+    "Soltero y codiciado: las revistas de farandula ya preguntan por el."
+  ],
+  "b_relacion_soltero": [
+    "Por ahora esta soltero y enfocado en su carrera.",
+    "En lo personal, prefiere no hablar: dice que ahora todo es futbol.",
+    ""
+  ],
+  "b_anecdota": [
+    "Hay una historia que siempre cuenta: {anecdota}.",
+    "Una anecdota lo define: {anecdota}.",
+    "Los que lo conocen recuerdan esto: {anecdota}."
+  ],
+  "b_cierre": [
+    "Hoy, con la camiseta de {club}, empieza a escribir su propia historia.",
+    "Ahora le toca demostrarlo en la cancha.",
+    "Lo mejor, dice, todavia no llego.",
+    ""
+  ],
+
+  "g_titulos": ["Promete ganar un titulo esta temporada y la prensa ya le lleva la cuenta.", "Un rival historico lo provoca: dice que nunca va a levantar una copa.", "Su club arma un equipo para pelear todo, y el es la pieza clave."],
+  "g_mejor_del_mundo": ["Un periodista influyente dice que esta sobrevalorado y no piensa callarse.", "Las casas de apuestas ya lo ponen entre los candidatos a los premios individuales.", "Una estrella de otro club le responde en redes: la rivalidad recien empieza."],
+  "g_familia": ["Su familia quiere que vuelva a jugar cerca de casa algun dia.", "Promete comprarle una casa a sus padres si cumple sus metas.", "Un hermano menor sigue sus pasos en las inferiores."],
+  "g_legado": ["La seleccion de su pais lo sigue de cerca.", "Quiere fundar una escuela de futbol en su barrio de origen.", "Un idolo retirado del club lo eligio como su heredero."],
+  "g_polemico": ["Una declaracion suya contra el arbitraje sigue dando que hablar.", "Un excompanero lo acusa de haberse olvidado de sus raices."],
+  "g_carismatico": ["Una marca deportiva lo quiere como cara de su nueva campana.", "Sus celebraciones se vuelven tendencia y los rivales empiezan a molestarse."],
+  "g_reservado": ["La prensa no sabe nada de su vida privada, y eso la vuelve loca.", "Su silencio en redes genera rumores de una pelea con el club."],
+  "g_humilde": ["Un club grande pregunta por el, pero dice que quiere quedarse a devolver la confianza.", "Su gesto con los utileros del club se volvio viral."],
+  "g_novia_real": ["Las revistas quieren saber cuando se casa con {pareja}.", "{pareja} lo acompana en cada partido, y las camaras ya la buscan."],
+  "g_celebridad": ["Una cantante famosa le dio like a una foto suya y las redes explotaron.", "Lo vieron en una fiesta con una actriz, y la prensa del corazon no lo suelta."],
+  "g_humilde_origen": ["Su barrio de origen le prepara un homenaje.", "Un entrenador de su infancia cuenta historias de el en la radio."],
+  "g_acomodada": ["Lo acusan de haber llegado por los contactos de su familia, y quiere callar bocas.", "Un negocio familiar lo pone en el ojo de la prensa."]
+}

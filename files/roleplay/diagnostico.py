@@ -1,7 +1,6 @@
 """
 Revision rapida de que todo este en su lugar, para cuando a alguien no le
-funciona algo ("mandame el diagnostico"). No llama a Gemini ni graba el
-microfono. Si toma una captura de prueba, pero no la guarda ni la manda a
+funciona algo ("mandame el diagnostico"). No graba el microfono. Si toma una captura de prueba, pero no la guarda ni la manda a
 ningun lado: solo anota su tamano.
 
     EAFC Roleplay.exe --diagnostico      lo escribe en diagnostico.txt y sale
@@ -22,10 +21,10 @@ def revisar() -> list[tuple[bool, str]]:
     modo = "paquete" if config.EMPAQUETADA else "codigo"
     anotar(True, f"Modo: {modo} · Python {sys.version.split()[0]} · datos en {config.CARPETA_DATOS}")
 
-    from roleplay.gemini import get_gemini_api_keys
+    from roleplay.servicios.narrador import CARPETA_DATOS
 
-    claves = get_gemini_api_keys()
-    anotar(bool(claves), f"Clave de Gemini: {'configurada' if claves else 'FALTA (Ajustes > Clave de Gemini)'}")
+    corpus = sorted(r.stem for r in CARPETA_DATOS.glob("*.json"))
+    anotar(len(corpus) >= 5, f"Motor narrativo (sin IA): {len(corpus)} archivos de datos ({', '.join(corpus)})")
 
     try:
         from roleplay.database import conectar, init_db

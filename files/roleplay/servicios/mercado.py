@@ -5,7 +5,7 @@ partida (tabla club_visto) los que cambiaron de club son traspasos.
 
 Que es noticia lo decide el codigo: lo que toca al club del usuario, las
 estrellas (por su media) de cualquier liga y los buenos jugadores de su
-liga. La IA solo redacta. Las jugadoras (ligas femeninas) no entran.
+liga. La noticia la arma el motor narrativo. Las jugadoras (ligas femeninas) no entran.
 """
 
 from dataclasses import dataclass
@@ -80,31 +80,21 @@ def traspaso_del_usuario(carrera: Carrera, anteriores: dict[int, int]) -> Option
     return None
 
 
-def _quien(carrera: Carrera, traspaso: Traspaso, nombres: dict[int, str], para_la_ia: bool) -> str:
+def _quien(carrera: Carrera, traspaso: Traspaso, nombres: dict[int, str]) -> str:
     if traspaso.jugador in nombres:
         return f"{nombres[traspaso.jugador]} (media {traspaso.media})"
     ficha = carrera.ficha(traspaso.jugador)
     edad = f"edad {ficha['edad']}, " if "edad" in ficha else ""
-    aviso = ", sin nombre en la partida" if para_la_ia else ""  # que la IA no le invente uno
-    return f"un {ficha.get('posicion', 'jugador')} ({edad}media {traspaso.media}{aviso})"
+    return f"un {ficha.get('posicion', 'jugador')} ({edad}media {traspaso.media})"
 
 
 def describir_traspaso(
-    carrera: Carrera, traspaso: Traspaso, nombres: dict[int, str], para_la_ia: bool = True
+    carrera: Carrera, traspaso: Traspaso, nombres: dict[int, str]
 ) -> str:
-    quien = _quien(carrera, traspaso, nombres, para_la_ia)
+    quien = _quien(carrera, traspaso, nombres)
     desde, hacia = carrera.equipo(traspaso.desde), carrera.equipo(traspaso.hacia)
     if carrera.es_agentes_libres(traspaso.hacia):
         return f"{quien} quedo libre tras dejar {desde}"
     if carrera.es_agentes_libres(traspaso.desde):
         return f"{quien} firmo con {hacia} como agente libre"
     return f"{quien} paso de {desde} a {hacia}"
-
-
-def texto_mercado(carrera: Carrera, traspasos: list[Traspaso], nombres: dict[int, str]) -> str:
-    """El hecho para la noticia del mundo: los movimientos, con lo que toca
-    al club del usuario primero."""
-    club = carrera.equipo(carrera.equipo_usuario())
-    lineas = [f"Movimientos del mercado de fichajes (club del jugador: {club}):"]
-    lineas += [f"- {describir_traspaso(carrera, t, nombres)}." for t in traspasos]
-    return "\n".join(lineas)

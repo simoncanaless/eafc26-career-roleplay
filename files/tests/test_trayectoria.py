@@ -8,7 +8,7 @@ import fabrica_partida as f
 from roleplay import database
 from roleplay.models import PlayerProfile
 from roleplay.partida.carrera import Partido, construir
-from roleplay.servicios import partida_real, prensa
+from roleplay.servicios import partida_real
 from roleplay.servicios.partida_real import archivar_temporada, describir_temporada, resumen_de_la_temporada
 
 
@@ -59,13 +59,6 @@ class TestBalanceEnLaPrensa(ayuda.PruebaConBase):
         self.perfil.id = database.save_profile(self.perfil)
         mock.patch.object(partida_real, "identificar_jugadores", return_value={}).start()
         mock.patch.object(partida_real, "identificar_competiciones", return_value={}).start()
-        self.prompts = []
-
-        def redactar(prompt, _api_key):
-            self.prompts.append(prompt)
-            return prensa.NoticiaIA(titular="T", cuerpo="C", tono="positiva")
-
-        mock.patch.object(prensa, "_redactar", redactar).start()
         self.addCleanup(mock.patch.stopall)
 
     def test_el_balance_y_la_trayectoria(self):
@@ -78,7 +71,7 @@ class TestBalanceEnLaPrensa(ayuda.PruebaConBase):
         segunda = partida_real.revisar_prensa_con_partida(self.perfil, [], estado, carrera_en_la_temporada_siguiente())
         tipos = [h["tipo"] for h in segunda["hitos"]]
         self.assertIn("fin_de_temporada", tipos)
-        self.assertTrue(any("termino la temporada 2026/27 con Man Utd" in p for p in self.prompts))
+        self.assertIn("temporada 2026/27 con Man Utd", ayuda.texto_de_noticias(segunda["noticias"]))
         trayectoria = segunda["estado_prensa"]["trayectoria"]
         self.assertEqual([t["temporada"] for t in trayectoria], ["2026/27"])
         self.assertEqual(trayectoria[0]["titulos"], ["Jugador del mes"])

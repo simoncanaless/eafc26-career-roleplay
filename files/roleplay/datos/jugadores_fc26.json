@@ -1,0 +1,77 @@
+{
+ "_que_es": "Nombres de jugadores de FC 26 por id de EA (el de sofifa), para las noticias: la partida no los guarda. Cada uno con su fecha de nacimiento: si la de la partida no calza, es otra persona y queda sin nombre (el jugador se describe: el delantero del X). Nunca se inventa. Para sumar: scripts/nombres_faltantes.py --agregar ID \"Nombre\" (toma el nacimiento de la partida). Verificados contra la partida el 2026-10-15 (la IA vieja se habia equivocado en 8 de 20).",
+ "jugadores": {
+  "192505": {
+   "nombre": "Romelu Lukaku",
+   "nacimiento": "1993-05-13"
+  },
+  "206517": {
+   "nombre": "Jack Grealish",
+   "nacimiento": "1995-09-10"
+  },
+  "220502": {
+   "nombre": "Mattia Zaccagni",
+   "nacimiento": "1995-06-16"
+  },
+  "221697": {
+   "nombre": "Ollie Watkins",
+   "nacimiento": "1995-12-30"
+  },
+  "224371": {
+   "nombre": "Jarrod Bowen",
+   "nacimiento": "1996-12-20"
+  },
+  "226162": {
+   "nombre": "Emiliano Buendía",
+   "nacimiento": "1996-12-25"
+  },
+  "231443": {
+   "nombre": "Ousmane Dembélé",
+   "nacimiento": "1997-05-15"
+  },
+  "233731": {
+   "nombre": "Alexander Isak",
+   "nacimiento": "1999-09-21"
+  },
+  "235794": {
+   "nombre": "Eberechi Eze",
+   "nacimiento": "1998-06-29"
+  },
+  "236015": {
+   "nombre": "Morgan Gibbs-White",
+   "nacimiento": "2000-01-27"
+  },
+  "237692": {
+   "nombre": "Phil Foden",
+   "nacimiento": "2000-05-28"
+  },
+  "238794": {
+   "nombre": "Vinícius Júnior",
+   "nacimiento": "2000-07-12"
+  },
+  "239085": {
+   "nombre": "Erling Haaland",
+   "nacimiento": "2000-07-21"
+  },
+  "240243": {
+   "nombre": "Matheus Cunha",
+   "nacimiento": "1999-05-27"
+  },
+  "240753": {
+   "nombre": "Amine Gouiri",
+   "nacimiento": "2000-02-16"
+  },
+  "242964": {
+   "nombre": "Anthony Gordon",
+   "nacimiento": "2001-02-24"
+  },
+  "251810": {
+   "nombre": "Brian Brobbey",
+   "nacimiento": "2002-02-01"
+  },
+  "259608": {
+   "nombre": "Evan Ferguson",
+   "nacimiento": "2004-10-19"
+  }
+ }
+}

@@ -10,7 +10,7 @@ import ayuda
 import fabrica_partida as f
 from roleplay import ajustes, config, database
 from roleplay.models import MatchInterviewRecord, PlayerProfile
-from roleplay.partida import formato, lector
+from roleplay.partida import lector
 from roleplay.partida.carrera import construir
 from roleplay.partida.formato import FormatoDesconocido
 from roleplay.servicios import partida_real, prensa
@@ -171,56 +171,90 @@ class TestPartidaReal(ayuda.PruebaConBase):
         sin_nombre = partida_real.describir_hecho(self.c, hechos[0], {})
         self.assertIn("el delantero centro del Manchester City", sin_nombre)
 
-    def test_los_nombres_se_preguntan_una_vez(self):
-        with mock.patch.object(partida_real, "identificar_jugadores", return_value={f.HAALAND: ("Erling Haaland", True)}) as ia:
+    def test_los_nombres_salen_de_la_base_local(self):
+        locales = {f.HAALAND: ("Erling Haaland", True), f.DELANTERO_ARSENAL: ("", False)}
+        with mock.patch.object(partida_real, "identificar_jugadores", side_effect=lambda fichas: {
+                ficha["id"]: locales[ficha["id"]] for ficha in fichas}):
             nombres = partida_real.nombres_de_jugadores(self.c, {f.HAALAND, f.USUARIO, f.DELANTERO_ARSENAL})
-            otra_vez = partida_real.nombres_de_jugadores(self.c, {f.HAALAND, f.DELANTERO_ARSENAL})
-        self.assertEqual(nombres, {f.HAALAND: "Erling Haaland", f.USUARIO: "Simon Canales"})
-        self.assertEqual(otra_vez, {f.HAALAND: "Erling Haaland"})
-        self.assertEqual(ia.call_count, 1)  # el que no reconocio tampoco se vuelve a preguntar
-        self.assertEqual(database.get_nombres_conocidos("jugador", {f.DELANTERO_ARSENAL}), {f.DELANTERO_ARSENAL: ("", False)})
+            self.assertEqual(nombres, {f.HAALAND: "Erling Haaland", f.USUARIO: "Simon Canales"})  # el editado, de la partida
+            # lo que adivino la IA en versiones viejas (tabla nombre_conocido) ya no se usa
+            database.guardar_nombres_conocidos("jugador", {f.DELANTERO_ARSENAL: ("Adivinado por la IA", True)})
+            self.assertEqual(partida_real.nombres_de_jugadores(self.c, {f.DELANTERO_ARSENAL}), {})
+        self.assertEqual(database.get_nombres_conocidos("jugador", {f.HAALAND}), {})  # leer no guarda nada
 
-    def test_sin_ia_no_se_guarda_nada(self):
-        with mock.patch.object(partida_real, "identificar_jugadores", side_effect=RuntimeError("sin cuota")):
-            self.assertEqual(partida_real.nombres_de_jugadores(self.c, {f.HAALAND}), {})
-        self.assertEqual(database.get_nombres_conocidos("jugador", {f.HAALAND}), {})
+    def test_la_base_local_no_inventa(self):
+        from roleplay.servicios import identificar
 
-    def test_contexto_de_la_temporada(self):
-        texto = partida_real.contexto_temporada(self.c, {f.HAALAND: "Erling Haaland"})
-        for esperado in (
-            "Simon Canales juega en Man Utd.",
-            "Premier League: 2 partidos, 6 goles, 2 asistencias, 2 veces figura",
-            "torneo continental: 1 partido, 2 goles, 1 asistencia, 0 veces figura",
-            "Man Utd va 2° en la Premier League con 6 pts (2 PJ); lider: Manchester City con 7.",
-            "2. Erling Haaland (Manchester City) 5",
-            "Proximo partido: ante SSC Napoli de visita",
-        ):
-            self.assertIn(esperado, texto)
+        base = {"jugadores": {str(f.HAALAND): {"nombre": "Erling Haaland", "nacimiento": "2000-07-21"}}}
+        ficha = {"id": f.HAALAND, "nacimiento": "1999-01-01"}
+        with mock.patch.object(identificar, "jugadores_conocidos", return_value=base["jugadores"]):
+            self.assertEqual(identificar.identificar_jugadores([ficha]), {f.HAALAND: ("", False)})  # otra persona
+            ficha["nacimiento"] = "2000-07-21"
+            self.assertEqual(identificar.identificar_jugadores([ficha]), {f.HAALAND: ("Erling Haaland", True)})
+            self.assertEqual(identificar.identificar_jugadores([{"id": 99999}]), {99999: ("", False)})
+
+    def test_la_base_de_nombres_trae_el_nacimiento_de_cada_uno(self):
+        # sin el nacimiento no hay como saber si el id es la persona: la IA vieja
+        # habia puesto a Haaland en el id de Vinicius Jr (nacidos con 9 dias de diferencia)
+        from roleplay.servicios import identificar
+
+        base = identificar.jugadores_conocidos()
+        self.assertTrue(base)
+        for ident, entrada in base.items():
+            self.assertRegex(entrada["nacimiento"], r"^\d{4}-\d{2}-\d{2}$", ident)
+            self.assertTrue(entrada["nombre"].strip(), ident)
+        nombres = [entrada["nombre"] for entrada in base.values()]
+        self.assertEqual(len(nombres), len(set(nombres)), "un mismo jugador con dos ids")
+
+    def test_nombres_faltantes_y_agregar_uno(self):
+        import importlib.util
+        import json
+
+        ruta = Path(__file__).resolve().parent.parent / "scripts" / "nombres_faltantes.py"
+        especificacion = importlib.util.spec_from_file_location("nombres_faltantes", ruta)
+        script = importlib.util.module_from_spec(especificacion)
+        especificacion.loader.exec_module(script)
+        with mock.patch.object(script.identificar, "jugadores_conocidos", return_value={}):
+            faltan = {ficha["id"] for ficha in script.sin_nombre(self.c)}
+        self.assertIn(f.HAALAND, faltan)
+        self.assertNotIn(f.USUARIO, faltan)  # el editado en la partida ya tiene nombre
+        archivo = Path(self.enterContext(tempfile.TemporaryDirectory())) / "jugadores.json"
+        archivo.write_text('{"_que_es": "x", "jugadores": {}}', encoding="utf-8")
+        entrada = script.agregar(self.c, f.HAALAND, " Erling Haaland ", archivo)
+        self.assertEqual(entrada, {"nombre": "Erling Haaland", "nacimiento": self.c.ficha(f.HAALAND)["nacimiento"]})
+        self.assertEqual(json.loads(archivo.read_text(encoding="utf-8"))["jugadores"], {str(f.HAALAND): entrada})
 
     def test_la_prensa_escribe_sobre_un_hecho_real(self):
         perfil = PlayerProfile(id=1, nombre_jugador="Simon Canales")
-        prompts = []
+        hechos = []
+        original = prensa.noticia_del_mundo
 
-        def gemini(prompt, esquema, que_hacer, api_key=None):
-            prompts.append(prompt)
-            return prensa.NoticiaIA(titular="T", cuerpo="C", tono="positiva")
+        def espiar(escritor, perfil_, hecho):
+            hechos.append(hecho)
+            return original(escritor, perfil_, hecho)
 
-        with mock.patch.object(prensa, "generar_json", gemini), \
-                mock.patch.object(partida_real, "identificar_jugadores", return_value={f.HAALAND: ("Erling Haaland", True)}), \
+        def de_partidos():
+            return [h for h in hechos if h["tipo"] in ("hat_trick", "goleada", "choque")]
+
+        with mock.patch.object(prensa, "noticia_del_mundo", espiar), \
+                mock.patch.object(partida_real, "identificar_jugadores", side_effect=lambda fichas: {
+                    ficha["id"]: ("Erling Haaland", True) if ficha["id"] == f.HAALAND else ("", False) for ficha in fichas}), \
                 mock.patch.object(partida_real, "identificar_competiciones", return_value={f.CHAMPIONS: ("Champions League", True)}):
             resultado = partida_real.revisar_prensa_con_partida(perfil, [], {"partida_hasta": "2027-01-01"}, self.c)
-
-        noticia_mundo = next(p for p in prompts if "hecho REAL" in p)
-        self.assertIn("Erling Haaland (Manchester City) marco 3 goles", noticia_mundo)
-        self.assertIn("Champions League", noticia_mundo)  # la copa quedo con nombre
-        self.assertEqual(resultado["noticias"][-1].categoria, "general")
-        estado = resultado["estado_prensa"]
-        self.assertEqual(estado["partida_hasta"], "2027-01-16")
-        # el mismo hecho no sale dos veces
-        with mock.patch.object(prensa, "generar_json", gemini):
-            prompts.clear()
+            (hecho,) = de_partidos()
+            self.assertEqual((hecho["tipo"], hecho["figura"]), ("hat_trick", "Erling Haaland"))
+            self.assertIn("Erling Haaland (Manchester City) marco 3 goles", hecho["texto"])
+            self.assertEqual(self.c.competiciones[f.CHAMPIONS].nombre, "Champions League")  # la copa quedo con nombre
+            noticia = resultado["noticias"][-1]
+            self.assertEqual(noticia.categoria, "general")
+            self.assertIn("Haaland", noticia.titular)
+            self.assertIn(hecho["texto"], noticia.cuerpo)
+            estado = resultado["estado_prensa"]
+            self.assertEqual(estado["partida_hasta"], "2027-01-16")
+            # el mismo hecho no sale dos veces
+            hechos.clear()
             partida_real.revisar_prensa_con_partida(perfil, [], estado, self.c)
-        self.assertFalse(any("hecho REAL" in p for p in prompts))
+        self.assertEqual(de_partidos(), [])
 
     def test_la_primera_vez_solo_la_ultima_semana_del_juego(self):
         hechos = partida_real.hechos_destacados(self.c)  # hoy en el juego: 16-01-2027
@@ -265,7 +299,7 @@ class TestSalaDePrensaConLaPartida(ayuda.PruebaDeInterfaz):
 
         self.modulo = entrevista
         lectura = partida_real.LecturaPartida(
-            carrera=carrera_falsa(), ultimo=None, contexto="CONTEXTO REAL", ya_entrevistado=False
+            carrera=carrera_falsa(), ultimo=None, ya_entrevistado=False
         )
         lectura.ultimo = partida_real.ultimo_partido(lectura.carrera, {})
         parche = mock.patch.object(entrevista, "leer_para_entrevista", return_value=lectura)
@@ -290,7 +324,7 @@ class TestSalaDePrensaConLaPartida(ayuda.PruebaDeInterfaz):
         with mock.patch.object(self.modulo, "generar_entrevista", return_value=["P1?"]) as generar:
             p.generar_entrevista_btn.click()
             ayuda.esperar_tareas()
-        self.assertEqual(generar.call_args.args[2], "CONTEXTO REAL")
+        self.assertEqual(generar.call_args.args[1].equipo_rival, "Sunderland")  # las stats de la partida
 
         p._respuesta_edits[0].setPlainText("Cinco goles, que mas se puede pedir")
         reaccion = self.modulo.evaluar_respuestas.__globals__["ReaccionPrensa"](reaccion_prensa="Bien", delta_reputacion=3)
@@ -310,7 +344,7 @@ class TestSalaDePrensaConLaPartida(ayuda.PruebaDeInterfaz):
             ayuda.esperar_tareas()
         self.assertIn("No encontre una partida", pagina.partida_label.text())
         self.assertFalse(pagina.cargar_partida_btn.isEnabled())
-        self.assertTrue(pagina.capturar_btn.isEnabled())
+        self.assertTrue(pagina.generar_entrevista_btn.isEnabled())  # las stats se escriben a mano
 
 
 class TestPartidaRealDelPC(unittest.TestCase):

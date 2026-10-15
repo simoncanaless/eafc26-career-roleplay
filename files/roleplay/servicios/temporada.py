@@ -1,7 +1,7 @@
 """
 Los datos de la pagina Temporada: tabla, goleadores, los partidos del club
 del usuario y la ultima fecha de una competicion, sacados de la partida de
-FC 26. Todo calculado; la IA solo pone nombre a los goleadores que la
+FC 26. Todo calculado; la base local de nombres pone nombre a los goleadores que la
 partida no trae (una vez, con cache).
 """
 
@@ -114,7 +114,7 @@ def _ordenar_competiciones(carrera: Carrera, ids) -> list[int]:
 
 
 def vista_temporada(
-    carrera: Carrera, competicion: Optional[int] = None, preguntar: bool = True
+    carrera: Carrera, competicion: Optional[int] = None
 ) -> Optional[VistaTemporada]:
     """None si la partida no tiene un club del usuario o no se jugo nada.
     `competicion` puede ser cualquiera de la partida (otras ligas, copas de
@@ -125,7 +125,7 @@ def vista_temporada(
     if equipo is None or hoy is None or not propias:
         return None
     todas = {p.competicion for p in carrera.partidos if p.competicion in carrera.competiciones}
-    nombrar_competiciones(carrera, todas, preguntar=preguntar)  # una vez; despues, cache
+    nombrar_competiciones(carrera, todas)  # una vez; despues, cache
     orden = _ordenar_competiciones(carrera, propias)
     otras = _ordenar_competiciones(carrera, todas - set(propias))
     if competicion not in orden and competicion not in otras:
@@ -152,7 +152,7 @@ def vista_temporada(
         vista.posicion = next((f.posicion for f in vista.tabla if f.es_usuario), None)
 
     goleadores = carrera.goleadores(competicion, GOLEADORES)
-    nombres = nombres_de_jugadores(carrera, {e.jugador for e in goleadores}, preguntar=preguntar)
+    nombres = nombres_de_jugadores(carrera, {e.jugador for e in goleadores})
     vista.goleadores = [
         GoleadorVista(
             describir_jugador(carrera, e.jugador, nombres), carrera.equipo(e.equipo), e.goles, e.partidos,

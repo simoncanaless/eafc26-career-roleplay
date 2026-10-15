@@ -99,13 +99,6 @@ class TestPrensaConPremios(ayuda.PruebaConBase):
         mock.patch.object(partida_real, "identificar_jugadores", return_value={}).start()
         mock.patch.object(partida_real, "identificar_competiciones", return_value={}).start()
         self.addCleanup(mock.patch.stopall)
-        self.prompts = []
-
-        def redactar(prompt, _api_key):
-            self.prompts.append(prompt)
-            return prensa.NoticiaIA(titular="T", cuerpo="C", tono="positiva")
-
-        mock.patch.object(prensa, "_redactar", redactar).start()
 
     def test_el_jugador_del_mes_es_noticia_bono_y_vitrina(self):
         resultado = partida_real.revisar_prensa_con_partida(
@@ -113,7 +106,7 @@ class TestPrensaConPremios(ayuda.PruebaConBase):
         )
         self.assertIn({"tipo": "jugador_del_mes", "valor": "enero de 2027 en la Premier League, con 6 goles"},
                       resultado["hitos"])
-        self.assertIn("fue elegido jugador del mes: enero de 2027", self.prompts[0])
+        self.assertIn("enero de 2027 en la Premier League", ayuda.texto_de_noticias(resultado["noticias"]))
         self.assertEqual(resultado["delta_reputacion"], prensa.BONOS_REPUTACION["jugador_del_mes"])
         estado = resultado["estado_prensa"]
         self.assertEqual(estado["mes"]["mes"], "2027-02")
@@ -126,7 +119,8 @@ class TestPrensaConPremios(ayuda.PruebaConBase):
         estado = {"mes": {"mes": "2027-01", "liga": f.LIGA, "base": {str(f.USUARIO): 3}}}
         resultado = partida_real.revisar_prensa_con_partida(self.perfil, [], estado, carrera_en_febrero())
         self.assertNotIn("jugador_del_mes", [h["tipo"] for h in resultado["hitos"]])
-        self.assertTrue(any("jugador del mes de enero" in p for p in self.prompts))
+        del_mundo = [n for n in resultado["noticias"] if n.categoria == "general"]
+        self.assertIn("jugador del mes de enero", ayuda.texto_de_noticias(del_mundo))
         self.assertEqual(resultado["estado_prensa"]["vitrina"], [])
         self.assertEqual(resultado["delta_reputacion"], 0)
 

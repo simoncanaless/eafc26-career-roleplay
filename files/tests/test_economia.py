@@ -8,7 +8,7 @@ from unittest import mock
 import ayuda
 import fabrica_partida as f
 from roleplay import database
-from roleplay.models import NoticiaPrensa, PlayerProfile
+from roleplay.models import PlayerProfile
 from roleplay.partida import lector
 from roleplay.partida.carrera import Partido, construir
 from roleplay.servicios import amor, economia, eventos, hinchada, partida_real
@@ -127,34 +127,26 @@ class TestEfecto(ayuda.PruebaConBase):
 class TestRepercusion(ayuda.PruebaConBase):
     def setUp(self):
         super().setUp()
-        self.perfil = PlayerProfile(id=1, nombre_jugador="Simon Canales")
+        self.perfil = PlayerProfile(nombre_jugador="Simon Canales")
+        self.perfil.id = database.save_profile(self.perfil)
         self.efecto = economia.Efecto(120, -3, True, "negativa", "en plena mala racha del equipo")
 
-    def test_con_ia(self):
-        redactada = economia.NoticiaCompra(titular="Canales y su jet", cuerpo="Polemica.")
-        comentarios = {0: [{"autor": "@x", "texto": "en serio??", "tono": "negativo"}]}
-        with mock.patch.object(economia, "generar_json", return_value=redactada) as ia, \
-                mock.patch.object(hinchada, "comentar_eventos", return_value=comentarios):
-            noticia, actividad = economia.repercusion(self.perfil, POR_ID["jet"], self.efecto, "£", "2027-01-16")
-        self.assertIn("en plena mala racha", ia.call_args.args[0])
-        self.assertIn("negativa", ia.call_args.args[0])
-        self.assertEqual((noticia.titular, noticia.tono, noticia.categoria), ("Canales y su jet", "negativa", "jugador"))
-        self.assertEqual((actividad.tipo, actividad.crecimiento_seguidores), ("compra", 120))
-        self.assertEqual(actividad.comentarios, comentarios[0])
-
-    def test_sin_ia_igual_sale(self):
-        with mock.patch.object(economia, "generar_json", side_effect=RuntimeError("sin cuota")), \
-                mock.patch.object(hinchada, "comentar_eventos", side_effect=RuntimeError("sin cuota")):
-            noticia, actividad = economia.repercusion(self.perfil, POR_ID["jet"], self.efecto, "£", "2027-01-16")
-        self.assertEqual(noticia.titular, "Simon Canales se compro: Jet privado (£45 M); en plena mala racha del equipo")
-        self.assertEqual(actividad.comentarios, [])
+    def test_la_noticia_la_escribe_el_motor(self):
+        noticia, actividad = economia.repercusion(self.perfil, POR_ID["jet"], self.efecto, "£", "2027-01-16")
+        self.assertIn("jet privado", noticia.titular.lower())
+        self.assertIn("en plena mala racha del equipo", noticia.cuerpo)
+        self.assertIn("£45 M", noticia.cuerpo)
+        self.assertEqual((noticia.tono, noticia.categoria, noticia.hitos), ("negativa", "jugador", ["compra:jet"]))
+        self.assertEqual((actividad.tipo, actividad.titulo, actividad.crecimiento_seguidores), ("compra", "Jet privado", 120))
+        self.assertTrue(actividad.comentarios)
+        self.assertTrue(all(c["autor"] and c["texto"] and c["tono"] for c in actividad.comentarios))
 
     def test_lo_discreto_solo_lo_comentan_los_hinchas(self):
         discreto = economia.Efecto(10, 0, False, "neutral", "")
-        with mock.patch.object(hinchada, "comentar_eventos", return_value={}):
-            noticia, actividad = economia.repercusion(self.perfil, POR_ID["reloj_suizo"], discreto, "£", "2027-01-16")
+        noticia, actividad = economia.repercusion(self.perfil, POR_ID["reloj_suizo"], discreto, "£", "2027-01-16")
         self.assertIsNone(noticia)
         self.assertEqual(actividad.titulo, "Reloj suizo")
+        self.assertTrue(actividad.comentarios)
 
 
 class TestPaginaVida(ayuda.PruebaDeInterfaz):
@@ -166,7 +158,6 @@ class TestPaginaVida(ayuda.PruebaDeInterfaz):
         mock.patch.object(partida_real, "identificar_jugadores", return_value={}).start()
         mock.patch.object(partida_real, "identificar_competiciones", return_value={}).start()
         mock.patch.object(hinchada, "comentar_eventos", return_value={}).start()
-        mock.patch.object(economia, "generar_json", return_value=economia.NoticiaCompra(titular="T", cuerpo="C")).start()
         mock.patch.object(eventos, "PROBABILIDAD_POR_SEMANA", 0).start()  # sin eventos inesperados: aca se prueba la plata
         mock.patch.object(amor, "PROBABILIDAD_POR_SEMANA", 0).start()  # ni la vida sentimental
         self.addCleanup(mock.patch.stopall)
@@ -208,15 +199,13 @@ class TestPaginaVida(ayuda.PruebaDeInterfaz):
         self.assertGreater(database.get_seguidores(self.pid), seguidores)
         self.assertEqual(database.get_reputacion_actual(self.pid), 50 - 1)  # humilde y ostentoso
         self.assertEqual([a.tipo for a in database.load_actividad_instagram(self.pid)], ["compra"])
-        self.assertEqual(database.load_noticias_prensa(self.pid)[0].titular, "T")
+        self.assertIn("coleccion de alta costura", database.load_noticias_prensa(self.pid)[0].titular.lower())
         self.assertIn("Compraste: Coleccion de alta costura", self.pagina.resultado_label.text())
         self.assertFalse(self._boton(self.pagina.tienda_layout, "comprar_coleccion_moda").isEnabled())  # ya lo tiene
         self.assertTrue(self.pagina._botones_categoria["moda"].isChecked())
         self.assertIn("En la prensa:", self.pagina.resultado_label.text())
 
     def test_la_noticia_de_una_compra_anterior_no_pisa_la_tarjeta(self):
-        from roleplay.ui.comun import tareas_vivas
-
         self.pagina._elegir_categoria("reloj")
         self._boton(self.pagina.tienda_layout, "comprar_cadena").click()  # su noticia llega despues...
         self._boton(self.pagina.donaciones_layout, "comprar_damnificados").click()

@@ -1,0 +1,56 @@
+{
+  "_que_es": "Diccionario del evaluador de respuestas (servicios/lexico.py). Cada eje suma el peso de sus palabras y frases (sin tildes, en minusculas). Una negacion (no, nunca...) en las 2 palabras de antes invierte el peso.",
+  "negaciones": ["no", "nunca", "jamas", "sin", "tampoco", "ni", "nadie"],
+  "ejes": {
+    "humildad_equipo": {
+      "equipo": 2, "companeros": 2.5, "companero": 2, "grupo": 1.5, "plantel": 2, "vestuario": 1.5,
+      "todos": 1, "entre todos": 2.5, "juntos": 2, "colectivo": 2.5, "unidos": 2,
+      "humildad": 2.5, "humilde": 2, "trabajo": 1.5, "trabajar": 1.5, "trabajando": 1.5,
+      "seguir trabajando": 2.5, "sacrificio": 2, "esfuerzo": 2, "aprender": 1.5, "mejorar": 1.5,
+      "merito del equipo": 3, "gracias al equipo": 3, "gracias a mis companeros": 3.5,
+      "el cuerpo tecnico": 2, "el profe": 1.5, "el tecnico": 1.5, "el entrenador": 1.5,
+      "con los pies en la tierra": 3, "paso a paso": 2, "nada esta hecho": 2.5, "respeto": 1.5,
+      "ayudar": 1.5, "aporte": 1.5, "sumar": 1, "poner el hombro": 3, "dejamos todo": 2
+    },
+    "amor_hinchada": {
+      "hinchada": 3, "hinchas": 3, "hincha": 2.5, "la gente": 2, "aficion": 3, "aficionados": 3,
+      "publico": 2, "estadio": 1.5, "tribuna": 2, "camiseta": 2, "escudo": 2.5, "colores": 2,
+      "aliento": 2.5, "alentaron": 2.5, "apoyo": 2, "cariño": 2, "carino": 2, "corazon": 2,
+      "orgullo": 2, "amor": 2, "fans": 2.5, "seguidores": 1.5, "ciudad": 1.5, "nuestra casa": 2.5,
+      "dedico": 2, "se lo dedico": 3, "para ellos": 2, "por ellos": 2, "gracias a la gente": 3.5,
+      "gracias": 1, "familia": 1, "club": 1, "historia del club": 3, "mi club": 2.5
+    },
+    "ego_confianza": {
+      "yo": 1, "yo solo": 3, "mi gol": 2, "mis goles": 2, "el mejor": 3, "el mejor del mundo": 4,
+      "mejor jugador": 3, "imparable": 3, "crack": 2.5, "superior": 2.5, "nivel": 1, "mi nivel": 2.5,
+      "facil": 2, "ganamos facil": 3, "me lo merezco": 3, "me merezco": 3, "balon de oro": 3,
+      "leyenda": 3, "talento": 2, "estoy en mi mejor momento": 3.5, "nadie me para": 4,
+      "obvio": 1.5, "sin duda": 1.5, "seguro": 1, "confianza": 1.5, "confiado": 1.5,
+      "los numeros hablan": 3, "que hablen": 2, "yo lo dije": 3, "lo dije": 2, "dominamos": 1.5,
+      "estoy para cosas grandes": 3.5, "me toca": 1.5, "soy": 1
+    },
+    "excusa_polemica": {
+      "arbitro": 3, "arbitraje": 3, "juez": 2.5, "robo": 3.5, "robaron": 3.5, "injusto": 3,
+      "injusticia": 3, "var": 2, "penal": 1.5, "fuera de juego": 1.5, "la cancha estaba": 2.5,
+      "el pasto": 2, "mala suerte": 2.5, "culpa": 2.5, "cansancio": 1.5, "cansados": 1.5,
+      "calendario": 2, "lesion": 1, "polemica": 2, "verguenza": 2.5, "ridiculo": 3, "mentira": 2.5,
+      "mienten": 3, "la prensa": 2, "periodistas": 2, "criticas": 1.5, "critican": 2,
+      "no me importa": 3, "me da lo mismo": 3, "que se callen": 3.5, "callense": 3.5, "callar bocas": 3.5,
+      "envidia": 3, "haters": 2.5, "provocacion": 2.5, "nos perjudicaron": 3.5, "perjudico": 3
+    },
+    "ambicion_foco": {
+      "titulo": 3, "titulos": 3, "campeon": 3, "campeones": 3, "campeonato": 2.5, "liga": 1.5,
+      "copa": 2, "champions": 2.5, "ganar": 1.5, "ganarlo todo": 3.5, "objetivo": 2.5, "objetivos": 2.5,
+      "meta": 2, "metas": 2, "siguiente partido": 2.5, "proximo partido": 2.5, "partido a partido": 3,
+      "foco": 3, "enfocado": 3, "enfocados": 3, "concentrado": 2.5, "concentrados": 2.5,
+      "ir por mas": 3, "por mas": 1.5, "ambicion": 3, "crecer": 1.5, "sueno": 2, "suenos": 2,
+      "pelear": 2, "pelear arriba": 3, "seguir sumando": 2.5, "puntos": 1, "la tabla": 1.5,
+      "mentalidad": 2.5, "hambre": 2.5, "no nos conformamos": 3, "la final": 2
+    }
+  },
+  "promesas": [
+    "prometo", "te prometo", "les prometo", "juro", "doy mi palabra", "voy a marcar", "voy a meter",
+    "vamos a ganar", "vamos a ser campeones", "le voy a hacer", "les voy a hacer", "este ano vamos",
+    "ya van a ver", "van a ver", "me la juego", "les aseguro", "te aseguro"
+  ]
+}

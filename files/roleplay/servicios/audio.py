@@ -1,5 +1,9 @@
 """
-Respuestas por voz: grabar del microfono y transcribir con Gemini.
+Respuestas por voz: grabar del microfono y transcribir con el reconocedor
+de voz de Windows (System.Speech, el de "Reconocimiento de voz"), sin
+internet ni IA. Se le pasa el WAV por PowerShell; no hace falta instalar nada
+si Windows tiene el reconocedor en espanol (Configuracion > Hora e idioma >
+Voz). Si no lo tiene, se avisa y se responde escribiendo.
 
 La grabacion es WAV mono de 16 kHz (lo que se necesita para voz: 2 minutos
 pesan ~3,8 MB). `sounddevice` se importa recien al usar el microfono, igual
@@ -7,14 +11,13 @@ que dxcam: no hace falta para abrir la app.
 """
 
 import io
+import os
+import subprocess
+import tempfile
 import threading
 import wave
 from dataclasses import dataclass
 from typing import Callable, Optional
-
-from pydantic import BaseModel
-
-from roleplay.gemini import generar_json
 
 FRECUENCIA = 16000
 MAXIMO_SEGUNDOS = 120  # tope por respuesta, para no mandar audios eternos
@@ -137,27 +140,54 @@ class GrabadorMicrofono:
             return a_wav(b"".join(self._bloques), self.frecuencia)
 
 
-class Transcripcion(BaseModel):
-    texto: str
+# El reconocedor de Windows, por PowerShell: carga System.Speech, busca un
+# reconocedor en espanol (el que haya: es-ES, es-MX...), dicta el WAV entero y
+# devuelve el texto. Sale con codigo 3 si no hay ningun reconocedor en espanol.
+GUION_RECONOCER = r"""
+$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+Add-Type -AssemblyName System.Speech
+$info = [System.Speech.Recognition.SpeechRecognitionEngine]::InstalledRecognizers() |
+    Where-Object { $_.Culture.Name -like 'es-*' } | Select-Object -First 1
+if ($null -eq $info) { exit 3 }
+$motor = New-Object System.Speech.Recognition.SpeechRecognitionEngine($info)
+$motor.LoadGrammar((New-Object System.Speech.Recognition.DictationGrammar))
+$motor.SetInputToWaveFile($env:EAFC_WAV)
+$partes = @()
+while ($true) { $r = $motor.Recognize(); if ($null -eq $r) { break }; $partes += $r.Text }
+$motor.Dispose()
+[Console]::Out.Write(($partes -join ' '))
+"""
+SIN_RECONOCEDOR = (
+    "Windows no tiene el reconocimiento de voz en espanol. Agregalo en Configuracion > Hora e idioma > "
+    "Idioma y region > Espanol > Opciones > Voz, o escribi la respuesta."
+)
+SEGUNDOS_RECONOCER = 120
 
 
-def _build_prompt(pregunta: str) -> str:
-    return f"""
-Transcribi este audio en espanol, palabra por palabra. Es la respuesta de
-un futbolista a esta pregunta de un periodista despues de un partido:
-"{pregunta}"
-
-No resumas, no corrijas lo que dice ni agregues nada: solo pone la
-puntuacion. Si no se escucha a nadie hablando, devolve el texto vacio.
-""".strip()
-
-
-def transcribir(wav: bytes, pregunta: str = "", api_key: Optional[str] = None) -> str:
-    resultado = generar_json(
-        _build_prompt(pregunta),
-        Transcripcion,
-        "Esperate un poco y volve a grabar la respuesta (o escribila).",
-        adjunto=(wav, "audio/wav"),
-        api_key=api_key,
-    )
-    return resultado.texto.strip()
+def transcribir(wav: bytes, pregunta: str = "") -> str:
+    """El texto de la respuesta grabada (vacio si no se entendio nada)."""
+    archivo = tempfile.NamedTemporaryFile(prefix="eafc_voz_", suffix=".wav", delete=False)
+    try:
+        archivo.write(wav)
+        archivo.close()
+        try:
+            proceso = subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", GUION_RECONOCER],
+                capture_output=True, timeout=SEGUNDOS_RECONOCER, env={**os.environ, "EAFC_WAV": archivo.name},
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise RuntimeError(f"No se pudo usar el reconocedor de voz de Windows ({exc}). Escribi la respuesta.") from exc
+        if proceso.returncode == 3:
+            raise RuntimeError(SIN_RECONOCEDOR)
+        if proceso.returncode != 0:
+            detalle = proceso.stderr.decode("utf-8", "replace").strip().splitlines()[-1:] or [""]
+            raise RuntimeError(f"El reconocedor de voz de Windows fallo ({detalle[0]}). Escribi la respuesta.")
+        texto = proceso.stdout.decode("utf-8", "replace").strip()
+        return texto[:1].upper() + texto[1:] if texto else ""
+    finally:
+        try:
+            os.unlink(archivo.name)
+        except OSError:
+            pass

@@ -1,6 +1,6 @@
 """
-Instagram del jugador: vos escribis el post y Gemini genera los
-comentarios, los likes y cuanto suben o bajan tus seguidores.
+Instagram del jugador: vos escribis el post y la app (servicios/instagram.py,
+sin IA) arma los comentarios, los likes y cuanto suben o bajan tus seguidores.
 
 Y se mueve solo (servicios/hinchada.py): con la partida de FC 26, los
 hinchas reaccionan a tus partidos y a las noticias sobre vos aunque no
@@ -188,9 +188,6 @@ class InstagramWindow(QWidget):
     def _on_partida_error(self, _mensaje: str):
         self._leyendo_partida = False  # sin partida, Instagram funciona igual
 
-    def _contexto_real(self) -> str:
-        return self._lectura.contexto if self._lectura is not None else ""
-
     def _ultimo_partido(self) -> str:
         """El ultimo partido, de la partida de FC 26 o de las entrevistas."""
         if self._lectura is not None and self._lectura.ultimo is not None:
@@ -210,7 +207,7 @@ class InstagramWindow(QWidget):
         self.sugerir_btn.setEnabled(False)
         self.sugerir_btn.setText("ESCRIBIENDO...")
         ejecutar_en_hilo(
-            sugerir_post, self.perfil, self._contexto_real(), self._ultimo_partido(),
+            sugerir_post, self.perfil, self._ultimo_partido(),
             al_completar=self._on_sugerido, al_fallar=self._on_sugerir_error,
         )
 
@@ -289,7 +286,6 @@ class InstagramWindow(QWidget):
             texto,
             get_reputacion_actual(self.perfil.id),
             get_seguidores(self.perfil.id),
-            self._contexto_real(),
             al_completar=self._on_publicar_completado,
             al_fallar=self._on_publicar_error,
         )

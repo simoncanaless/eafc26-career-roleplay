@@ -1,18 +1,18 @@
 """Backstory del personaje + ganchos narrativos (semillas de tramas
-futuras), generados a partir de las respuestas del quiz."""
+futuras), armados a partir de las respuestas del asistente: un parrafo por
+lo que contesto (de donde viene, como es, que lo mueve, su vida personal y
+su anecdota), con el motor narrativo (roleplay/datos/corpus_vida.json).
+Sin IA, al instante, y queda editable."""
 
+import random
 from typing import Optional
 
 from pydantic import BaseModel
 
-from roleplay.gemini import generar_json
-from roleplay.models import (
-    CONTEXTOS_SOCIOECONOMICOS,
-    ESTADOS_RELACION,
-    MOTIVACIONES,
-    PERSONALIDADES,
-    PlayerProfile,
-)
+from roleplay.models import PlayerProfile
+from roleplay.servicios.narrador import Narrador, unir
+
+GANCHOS = 4
 
 
 class BackstoryResult(BaseModel):
@@ -20,34 +20,38 @@ class BackstoryResult(BaseModel):
     ganchos_narrativos: list[str]
 
 
-def _build_prompt(profile: PlayerProfile) -> str:
-    relacion = ESTADOS_RELACION.get(profile.estado_relacion, "")
-    if profile.estado_relacion == "novia_real" and profile.nombre_pareja:
-        relacion += f" Su pareja se llama {profile.nombre_pareja}."
-
-    return f"""
-Genera un backstory de un futbolista para modo carrera con estos datos.
-- Nombre: {profile.nombre_jugador}
-- Padres de: {profile.pais_padres}
-- Ciudad natal: {profile.ciudad_natal}
-- Fecha de nacimiento: {profile.fecha_nacimiento}
-- Contexto: {CONTEXTOS_SOCIOECONOMICOS.get(profile.contexto_socioeconomico, "")}
-- Personalidad: {PERSONALIDADES.get(profile.personalidad, "")}
-- Motivacion: {MOTIVACIONES.get(profile.motivacion, "")}
-- Situacion sentimental: {relacion}
-- Anecdota: {profile.anecdota_personal or "(ninguna)"}
-
-Devuelve JSON con `backstory` y `ganchos_narrativos`.
-`backstory`: 120-200 palabras.
-`ganchos_narrativos`: lista de 3 a 5 frases breves.
-No inventes nombres de personas o jugadores reales.
-""".strip()
-
-
-def generar_backstory(profile: PlayerProfile, api_key: Optional[str] = None) -> BackstoryResult:
-    return generar_json(
-        _build_prompt(profile),
-        BackstoryResult,
-        "Esperate un poco y apreta 'Regenerar backstory' de nuevo.",
-        api_key=api_key,
-    )
+def generar_backstory(profile: PlayerProfile, dado: Optional[random.Random] = None) -> BackstoryResult:
+    escritor = Narrador("vida", dado=dado, ricas=True)
+    datos = {
+        "nombre": profile.nombre_jugador or "El jugador",
+        "ciudad": profile.ciudad_natal.strip(),
+        "pais_padres": profile.pais_padres.strip(),
+        "anio": profile.fecha_nacimiento[:4] if profile.fecha_nacimiento[:4].isdigit() else "",
+        "pareja": profile.nombre_pareja.strip(),
+        "anecdota": profile.anecdota_personal.strip().rstrip(".")[:1].lower() + profile.anecdota_personal.strip().rstrip(".")[1:],
+        "club": profile.club_actual.strip(),
+    }
+    relacion = profile.estado_relacion if profile.estado_relacion in ("novia_real", "celebridad", "soltero") else "soltero"
+    if relacion == "novia_real" and not datos["pareja"]:
+        relacion = "soltero"
+    parrafos = [
+        escritor.elegir(f"b_origen_{profile.contexto_socioeconomico}", **datos)
+        or escritor.elegir("b_origen_clase_media", **datos),
+        unir(escritor.elegir(f"b_personalidad_{profile.personalidad}", **datos),
+             escritor.elegir(f"b_motivacion_{profile.motivacion}", **datos)),
+        unir(escritor.elegir(f"b_relacion_{relacion}", **datos), escritor.elegir("b_anecdota", **datos),
+             escritor.elegir("b_cierre", **datos)),
+    ]
+    origen = {"humilde": "humilde_origen", "acomodada": "acomodada"}.get(profile.contexto_socioeconomico, "")
+    fuentes = [f"g_{profile.motivacion}", f"g_{profile.personalidad}", f"g_{relacion}", f"g_{origen}"]
+    ganchos = []
+    for fuente in fuentes:
+        if escritor.tiene(fuente) and escritor.puede(fuente, **datos):
+            gancho = escritor.elegir(fuente, **datos)
+            if gancho and gancho not in ganchos:
+                ganchos.append(gancho)
+    while len(ganchos) < 3:  # siempre al menos tres tramas
+        extra = escritor.elegir(escritor.dado.choice([f for f in ("g_titulos", "g_legado", "g_familia") if f]), **datos)
+        if extra not in ganchos:
+            ganchos.append(extra)
+    return BackstoryResult(backstory="\n\n".join(p for p in parrafos if p), ganchos_narrativos=ganchos[:GANCHOS])

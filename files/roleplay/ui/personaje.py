@@ -2,7 +2,7 @@
 Asistente de creacion de personaje (quiz inicial).
 
 Guia por unas paginas de preguntas, arma un PlayerProfile, genera el
-backstory con IA (editable antes de guardar) y lo guarda en SQLite.
+backstory (servicios/backstory.py, editable antes de guardar) y lo guarda en SQLite.
 """
 
 from PySide6.QtCore import QDate, Qt
@@ -153,7 +153,7 @@ class PaginaBackstory(QWizardPage):
         self.resumen_label.setWordWrap(True)
         layout.addWidget(self.resumen_label)
 
-        self.generar_btn = boton("Generar backstory con IA", primario=True, icono_nombre="chispa")
+        self.generar_btn = boton("Generar backstory", primario=True, icono_nombre="chispa")
         self.generar_btn.clicked.connect(self._on_generar_clicked)
         layout.addWidget(self.generar_btn)
 
@@ -202,11 +202,11 @@ class PaginaBackstory(QWizardPage):
     def _on_error(self, mensaje: str):
         QMessageBox.warning(self, "Error al generar backstory", mensaje)
         self.generar_btn.setEnabled(True)
-        self.generar_btn.setText("GENERAR BACKSTORY CON IA")
+        self.generar_btn.setText("GENERAR BACKSTORY")
 
     def isComplete(self) -> bool:
         # Basta con que haya un backstory, generado o escrito a mano: asi
-        # se puede crear el personaje aunque Gemini este caido.
+        # se puede crear el personaje sin generarlo.
         return bool(self.backstory())
 
     def backstory(self) -> str:

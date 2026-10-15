@@ -30,8 +30,8 @@ Estado en estado_json.clubes:
 """
 
 import copy
-from dataclasses import dataclass, field
-from datetime import date, timedelta
+from dataclasses import dataclass
+from datetime import date
 from typing import Optional
 
 from roleplay.partida.carrera import Carrera
@@ -171,6 +171,7 @@ def _cambio_de_club(estado: dict, carrera: Carrera, equipo: int, hoy: date) -> l
     liga_nueva = carrera.ligas_de_equipo.get(equipo)
     if viejo["salida"] == "idolo" and liga_nueva is not None and liga_nueva == viejo.get("liga"):
         _acotar(viejo, -CASTIGO_TRAICION)
+        viejo["traicion"] = True  # para el morbo cuando se vuelvan a cruzar (servicios/cruce.py)
         hitos.append(Hito("traicion", f"Los hinchas de {viejo['nombre']} lo tratan de traidor",
                           f"ficho por {nuevo_nombre}, rival de liga de {viejo['nombre']}, y sus ex hinchas no se lo "
                           "perdonan", "negativa", 1.0, -2))
@@ -253,6 +254,15 @@ def por_evento(estado: Optional[dict], evento_id: str, hoy: date) -> dict:
     _acotar(estado["clubes"][estado["actual"]], POR_EVENTO.get(evento_id, 0))
     if evento_id in EVENTOS_POLEMICOS:
         _proponer(estado, "polemica", hoy)
+    return estado
+
+
+def sumar_carino(estado: Optional[dict], delta: int) -> dict:
+    """Lo que dijo en una entrevista o en una previa mueve el carino de la
+    hinchada de su club (servicios/entrevista.py decide cuanto)."""
+    estado = copy.deepcopy(estado or {})
+    if estado.get("actual") and delta:
+        _acotar(estado["clubes"][estado["actual"]], delta)
     return estado
 
 

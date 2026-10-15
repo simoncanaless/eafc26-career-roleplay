@@ -5,9 +5,7 @@ from unittest import mock
 import ayuda
 from roleplay import database
 from roleplay.models import PlayerProfile
-from roleplay.servicios.entrevista import ReaccionPrensa
 from roleplay.servicios.instagram import ComentarioIA, InstagramReaccionIA
-from roleplay.servicios.vision import MatchStats
 
 
 class TestHilos(unittest.TestCase):
@@ -98,24 +96,23 @@ class TestEntrevista(ayuda.PruebaDeInterfaz):
             p.generar_entrevista_btn.click()
             ayuda.esperar_tareas()
         self.assertEqual(len(p._respuesta_edits), 2)
-        p._respuesta_edits[0].setPlainText("Contento por el equipo")
+        p._respuesta_edits[0].setPlainText("Contento por el equipo, el grupo trabajo muchisimo. Les prometo que vamos a ganar la liga")
 
         liberar = threading.Event()
+        evaluado = []
+        real = self.modulo.evaluar_respuestas
 
-        def gemini_lento(prompt, esquema, que_hacer, api_key=None):
+        def evaluar_lento(*argumentos):  # el motor real, pero frenado para ver la pantalla mientras trabaja
             liberar.wait(5)
-            return ReaccionPrensa(
-                reaccion_prensa="Cayo bien <3", delta_reputacion=99, nuevo_gancho_narrativo="Lo quiere el Madrid"
-            )
-
-        from roleplay.servicios import entrevista as servicio
+            evaluado.append(real(*argumentos))
+            return evaluado[-1]
 
         prensa = mock.Mock(return_value={"noticias": [], "hitos": [], "estado_prensa": {"ok": 1}})
-        with mock.patch.object(servicio, "generar_json", gemini_lento), \
+        with mock.patch.object(self.modulo, "evaluar_respuestas", evaluar_lento), \
                 mock.patch.object(self.modulo, "revisar_prensa", prensa):
             p.enviar_respuestas_btn.click()
-            # mientras Gemini evalua: no se puede regenerar, ni aunque se
-            # vuelva a la pestana; y tocar el formulario no cambia lo guardado
+            # mientras evalua: no se puede regenerar, ni aunque se vuelva a
+            # la pestana; y tocar el formulario no cambia lo guardado
             self.assertFalse(p.generar_entrevista_btn.isEnabled())
             p.actualizar()
             self.assertFalse(p.generar_entrevista_btn.isEnabled())
@@ -128,11 +125,16 @@ class TestEntrevista(ayuda.PruebaDeInterfaz):
         partido = database.load_match_interviews(self.pid)[0]
         self.assertEqual((partido.equipo_rival, partido.goles_jugador, partido.rating_jugador), ("Juventus", 2, 8.6))
         self.assertEqual(partido.preguntas_entrevista, ["P1?", "P2?"])
-        self.assertEqual(partido.respuestas_jugador, ["Contento por el equipo", ""])
-        self.assertEqual(partido.delta_reputacion, 15)  # acotado
-        self.assertEqual(database.get_reputacion_actual(self.pid), 55)
-        self.assertIn("Lo quiere el Madrid", database.load_profile(self.pid).ganchos_narrativos)
-        self.assertIn("Cayo bien <3", ayuda.texto_visible(p.reaccion_label.text()))
+        self.assertEqual(partido.respuestas_jugador[1], "")
+        self.assertTrue(partido.respuestas_jugador[0].startswith("Contento por el equipo"))
+        (reaccion,) = evaluado
+        self.assertEqual(reaccion.eje, "humildad_equipo")
+        self.assertTrue(0 < partido.delta_reputacion <= 15)  # acotado
+        self.assertEqual(partido.delta_reputacion, reaccion.delta_reputacion)
+        self.assertEqual(database.get_reputacion_actual(self.pid), 40 + reaccion.delta_reputacion)
+        self.assertTrue(reaccion.nuevo_gancho_narrativo)  # prometio algo: queda de gancho
+        self.assertIn(reaccion.nuevo_gancho_narrativo, database.load_profile(self.pid).ganchos_narrativos)
+        self.assertIn(reaccion.reaccion_prensa[:40], ayuda.texto_visible(p.reaccion_label.text()))
         prensa.assert_called_once()
         self.assertEqual(database.get_estado_prensa(self.pid), {"ok": 1})
         self.assertTrue(p.generar_entrevista_btn.isEnabled())
@@ -146,21 +148,24 @@ class TestEntrevista(ayuda.PruebaDeInterfaz):
         evaluar.assert_not_called()
         self.avisos.assert_called_once()
 
-    def test_la_captura_carga_las_stats_en_el_formulario(self):
-        stats = MatchStats(goles_equipo=3, goles_rival=1, equipo_rival="Inter", rating_jugador=7.9)
-        with mock.patch.object(self.modulo, "_capturar_y_leer", return_value=stats):
-            self.pagina.capturar_btn.click()
-            ayuda.esperar_tareas()
-        self.assertEqual(self.pagina._leer_stats_desde_formulario().equipo_rival, "Inter")
-        self.assertAlmostEqual(self.pagina.rating_spin.value(), 7.9)
+    def test_sin_ia_no_hay_lectura_de_la_captura(self):
+        # leer las stats de una foto de la pantalla necesitaba la IA: queda
+        # "Cargar de mi partida" (el guardado) o escribirlas a mano
+        self.assertFalse(hasattr(self.pagina, "capturar_btn"))
+        with self.assertRaises(RuntimeError):
+            __import__("roleplay.servicios.vision", fromlist=["x"]).extraer_stats_partido(b"png")
 
-    def test_si_la_captura_falla_se_avisa_y_se_puede_seguir(self):
-        with mock.patch.object(self.modulo, "_capturar_y_leer", side_effect=RuntimeError("sin dxcam")):
-            self.pagina.capturar_btn.click()
-            ayuda.esperar_tareas()
-        self.assertIn("sin dxcam", self.avisos.call_args.args[2])
-        self.assertTrue(self.pagina.capturar_btn.isEnabled())
-        self.assertTrue(self.pagina.generar_entrevista_btn.isEnabled())
+    def test_las_preguntas_son_de_los_tres_periodistas(self):
+        from roleplay.servicios import entrevista as servicio
+
+        self.pagina.equipo_rival_edit.setText("Juventus")
+        self.pagina.goles_jugador_spin.setValue(2)
+        self.pagina.generar_entrevista_btn.click()
+        ayuda.esperar_tareas()
+        preguntas = self.pagina._preguntas
+        self.assertEqual([q.split(" (")[0] for q in preguntas], [nombre for nombre, _ in servicio.PERIODISTAS])
+        self.assertEqual(len(self.pagina._respuesta_edits), len(preguntas))
+        self.assertNotRegex(" ".join(preguntas), r"[{}]|#\w+#")
 
 
 class TestInstagram(ayuda.PruebaDeInterfaz):
@@ -187,13 +192,18 @@ class TestInstagram(ayuda.PruebaDeInterfaz):
         self.assertEqual((post.texto, post.comentarios[0]["autor"]), ("Golazo hoy", "fan"))
         self.assertIn("@simoncanales", pagina.header_label.text())
 
-    def test_likes_negativos_de_la_ia_quedan_en_cero(self):
+    def test_la_reaccion_al_post_sale_del_motor(self):
         from roleplay.servicios import instagram as servicio
 
-        reaccion = InstagramReaccionIA(comentarios=[], likes_estimados=-4, crecimiento_seguidores=0)
-        with mock.patch.object(servicio, "generar_json", return_value=reaccion):
-            resultado = servicio.generar_reaccion_post(PlayerProfile(nombre_jugador="S"), "x", 50, 100)
-        self.assertEqual(resultado.likes_estimados, 0)
+        perfil = PlayerProfile(nombre_jugador="Simon Canales", club_actual="Man Utd")
+        perfil.id = database.save_profile(perfil)
+        humilde = servicio.generar_reaccion_post(perfil, "Gracias al equipo y a la hinchada, vamos por mas", 50, 10_000)
+        self.assertGreater(humilde.crecimiento_seguidores, 0)
+        self.assertGreater(humilde.likes_estimados, 0)
+        self.assertTrue(humilde.comentarios)
+        polemico = servicio.generar_reaccion_post(perfil, "Soy el mejor, el arbitro nos robo", 20, 10_000)
+        self.assertLess(polemico.crecimiento_seguidores, 0)  # sin reputacion, la polemica resta
+        self.assertGreaterEqual(polemico.likes_estimados, 0)
 
 
 class TestPersonajeYMenu(ayuda.PruebaDeInterfaz):
@@ -274,7 +284,7 @@ class TestCarta(unittest.TestCase):
 
 
 class TestArranque(unittest.TestCase):
-    def test_abrir_la_app_no_carga_gemini_ni_la_captura(self):
+    def test_abrir_la_app_no_carga_lo_pesado(self):
         proceso = ayuda.correr_aislado(
             "import sys, roleplay.ui.menu\n"
             "print(sorted(m for m in ('google.genai', 'cv2', 'dxcam', 'sounddevice', 'PySide6.QtWebEngineWidgets', "
@@ -308,15 +318,16 @@ class TestInstagramConContexto(ayuda.PruebaDeInterfaz):
             self.pagina.sugerir_btn.click()
             ayuda.esperar_tareas()
         self.assertEqual(self.pagina.post_edit.toPlainText(), "Tres puntos y dos goles ⚽")
-        self.assertIn("Man Utd 3-1 Arsenal", sugerir.call_args.args[2])
+        self.assertIn("Man Utd 3-1 Arsenal", sugerir.call_args.args[1])
         self.assertTrue(self.pagina.sugerir_btn.isEnabled())
 
-    def test_publicar_manda_el_contexto_real(self):
-        lectura = mock.Mock(contexto="CONTEXTO REAL", ultimo=None)
-        self.pagina._lectura = lectura
+    def test_publicar_manda_el_post_la_reputacion_y_los_seguidores(self):
         self.pagina.post_edit.setPlainText("Vamos")
+        antes = database.get_seguidores(self.pid)
         reaccion = InstagramReaccionIA(comentarios=[], likes_estimados=10, crecimiento_seguidores=1)
         with mock.patch.object(self.modulo, "generar_reaccion_post", return_value=reaccion) as publicar:
             self.pagina.publicar_btn.click()
             ayuda.esperar_tareas()
-        self.assertEqual(publicar.call_args.args[4], "CONTEXTO REAL")
+        perfil, texto, reputacion, seguidores = publicar.call_args.args
+        self.assertEqual((perfil.id, texto, reputacion, seguidores),
+                         (self.pid, "Vamos", database.get_reputacion_actual(self.pid), antes))

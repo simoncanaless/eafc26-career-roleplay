@@ -4,21 +4,18 @@ que lee el modo en vivo), los hinchas reaccionan a los partidos nuevos del
 jugador y a las noticias sobre el, sin que publique nada.
 
 Cuantos seguidores gana o pierde lo decide el codigo (resultado, sus goles,
-su nota, el tono de la noticia, escalado por sus seguidores y reputacion);
-la IA solo escribe los comentarios. Sin IA, los seguidores se mueven igual
-y la actividad sale sin comentarios.
+su nota, el tono de la noticia, escalado por sus seguidores y reputacion), y
+los comentarios tambien: servicios/narrador.py con roleplay/datos/corpus_redes.json
+(autores inventados, el tono sigue lo que paso). Sin IA, al instante.
 """
 
+import re
 from dataclasses import dataclass
 from typing import Optional
 
-from pydantic import BaseModel
-
-from roleplay.gemini import generar_json
 from roleplay.models import ActividadInstagram, NoticiaPrensa, PlayerProfile
 from roleplay.partida.carrera import Carrera
-from roleplay.servicios.contexto import ficha_jugador
-from roleplay.servicios.instagram import ComentarioIA
+from roleplay.servicios.narrador import narrador
 from roleplay.servicios.partida_real import cantidad, clave_partido, fecha_corta, marcador
 
 MAXIMO_EVENTOS = 5  # por revision: si la app estuvo cerrada mucho tiempo, solo lo ultimo
@@ -33,7 +30,7 @@ class EventoHinchada:
     tipo: str  # "partido" | "noticia"
     fecha_juego: str  # iso
     titulo: str  # lo que se muestra
-    detalle: str  # lo que lee la IA
+    detalle: str  # lo que paso, en una oracion
     crecimiento: int
 
 
@@ -122,51 +119,46 @@ def eventos_nuevos(
     return eventos, estado
 
 
-# ---- la IA: los comentarios ----
+# ---- los comentarios (motor narrativo) ----
 
 
-class ComentariosDeEvento(BaseModel):
-    indice: int
-    comentarios: list[ComentarioIA]
+def datos_de_redes(perfil: PlayerProfile, titulo: str = "") -> dict:
+    """Lo que necesitan los comentarios: el apellido, el club y su "tag"."""
+    club = perfil.club_actual or "futbol"
+    etiqueta = re.sub(r"[^a-z0-9]", "", club.lower()) or "futbol"
+    partes = perfil.nombre_jugador.split()
+    return {"apellido": partes[-1] if partes else "crack", "club": club, "club_tag": etiqueta,
+            "club_tag_mayus": "".join(p.capitalize() for p in re.findall(r"[a-z0-9]+", club.lower())) or "Futbol",
+            "titulo": titulo}
 
 
-class ReaccionesDeHinchas(BaseModel):
-    eventos: list[ComentariosDeEvento]
+def comentarios(escritor, tipo: str, crecimiento: int, datos: dict) -> list[dict]:
+    """Dos o tres comentarios: el tono sigue lo que paso (si gano seguidores,
+    mas hinchas contentos; si perdio, mas criticas), con algun gracioso."""
+    dado = escritor.dado
+    lado = "pos" if crecimiento >= 0 else "neg"
+    propio = f"com_{tipo}_{lado}" if escritor.puede(f"com_{tipo}_{lado}", **datos) else f"com_{lado}"
+    if lado == "pos":
+        plan = [("hincha", propio, "positivo"), ("gracioso", "com_grac", "gracioso"),
+                dado.choice([("rival", "com_neg", "negativo"), ("neutro", "com_neutro", "neutral")])]
+    else:
+        plan = [("hincha", propio, "negativo"), ("rival", "com_neg", "negativo"),
+                dado.choice([("gracioso", "com_grac", "gracioso"), ("hincha", "com_pos", "positivo")])]
+    if dado.random() < 0.3:
+        plan = plan[:2]
+    resultado = []
+    for clase, simbolo, tono in plan:
+        con_numero = {**datos, "n": dado.randint(7, 99)}
+        resultado.append({"autor": escritor.elegir(f"autor_{clase}", **con_numero),
+                          "texto": escritor.decir(simbolo, **con_numero), "tono": tono})
+    return resultado
 
 
-def comentar_eventos(
-    perfil: PlayerProfile, eventos: list[EventoHinchada], contexto_real: str = "", api_key: Optional[str] = None
-) -> dict[int, list[dict]]:
-    """{indice del evento: [comentarios]} (una sola consulta para todos)."""
-    lista = "\n".join(
-        f"{i}. {e.detalle} (seguidores: {'+' if e.crecimiento >= 0 else ''}{e.crecimiento})"
-        for i, e in enumerate(eventos)
-    )
-    contexto = f"\n{contexto_real}\n(Datos reales de su partida: los hinchas los conocen.)\n" if contexto_real else ""
-    respuesta = generar_json(
-        f"""
-Simulas los comentarios que dejan los hinchas en el Instagram de
-{perfil.nombre_jugador}, futbolista de un modo carrera roleplay de EAFC 26,
-cuando pasan cosas en su temporada (el no publico nada: comentan en su
-ultimo post).
-
-{ficha_jugador(perfil)}{contexto}
-Lo que paso (con cuantos seguidores gano o perdio por eso):
-{lista}
-
-Para cada uno, 2 o 3 comentarios cortos estilo Instagram (en espanol, se
-puede mezclar algo de ingles si el club es ingles, con emojis): hinchas de
-su club, algun hater o hincha rival, algun comentario gracioso. Que el tono
-siga lo que paso (si perdio o una noticia negativa, criticas; si la rompio,
-euforia). Autores inventados tipo @usuario, nunca nombres de personas
-reales. No inventes datos que no esten arriba.
-Devolve "indice" igual al numero de cada uno.
-""".strip(),
-        ReaccionesDeHinchas,
-        "No se pudieron escribir los comentarios esta vez.",
-        api_key=api_key,
-    )
-    return {e.indice: [c.model_dump() for c in e.comentarios] for e in respuesta.eventos}
+def comentar_eventos(perfil: PlayerProfile, eventos: list[EventoHinchada]) -> dict[int, list[dict]]:
+    """{indice del evento: [comentarios]} (todos de una vez, al instante)."""
+    with narrador(perfil.id, "redes") as escritor:
+        return {i: comentarios(escritor, e.tipo, e.crecimiento, datos_de_redes(perfil, e.titulo))
+                for i, e in enumerate(eventos)}
 
 
 def procesar(
@@ -176,21 +168,14 @@ def procesar(
     estado: Optional[dict],
     seguidores: int,
     reputacion: int,
-    contexto_real: str = "",
 ) -> tuple[list[ActividadInstagram], dict]:
-    """La actividad nueva (sin guardar) y el estado nuevo. Si la IA falla,
-    la actividad sale igual, sin comentarios."""
+    """La actividad nueva (sin guardar) y el estado nuevo."""
     eventos, nuevo_estado = eventos_nuevos(carrera, noticias, estado, seguidores, reputacion)
-    comentarios: dict[int, list[dict]] = {}
-    if eventos:
-        try:
-            comentarios = comentar_eventos(perfil, eventos, contexto_real)
-        except RuntimeError:
-            comentarios = {}
+    dichos = comentar_eventos(perfil, eventos) if eventos else {}
     actividad = [
         ActividadInstagram(
             player_id=perfil.id, fecha_juego=e.fecha_juego, tipo=e.tipo, titulo=e.titulo,
-            crecimiento_seguidores=e.crecimiento, comentarios=comentarios.get(i, []),
+            crecimiento_seguidores=e.crecimiento, comentarios=dichos.get(i, []),
         )
         for i, e in enumerate(eventos)
     ]
@@ -202,7 +187,6 @@ def revisar_hinchada(player_id: int) -> Optional[tuple[list[ActividadInstagram],
     lo que los hinchas tienen para decir. None sin partida o sin perfil."""
     from roleplay import database
     from roleplay.partida.lector import carrera_actual
-    from roleplay.servicios.partida_real import contexto_temporada
 
     perfil = database.load_profile(player_id)
     carrera = carrera_actual()
@@ -215,5 +199,4 @@ def revisar_hinchada(player_id: int) -> Optional[tuple[list[ActividadInstagram],
         database.get_estado_hinchada(player_id),
         database.get_seguidores(player_id),
         database.get_reputacion_actual(player_id),
-        contexto_temporada(carrera),
     )

@@ -11,7 +11,7 @@ from roleplay import database
 from roleplay.models import PlayerProfile
 from roleplay.partida import lector
 from roleplay.partida.carrera import construir
-from roleplay.servicios import clubes, eventos, hinchada, partida_real
+from roleplay.servicios import clubes, hinchada, partida_real
 
 HOY = date(2027, 1, 16)
 
@@ -125,7 +125,6 @@ class TestTarjetaEnElResumen(ayuda.PruebaDeInterfaz):
         mock.patch.object(partida_real, "identificar_jugadores", return_value={}).start()
         mock.patch.object(partida_real, "identificar_competiciones", return_value={}).start()
         mock.patch.object(hinchada, "comentar_eventos", return_value={}).start()
-        mock.patch.object(eventos, "generar_json", return_value=eventos.NoticiaEvento(titular="Pide salir", cuerpo="C")).start()
         self.addCleanup(mock.patch.stopall)
         self.addCleanup(ayuda.esperar_tareas)  # (antes de borrar la carpeta: la lectura de la partida corre en un hilo)
         self.pid = database.save_profile(PlayerProfile(nombre_jugador="Simon Canales", club_actual="Man Utd"))

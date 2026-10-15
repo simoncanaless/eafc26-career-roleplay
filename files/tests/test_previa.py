@@ -8,7 +8,7 @@ import fabrica_partida as f
 from roleplay import database
 from roleplay.models import PlayerProfile
 from roleplay.partida.carrera import construir
-from roleplay.servicios import partida_real, previa
+from roleplay.servicios import entrevista, partida_real, previa
 from roleplay.servicios.previa import PreviaPartido, ReaccionPrevia, previa_del_proximo
 
 
@@ -21,9 +21,9 @@ class TestPreviaDelProximo(ayuda.PruebaConBase):
         p = previa_del_proximo(carrera_falsa())
         self.assertEqual((p.club, p.rival, p.de_local, p.fecha), ("Man Utd", "SSC Napoli", False, "20-01-2027"))
         self.assertEqual(p.clave, "2027-01-20|122|48|11")
-        texto = p.describir()
+        self.assertEqual(p.resumen, "vs SSC Napoli (de visita) · torneo continental · 20-01-2027")
+        texto = "\n".join(p.datos)
         for esperado in (
-            "Man Utd ante SSC Napoli, de visita",
             "Racha de Man Utd (ultimos partidos, el mas reciente al final): G E G.",
             "Ya se enfrentaron esta temporada: Man Utd 3-3 SSC Napoli",
         ):
@@ -61,26 +61,38 @@ class TestPreviaDelProximo(ayuda.PruebaConBase):
         self.assertEqual(lectura.previa.rival, "SSC Napoli")
 
 
-class TestPromptsYEvaluacion(unittest.TestCase):
+class TestPreguntasYEvaluacion(ayuda.PruebaConBase):
     def setUp(self):
-        self.perfil = PlayerProfile(id=1, nombre_jugador="Simon Canales", club_actual="Man Utd")
+        super().setUp()
+        self.perfil = PlayerProfile(nombre_jugador="Simon Canales", club_actual="Man Utd")
+        self.perfil.id = database.save_profile(self.perfil)
         self.previa = PreviaPartido("clave", "Man Utd", "Spurs", True, "Premier League", "24-01-2027",
-                                    ["En la tabla: Man Utd 2° con 55 pts, Spurs 8° con 32 pts (de 20 equipos)."])
+                                    ["En la tabla: Man Utd 2° con 55 pts, Spurs 8° con 32 pts (de 20 equipos)."],
+                                    posicion="2°", posicion_rival="8°", racha_club="G G E", racha_rival="P P G")
 
-    def test_las_preguntas_usan_los_datos_reales(self):
-        prompt = previa._prompt_preguntas(self.perfil, self.previa, "CONTEXTO")
-        self.assertIn("PREVIA", prompt)
-        self.assertIn("Man Utd ante Spurs, de local, por Premier League", prompt)
-        self.assertIn("Spurs 8° con 32 pts", prompt)
-        self.assertIn("CONTEXTO", prompt)
+    def test_tres_periodistas_con_los_datos_reales(self):
+        preguntas = previa.generar_previa(self.perfil, self.previa)
+        self.assertEqual([p.split(" (")[0] for p in preguntas], [nombre for nombre, _ in entrevista.PERIODISTAS])
+        for pregunta in preguntas:
+            self.assertNotRegex(pregunta, r"[{}]|#\w+#")
+        self.assertTrue(any(dato in preguntas[0] for dato in ("2°", "G G E", "Spurs")), preguntas[0])  # la tactica usa la partida
 
     def test_la_evaluacion_se_acota(self):
-        crudo = ReaccionPrevia(titular=" ", reaccion_prensa="Polemica", tono="Rarisimo", delta_reputacion=40)
-        with mock.patch.object(previa, "generar_json", return_value=crudo):
-            r = previa.evaluar_previa(self.perfil, self.previa, [("P?", "R")])
-        self.assertEqual(r.delta_reputacion, previa.DELTA_REPUTACION_MAXIMO)
-        self.assertEqual(r.tono, "neutral")
-        self.assertIn("Spurs", r.titular)  # sin titular, uno por defecto
+        humilde = "El equipo, el grupo, mis companeros, todos juntos, gracias al cuerpo tecnico y al grupo. " * 6
+        r = previa.evaluar_previa(self.perfil, self.previa, [("P?", humilde)])
+        self.assertEqual((r.eje, r.tono), ("humildad_equipo", "positiva"))
+        self.assertTrue(0 < r.delta_reputacion <= previa.DELTA_REPUTACION_MAXIMO)
+        self.assertIn("Spurs", r.titular)
+        excusas = "El arbitro nos robo, la cancha estaba horrible, el calendario es una verguenza, culpa del arbitro. " * 6
+        r = previa.evaluar_previa(self.perfil, self.previa, [("P?", excusas)])
+        self.assertEqual(r.eje, "excusa_polemica")
+        self.assertTrue(-previa.DELTA_REPUTACION_MAXIMO <= r.delta_reputacion < 0)
+
+    def test_una_respuesta_seca_no_se_cita(self):
+        r = previa.evaluar_previa(self.perfil, self.previa, [("P?", "Si.")])
+        self.assertEqual(r.cita, "")
+        self.assertNotIn("«", r.titular)
+        self.assertIn("Spurs", r.titular)
 
 
 class TestSalaConPrevia(ayuda.PruebaDeInterfaz):
@@ -92,7 +104,7 @@ class TestSalaConPrevia(ayuda.PruebaDeInterfaz):
         self.modulo = entrevista
         carrera = carrera_falsa()
         self.lectura = partida_real.LecturaPartida(
-            carrera=carrera, ultimo=partida_real.ultimo_partido(carrera, {}), contexto="CONTEXTO REAL",
+            carrera=carrera, ultimo=partida_real.ultimo_partido(carrera, {}),
             ya_entrevistado=False, previa=previa_del_proximo(carrera),
         )
         mock.patch.object(entrevista, "leer_para_entrevista", return_value=self.lectura).start()
@@ -125,7 +137,6 @@ class TestSalaConPrevia(ayuda.PruebaDeInterfaz):
     def test_generar_y_enviar_la_previa(self):
         generar = self._a_la_previa_con_preguntas()
         self.assertIs(generar.call_args.args[1], self.lectura.previa)
-        self.assertEqual(generar.call_args.args[2], "CONTEXTO REAL")
 
         sala = self.sala
         sala._respuesta_edits[0].setPlainText("Vamos a ganar alla, no hay otra")

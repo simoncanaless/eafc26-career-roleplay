@@ -1,30 +1,11 @@
-"""Lectura de las estadisticas de fin de partido desde la captura, con
-Gemini Vision. Lo que lee queda editable en la pantalla antes de seguir."""
+"""Las estadisticas de un partido del jugador (MatchStats).
 
-from typing import Optional
+Antes se leian de una captura de la pantalla de fin de partido con IA. Sin
+IA no hay forma confiable de leer esa pantalla (cambia con cada modo y cada
+idioma), asi que el partido sale del guardado de la carrera
+(roleplay/partida/, "Cargar de mi partida") o se escribe a mano."""
 
 from pydantic import BaseModel
-
-from roleplay.gemini import generar_json
-
-PROMPT_EXTRACCION = """
-Esta imagen es una captura de pantalla de fin de partido de EAFC 26.
-Extrae solo las estadisticas del jugador controlado.
-Devuelve JSON con estas claves:
-- goles_equipo
-- goles_rival
-- equipo_rival
-- goles_jugador
-- asistencias_jugador
-- rating_jugador
-- minutos_jugados
-- tarjeta_amarilla
-- tarjeta_roja
-- hombre_del_partido
-- confianza_baja
-
-Si no se puede leer un dato, usa 0/false/"" y marca confianza_baja como true.
-""".strip()
 
 
 class MatchStats(BaseModel):
@@ -41,11 +22,9 @@ class MatchStats(BaseModel):
     confianza_baja: bool = False
 
 
-def extraer_stats_partido(imagen_png: bytes, api_key: Optional[str] = None) -> MatchStats:
-    return generar_json(
-        PROMPT_EXTRACCION,
-        MatchStats,
-        "Esperate un poco y volve a capturar la pantalla (o escribi las stats a mano).",
-        adjunto=(imagen_png, "image/png"),
-        api_key=api_key,
+def extraer_stats_partido(_imagen_png: bytes) -> MatchStats:
+    """(Sin IA no se lee la captura: queda para quien la llame, con el aviso de que hacer.)"""
+    raise RuntimeError(
+        "Leer la captura de pantalla necesitaba IA y la app ya no la usa. "
+        "Usa 'Cargar de mi partida' o escribi los numeros a mano."
     )

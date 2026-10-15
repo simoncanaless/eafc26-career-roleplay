@@ -1,18 +1,16 @@
 """
-Bienvenida (clave de Gemini) y Ajustes: la clave, como se abre el juego,
-los dos iconos del escritorio y el diagnostico.
+Ajustes: como se abre el juego, la partida que se lee, el modo en vivo,
+los dos iconos del escritorio y el diagnostico. (No hay clave que pedir: la
+app no usa IA, funciona de fabrica y sin internet.)
 """
 
 import os
 
-from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QDesktopServices, QGuiApplication
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
     QFileDialog,
-    QLabel,
-    QLineEdit,
     QMessageBox,
     QPlainTextEdit,
     QVBoxLayout,
@@ -20,16 +18,13 @@ from PySide6.QtWidgets import (
 )
 
 from roleplay import ajustes
-from roleplay.gemini import get_gemini_api_keys, guardar_clave, probar_clave, usa_lista_de_claves
 from roleplay.partida import lector
 from roleplay.ui.atajo import ATAJO_TEXTO
 from roleplay.servicios.accesos import crear_accesos
 from roleplay.servicios.juego import abrir_juego, elegir_a_mano, juego_configurado, olvidar_eleccion
-from roleplay.ui import estilos
-from roleplay.ui.comun import ejecutar_en_hilo, esc
+from roleplay.ui.comun import esc
 from roleplay.ui.componentes import Tarjeta, boton, fila, texto_suave, titulo_pagina
 
-URL_AI_STUDIO = "https://aistudio.google.com/apikey"
 FILTRO_JUEGO = "El juego o su acceso directo (*.exe *.lnk *.url)"
 
 
@@ -62,85 +57,6 @@ def abrir_juego_o_preguntar(padre: QWidget) -> bool:
     return True
 
 
-class DialogoClave(QDialog):
-    """Pide la clave de Gemini, la prueba y la guarda. Con `bienvenida`
-    es la pantalla del primer arranque y deja seguir sin IA."""
-
-    def __init__(self, padre: QWidget | None = None, bienvenida: bool = False):
-        super().__init__(padre)
-        self.setWindowTitle("EAFC 26 Roleplay - Clave de Gemini")
-        self.setMinimumWidth(620)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(30, 28, 30, 24)
-        layout.setSpacing(14)
-        layout.addWidget(titulo_pagina("Bienvenido" if bienvenida else "Clave de Gemini"))
-        layout.addWidget(
-            texto_suave(
-                "La IA del roleplay (entrevistas, prensa, Instagram, leer las stats) usa "
-                "Gemini de Google. Cada uno usa su propia clave: es gratis y se saca en un minuto."
-            )
-        )
-        pasos = QLabel(
-            f"<span style='color:{estilos.ACENTO}'><b>1.</b></span> Abri AI Studio con tu cuenta de Google.<br>"
-            f"<span style='color:{estilos.ACENTO}'><b>2.</b></span> Apreta <b>Create API key</b> y copiala.<br>"
-            f"<span style='color:{estilos.ACENTO}'><b>3.</b></span> Pegala aca abajo."
-        )
-        layout.addWidget(pasos)
-        abrir = boton("Abrir AI Studio")
-        abrir.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(URL_AI_STUDIO)))
-        layout.addLayout(fila(abrir, None))
-
-        self.clave_edit = QLineEdit()
-        self.clave_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        self.clave_edit.setPlaceholderText("Pega tu clave (empieza con AIza...)")
-        layout.addWidget(self.clave_edit)
-
-        self.estado_label = QLabel()
-        self.estado_label.setWordWrap(True)
-        layout.addWidget(self.estado_label)
-
-        self.guardar_btn = boton("Probar y guardar", primario=True)
-        self.guardar_btn.clicked.connect(self._on_guardar)
-        self.cancelar_btn = boton("Seguir sin IA" if bienvenida else "Cancelar")
-        self.cancelar_btn.clicked.connect(self.reject)
-        layout.addLayout(fila(None, self.cancelar_btn, self.guardar_btn))
-
-        if usa_lista_de_claves():
-            self.clave_edit.setEnabled(False)
-            self.guardar_btn.setEnabled(False)
-            self._estado("Tu .env usa una lista de claves (GEMINI_API_KEYS): cambialas ahi.", estilos.MIXTO)
-
-    def _estado(self, texto: str, color: str) -> None:
-        self.estado_label.setText(f"<span style='color:{color}'>{esc(texto)}</span>")
-
-    def _on_guardar(self):
-        clave = self.clave_edit.text().strip()
-        if not clave:
-            self._estado("Pega la clave primero.", estilos.MIXTO)
-            return
-        self.guardar_btn.setEnabled(False)
-        self._estado("Probando la clave...", estilos.TEXTO_SUAVE)
-        ejecutar_en_hilo(probar_clave, clave, al_completar=self._on_clave_ok, al_fallar=self._on_clave_mala)
-
-    def _on_clave_ok(self, _):
-        guardar_clave(self.clave_edit.text())
-        self.accept()
-
-    def _on_clave_mala(self, mensaje: str):
-        self.guardar_btn.setEnabled(True)
-        self._estado(mensaje, estilos.NEGATIVO)
-
-
-def pedir_clave_si_falta() -> None:
-    """Primer arranque: si no hay clave y la persona no eligio seguir sin
-    IA, se le muestra la bienvenida."""
-    if get_gemini_api_keys() or ajustes.leer().get("sin_ia"):
-        return
-    if DialogoClave(bienvenida=True).exec() != QDialog.DialogCode.Accepted:
-        ajustes.guardar(sin_ia=True)  # no volver a preguntar; queda en Ajustes
-
-
 class DialogoAjustes(QDialog):
     def __init__(self, padre: QWidget | None = None):
         super().__init__(padre)
@@ -151,13 +67,6 @@ class DialogoAjustes(QDialog):
         layout.setContentsMargins(30, 28, 30, 24)
         layout.setSpacing(14)
         layout.addWidget(titulo_pagina("Ajustes"))
-
-        clave = Tarjeta("Clave de Gemini")
-        self.clave_label = texto_suave(ajustar=False)
-        cambiar = boton("Cambiar clave")
-        cambiar.clicked.connect(self._on_cambiar_clave)
-        clave.cuerpo.addLayout(fila(self.clave_label, None, cambiar))
-        layout.addWidget(clave)
 
         juego = Tarjeta("El juego")
         self.juego_label = texto_suave()
@@ -246,11 +155,6 @@ class DialogoAjustes(QDialog):
         self._refrescar()
 
     def _refrescar(self):
-        claves = get_gemini_api_keys()
-        if claves:
-            self.clave_label.setText(f"Configurada (termina en …{esc(claves[0][-4:])}).")
-        else:
-            self.clave_label.setText("Sin clave: la IA no funciona hasta que pongas una.")
         elegida = lector.guardado_elegido()
         if elegida is None:
             self.partida_label.setText(
@@ -264,11 +168,6 @@ class DialogoAjustes(QDialog):
             f"<b>{esc(juego.describir())}</b><br>{esc(juego.comando)}" if juego
             else "No encontre EA FC 26 en Steam, la EA app ni Epic. Elegilo a mano."
         )
-
-    def _on_cambiar_clave(self):
-        if DialogoClave(self).exec() == QDialog.DialogCode.Accepted:
-            ajustes.guardar(sin_ia=None)
-        self._refrescar()
 
     def _on_elegir_juego(self):
         try:

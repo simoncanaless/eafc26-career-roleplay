@@ -4,7 +4,7 @@ Lo comun a todas las pruebas:
 - Qt sin ventana (QT_QPA_PLATFORM=offscreen).
 - Una base SQLite temporal por prueba, dentro de una carpeta de datos
   temporal: nunca se toca career_roleplay.db ni nada del proyecto.
-- Gemini bloqueado: si una prueba llega a llamar a la API de verdad, falla.
+- La memoria anti-repeticion del motor narrativo es la de cada base: cada prueba arranca de cero.
 - Dialogos modales mudos (si no, cuelgan la prueba).
 """
 
@@ -27,14 +27,7 @@ RAIZ = Path(__file__).resolve().parent.parent
 if str(RAIZ) not in sys.path:
     sys.path.insert(0, str(RAIZ))
 
-from roleplay import config, database, gemini  # noqa: E402
-
-
-def _gemini_prohibido(*_args, **_kwargs):
-    raise AssertionError("Una prueba intento llamar a Gemini de verdad: mockeala.")
-
-
-gemini._cliente = _gemini_prohibido
+from roleplay import config, database  # noqa: E402
 
 
 def qapp():
@@ -100,6 +93,11 @@ class PruebaDeInterfaz(PruebaConBase):
             parche.start()
             self.addCleanup(parche.stop)
         self.addCleanup(esperar_tareas)
+
+
+def texto_de_noticias(noticias) -> str:
+    """Todo lo que dice la prensa (titulares y cuerpos), para buscar en el."""
+    return "\n".join(f"{n.titular}\n{n.cuerpo}" for n in noticias)
 
 
 def texto_visible(html: str) -> str:

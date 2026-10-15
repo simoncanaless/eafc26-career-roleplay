@@ -1,0 +1,48 @@
+{
+  "_que_es": "Instagram: autores, comentarios de los hinchas por tipo de evento y tono, y posts sugeridos (servicios/instagram.py y hinchada.py). Sin tildes. Autores inventados, nunca personas reales.",
+
+  "autor_hincha": ["@{club_tag}_{n}", "@hincha_{club_tag}", "@{club_tag}_por_siempre", "@ultra_{club_tag}", "@la_tribuna_{club_tag}", "@corazon_{club_tag}", "@puro_{club_tag}", "@{club_tag}_hasta_la_muerte"],
+  "autor_rival": ["@el_rival_de_siempre", "@hater_profesional", "@anti_{club_tag}", "@no_me_convence_{n}", "@sobrevalorado_fc", "@critico_de_sillon"],
+  "autor_gracioso": ["@memes_futboleros", "@el_tio_del_asado", "@la_vieja_del_9", "@goleador_frustrado", "@sabado_de_fulbito", "@el_utilero_dice", "@vendo_humo_fc"],
+  "autor_neutro": ["@datos_que_importan", "@futbol_al_dia", "@el_profe_tactico", "@scouting_report", "@stats_y_mas_stats"],
+
+  "com_pos": ["Vamos {apellido}!! 🔥", "Que jugador, por favor 👏👏", "Orgullo de {club} ❤️", "Esto recien empieza 💪", "Crack total", "Te queremos {apellido}!!", "Bien ahi, sigue asi 🙌", "El mejor del plantel lejos"],
+  "com_neg": ["Hay que mejorar, eh 😤", "No me convence...", "Menos redes y mas cancha", "Otra vez lo mismo 🙄", "Asi no, {apellido}", "La camiseta se respeta", "Muy poco para lo que cobra"],
+  "com_grac": ["Mi abuela lo hacia mejor 😂", "Yo en el FIFA hago lo mismo 🤣", "Esto lo vi en un sueno", "Pase por aca para el meme 😂", "Mi tio dice que el lo descubrio", "Se viene el pan con palta para celebrar 🥑"],
+  "com_neutro": ["Interesante...", "A ver que pasa la proxima", "Los numeros no mienten 📊", "Habra que esperar", "Dato no menor"],
+
+  "com_partido_pos": ["{titulo}. Que partido!! 🔥", "Asi se juega, {apellido} 👏", "{titulo} y a seguir sumando 💪", "Gigante {apellido}, gigante", "Esta es la version que queremos ver"],
+  "com_partido_neg": ["{titulo}... hay que levantar cabeza", "Hoy no fue, {apellido} 😔", "Un partido para olvidar", "Esto tiene que cambiar ya", "Asi no se puede pelear nada"],
+  "com_noticia_pos": ["Ya salio en todos lados!! 📰🔥", "Lo dijo la prensa, lo decimos todos 👏", "Que titular, por favor", "Merecidisimo"],
+  "com_noticia_neg": ["La prensa no le perdona una...", "Hay que dar vuelta esto", "Ojo con estos titulares", "Que se diga en la cancha, no en los diarios"],
+  "com_compra_pos": ["Que lujo!! 😍", "Se lo merece, se lo gano", "Cuando una vueltita? 😂", "Cuidado con las multas 🚓"],
+  "com_compra_neg": ["Menos lujos y mas goles", "Con lo que juega, ni un triciclo", "Primero la camiseta, despues los gustos", "Y los resultados? 🙄"],
+  "com_donacion_pos": ["Eso es ser grande de verdad ❤️", "Gesto enorme, {apellido} 👏", "Esto vale mas que un gol", "Orgullo total"],
+  "com_entrega_pos": ["Que maquina!! 🏎️", "Lo vi pasar por el centro, increible", "El auto mas rapido que el 9 😂", "Disfrutalo, te lo ganaste"],
+  "com_entrega_neg": ["Ojala corriera asi en la cancha", "Lindo auto, ahora los goles", "Menos concesionario y mas entrenamiento"],
+  "com_evento_pos": ["Grande {apellido} ❤️", "Asi se hace", "Que buena noticia!!", "Esto lo hace distinto"],
+  "com_evento_neg": ["Uff, que paso aca 😬", "Hay que cuidarse, {apellido}", "Esto no le hace bien al equipo", "Otra polemica mas..."],
+  "com_hinchada_pos": ["Bienvenido a casa!! ❤️", "Aca siempre vas a ser idolo", "Que se escuche en todo el estadio", "Gracias por todo, {apellido}"],
+  "com_hinchada_neg": ["Traidor, nunca mas 😡", "Te fuiste por la puerta de atras", "No se olvida", "Ni lo menciones aca"],
+  "com_amor_pos": ["Que lindos!! 😍", "Pareja del ano ❤️", "Bien ahi, {apellido} 😏", "Que sean muy felices"],
+  "com_amor_neg": ["Mucha revista y poca cancha...", "Primero el futbol, eh", "Que pena 😔"],
+
+  "post_reservado_victoria": ["Tres puntos importantes. Seguimos. 💪", "Buen trabajo del equipo ante {rival}. A descansar y a seguir.", "Victoria del grupo. Vamos {club}."],
+  "post_reservado_derrota": ["No fue el resultado que buscabamos. A trabajar.", "Toca levantarse. Seguimos.", "Dolorosa derrota ante {rival}. Cabeza en lo que viene."],
+  "post_reservado_empate": ["Un punto mas. Seguimos trabajando.", "Empate ante {rival}. A mejorar."],
+  "post_reservado_neutro": ["Trabajo y silencio. 💪", "Un dia mas, un entrenamiento mas."],
+  "post_carismatico_victoria": ["QUE NOCHE!!! 🔥🔥 {marcador} ante {rival} y la gente de pie. Esto es {club}! ❤️ #hashtag#", "{goles_texto_mayus}! Gracias a todos los que vinieron, son lo mas 🙌 #hashtag#", "Asi se vive el futbol! Gracias {club} ❤️⚽ #hashtag#"],
+  "post_carismatico_derrota": ["Hoy no salio, pero esta gente merece todo. Volvemos mas fuertes 💪 #hashtag#", "Duele, pero juntos salimos. Gracias por el aliento siempre ❤️"],
+  "post_carismatico_empate": ["Un punto con sabor a poco, pero que ambiente!! Gracias {club} 🙌 #hashtag#", "Empate ante {rival}. La proxima es nuestra 😉"],
+  "post_carismatico_neutro": ["Lo mejor esta por venir 😎 #hashtag#", "Gracias por tanto carino, los leo a todos ❤️"],
+  "post_polemico_victoria": ["Algunos dudaban... aca estan las respuestas 😏 {marcador} #hashtag#", "Que hablen ahora 🤫 {goles_texto} y tres puntos.", "Los numeros hablan solos. Los que critican, tambien 😂"],
+  "post_polemico_derrota": ["Hoy no fuimos nosotros los que fallamos... 🤐", "Ya se lo que van a decir. No me importa. Volvemos.", "Mucha gente opinando sin saber. A seguir."],
+  "post_polemico_empate": ["Nos robaron dos puntos y lo saben 🙄", "Empate. Algunos deberian mirar mas futbol y menos redes."],
+  "post_polemico_neutro": ["Que sigan hablando 😏", "Ni los haters me sacan la sonrisa 😎 #hashtag#"],
+  "post_humilde_victoria": ["Gracias a Dios y a mis companeros. Victoria de todos 🙏 #hashtag#", "El merito es del equipo. Seguimos con los pies en la tierra.", "Feliz por el grupo y por la gente de {club}. Vamos!"],
+  "post_humilde_derrota": ["Hoy no se pudo. Pido disculpas a la gente, vamos a mejorar 🙏", "Golpe duro. Toca trabajar mas que nunca."],
+  "post_humilde_empate": ["Un punto. Seguimos trabajando con humildad 🙏", "Gracias por el apoyo de siempre. Vamos por mas."],
+  "post_humilde_neutro": ["Agradecido por cada dia 🙏", "Trabajo, humildad y familia. ⚽"],
+
+  "hashtag": ["#Vamos{club_tag_mayus}", "#SiempreJuntos", "#VamosPorMas", "#NuncaRendirse", "#PasionFutbol", "#OrgulloDeSerDe{club_tag_mayus}", "#Seguimos"]
+}

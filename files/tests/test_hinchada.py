@@ -74,17 +74,25 @@ class TestEventos(ayuda.PruebaConBase):
         self.assertLess(eventos[0].crecimiento, 0)
         self.assertEqual(estado["noticia"], 5)
 
-    def test_procesar_con_y_sin_ia(self):
-        perfil = PlayerProfile(id=1, nombre_jugador="Simon Canales")
-        comentarios = {0: [{"autor": "@redevil", "texto": "CINCO 🔥", "tono": "positivo"}]}
-        with mock.patch.object(hinchada, "comentar_eventos", return_value=comentarios):
-            actividad, _ = hinchada.procesar(perfil, self.c, [], None, 10_000, 50)
-        self.assertEqual(actividad[0].comentarios, comentarios[0])
+    def test_procesar_comenta_con_el_corpus(self):
+        perfil = PlayerProfile(nombre_jugador="Simon Canales", club_actual="Man Utd")
+        perfil.id = database.save_profile(perfil)
+        actividad, _ = hinchada.procesar(perfil, self.c, [], None, 10_000, 50)
         self.assertEqual(actividad[0].fecha_juego, "2027-01-16")
-        with mock.patch.object(hinchada, "comentar_eventos", side_effect=RuntimeError("sin cuota")):
-            actividad, _ = hinchada.procesar(perfil, self.c, [], None, 10_000, 50)
-        self.assertEqual(actividad[0].comentarios, [])  # sin comentarios, pero los seguidores se mueven
         self.assertGreater(actividad[0].crecimiento_seguidores, 0)
+        comentarios = actividad[0].comentarios
+        self.assertGreaterEqual(len(comentarios), 2)
+        self.assertEqual((comentarios[0]["tono"], comentarios[0]["autor"][:1]), ("positivo", "@"))
+        for c in comentarios:  # todo resuelto: ni variables ni simbolos sin expandir
+            self.assertNotRegex(c["texto"] + c["autor"], r"[{}]|#\w+#")  # (un #hashtag suelto si vale)
+
+    def test_los_comentarios_no_se_repiten_entre_partidos(self):
+        perfil = PlayerProfile(nombre_jugador="Simon Canales", club_actual="Man Utd")
+        perfil.id = database.save_profile(perfil)
+        evento = hinchada.EventoHinchada("partido", "2027-01-16", "Victoria", "Gano", 300)
+        textos = [c["texto"] for _ in range(4) for c in hinchada.comentar_eventos(perfil, [evento])[0]
+                  if c["tono"] == "positivo"]
+        self.assertEqual(len(textos), len(set(textos)), textos)
 
 
 class ConPartida(ayuda.PruebaDeInterfaz):

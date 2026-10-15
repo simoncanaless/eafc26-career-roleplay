@@ -1,7 +1,7 @@
 """
 Captura de pantalla de fin de partido, con dxcam (Windows, Desktop
 Duplication API: la misma que usan OBS o Discord para compartir pantalla;
-no toca el juego). Despues se manda a Gemini Vision (servicios/vision.py).
+no toca el juego). La usa el diagnostico para probar que se puede capturar.
 
 Se pide la imagen en BGRA, el formato nativo de Windows: asi dxcam no
 convierte colores y no necesita OpenCV (~110 MB menos en el paquete para

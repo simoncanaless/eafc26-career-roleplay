@@ -261,14 +261,13 @@ class TestPedidoYEntrega(ayuda.PruebaConBase):
         efecto = economia.efecto(articulo, PlayerProfile(personalidad="carismatico"), 10_000, 50, f.SUELDO, False)
         self.assertTrue(articulo.ostentoso)
         self.assertTrue(efecto.es_noticia)
-        perfil = PlayerProfile(id=1, nombre_jugador="Simon Canales")
-        with mock.patch.object(economia, "generar_json", side_effect=RuntimeError), \
-                mock.patch.object(hinchada, "comentar_eventos", return_value={}):
+        perfil = PlayerProfile(nombre_jugador="Simon Canales")
+        perfil.id = database.save_profile(perfil)
+        with mock.patch.object(hinchada, "comentar_eventos", return_value={}):
             noticia, actividad = economia.repercusion(perfil, articulo, efecto, "£", "2027-03-01")
-        self.assertEqual(
-            noticia.titular,
-            "Simon Canales recibio su nuevo Ferrari 296 GTB (rojo brillante; £245.000); a sus seguidores les encanta el show",
-        )
+        self.assertIn("ferrari 296 gtb", noticia.titular.lower())
+        self.assertIn("Simon Canales recibio su nuevo Ferrari 296 GTB (rojo brillante; £245.000)", noticia.cuerpo)
+        self.assertIn("a sus seguidores les encanta el show", noticia.cuerpo)
         self.assertEqual(actividad.tipo, "entrega")
 
 
@@ -281,7 +280,6 @@ class TestConcesionarioEnLaPagina(ayuda.PruebaDeInterfaz):
         mock.patch.object(partida_real, "identificar_jugadores", return_value={}).start()
         mock.patch.object(partida_real, "identificar_competiciones", return_value={}).start()
         mock.patch.object(hinchada, "comentar_eventos", return_value={}).start()
-        mock.patch.object(economia, "generar_json", return_value=economia.NoticiaCompra(titular="T", cuerpo="C")).start()
         mock.patch.object(eventos, "PROBABILIDAD_POR_SEMANA", 0).start()  # sin eventos inesperados: aca se prueba la plata
         mock.patch.object(amor, "PROBABILIDAD_POR_SEMANA", 0).start()  # ni la vida sentimental
         self.addCleanup(mock.patch.stopall)

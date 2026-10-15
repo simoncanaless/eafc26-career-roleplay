@@ -1,5 +1,5 @@
 """
-Piezas que comparten todas las pantallas: correr la IA en un hilo, dar
+Piezas que comparten todas las pantallas: correr algo lento (leer la partida) en un hilo, dar
 formato a numeros y textos, y envolver una pagina en un scroll.
 """
 
@@ -36,7 +36,7 @@ class _TareasVivas(QObject):
     """Guarda cada Tarea hasta que termina.
 
     Si la ventana que la lanzo se cierra antes (ej. cancelar el asistente
-    mientras Gemini escribe el backstory), nadie mas tiene una referencia
+    mientras se lee la partida), nadie mas tiene una referencia
     al QThread, Python lo destruye corriendo y Qt cierra la app entera
     ("QThread: Destroyed while thread is still running"). Con este
     registro el hilo termina tranquilo; la ventana ya cerrada simplemente

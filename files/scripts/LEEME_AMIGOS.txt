@@ -5,8 +5,13 @@ Una capa de roleplay para el Modo Carrera Jugador de EA FC 26: tu jugador
 con historia, entrevistas despues de cada partido (escritas o por voz),
 prensa que reacciona a tus rachas e Instagram con seguidores.
 
-NO MODIFICA EL JUEGO. Corre al lado, como Discord u OBS: lee la pantalla,
-no toca archivos ni memoria de FC 26. Podes seguir jugando online igual.
+NO MODIFICA EL JUEGO. Corre al lado, como Discord u OBS: lee tu partida
+guardada (solo la lee), no toca archivos ni memoria de FC 26. Podes seguir
+jugando online igual.
+
+NO USA IA NI PIDE CLAVES: los textos (preguntas, prensa, comentarios) los
+arma la app sola, al instante y sin internet. Solo la web de las marcas en
+Autos necesita conexion.
 
 
 INSTALAR
@@ -18,10 +23,7 @@ INSTALAR
    firmado: "Mas informacion" > "Ejecutar de todas formas". Algunos antivirus
    desconfian de los programas hechos en Python; si te lo borra, agregalo
    como excepcion (o pregunta).
-3. La primera vez te pide tu clave de Gemini (la IA que escribe las
-   entrevistas y la prensa). Es gratis: aistudio.google.com/apikey
-   > Create API key > copiala y pegala. Cada uno usa la suya.
-4. En AJUSTES > "Crear los dos iconos" te aparecen en el escritorio:
+3. En AJUSTES > "Crear los dos iconos" te aparecen en el escritorio:
      - EA FC 26              el juego normal
      - EA FC 26 + Roleplay   el mismo juego, y ademas esta app
 
@@ -38,9 +40,13 @@ JUGAR
 -----
 - Abri "EA FC 26 + Roleplay". La app se queda en la Sala de prensa.
 - Al terminar un partido (y que el juego guarde): "Cargar de mi partida",
-  "Generar entrevista" y responde, escribiendo o por voz. Si no jugas Carrera
-  Jugador: "Capturar pantalla" en la pantalla de estadisticas, o escribi los
-  numeros a mano.
+  "Generar entrevista" y responde, escribiendo o por voz. Tres periodistas
+  (uno tactico, una de la hinchada y uno picante) se acuerdan de tus partidos
+  y de lo que dijiste antes. Si no jugas Carrera Jugador, escribi los numeros
+  del partido a mano.
+- La voz usa el reconocimiento de voz de Windows en espanol (sin internet).
+  Si no lo tenes: Configuracion > Hora e idioma > Idioma y region > Espanol >
+  Opciones > Voz. Sin eso, escribi las respuestas.
 - En VIDA cobras tu sueldo real y te compras lo que quieras (o donas):
   la prensa y tus hinchas reaccionan. En Autos configuras y pedis tu auto
   (Ferrari, Porsche, Lamborghini...) y llega unos dias despues en el juego.
@@ -59,13 +65,13 @@ JUGAR
   conferencia previa (rival, tabla, rachas).
 - Ctrl+Shift+F12 abre la SALA FLOTANTE encima del juego: responde por voz
   y envia sin salir del partido. Tambien aparece sola al terminar un partido.
-- Para que la sala flotante y la captura se vean con el juego abierto, usa el
-  juego en "Ventana sin bordes" (Ajustes de pantalla del FC 26).
+- Para que la sala flotante se vea con el juego abierto, usa el juego en
+  "Ventana sin bordes" (Ajustes de pantalla del FC 26).
 
 
 TUS DATOS
 ---------
-Tu carrera, tu clave y tus ajustes quedan en %APPDATA%\EAFC26 Roleplay
+Tu carrera, tus ajustes y las fotos de tu garage quedan en %APPDATA%\EAFC26 Roleplay
 (no en esta carpeta): si te llega una version nueva, borras esta carpeta,
 descomprimis la nueva y no pierdes nada.
 

@@ -9,9 +9,11 @@ Sale en dist\\:
     dist\\EAFC Roleplay\\                 la carpeta (para probar)
     dist\\EAFC Roleplay (amigos).zip     lo que se comparte
 
-Lo que NO va en el paquete: tu .env (tu clave), tu career_roleplay.db ni
-tus ajustes. Cada amigo pone su clave al abrirlo y sus datos quedan en su
-%APPDATA%\\EAFC26 Roleplay (ver roleplay/config.py).
+Lo que NO va en el paquete: tu career_roleplay.db, tus ajustes ni las fotos
+de tu garage. La app no usa IA ni pide ninguna clave: cada amigo la abre y
+listo, y sus datos quedan en su %APPDATA%\\EAFC26 Roleplay (ver
+roleplay/config.py). Lo que SI va: roleplay/datos (los textos del motor
+narrativo y las bases de nombres).
 """
 
 import shutil
@@ -26,6 +28,7 @@ DIST = RAIZ / "dist"
 TRABAJO = RAIZ / "build"
 ZIP = DIST / f"{NOMBRE} (amigos).zip"
 ICONOS = RAIZ / "roleplay" / "ui" / "iconos"
+DATOS = RAIZ / "roleplay" / "datos"  # corpus del motor narrativo y bases de nombres (servicios/narrador.py)
 NO_VA = (".env", "career_roleplay.db", "ajustes.json", "errores.log")
 # El navegador del configurador (QtWebEngine) trae ~125 MB que no se usan:
 # los recursos de depuracion, las herramientas de desarrollador y los
@@ -43,6 +46,7 @@ def construir() -> Path:
         "--name", NOMBRE,
         "--icon", str(ICONOS / "app.ico"),
         "--add-data", f"{ICONOS}{';'}roleplay/ui/iconos",
+        "--add-data", f"{DATOS}{';'}roleplay/datos",
         # dxcam carga sus procesadores con import_module: el analisis no los ve
         "--collect-submodules", "dxcam",
         "--exclude-module", "cv2",
@@ -60,6 +64,9 @@ def construir() -> Path:
     colados = [ruta for ruta in carpeta.rglob("*") if ruta.name in NO_VA]
     if colados:
         raise SystemExit(f"Se colaron datos personales en el paquete: {colados}")
+    faltan = [r.name for r in DATOS.glob("*.json") if not (carpeta / "_internal" / "roleplay" / "datos" / r.name).exists()]
+    if faltan:  # sin los corpus, la app no tendria que decir
+        raise SystemExit(f"Faltan los datos del motor narrativo en el paquete: {faltan}")
     return carpeta
 
 

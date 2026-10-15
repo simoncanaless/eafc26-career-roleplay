@@ -1,7 +1,7 @@
 """
 El mundo de la carrera a partir de los registros del guardado: equipos,
 competiciones, partidos, quien jugo y marco en cada uno, tablas y
-estadisticas. Todo es calculo deterministico; la IA solo pone nombres a
+estadisticas. Todo es calculo deterministico; los nombres que faltan salen de la base local de
 los jugadores que la partida no trae (ver servicios/identificar.py).
 """
 
@@ -139,7 +139,7 @@ class FilaPosiciones:
 class Competicion:
     id: int
     codigo: str
-    nombre: Optional[str]  # None si la partida no lo trae (copas): lo pone la IA
+    nombre: Optional[str]  # None si la partida no lo trae (copas): sale de la base local
     es_liga: bool
     continental: bool
 
@@ -284,7 +284,7 @@ class Carrera:
         return self.nombres_editados.get(jugador)
 
     def ficha(self, jugador: int) -> dict:
-        """Lo que la partida sabe de un jugador, para que la IA lo reconozca."""
+        """Lo que la partida sabe de un jugador, para reconocerlo (base local de nombres)."""
         ficha = {"id": jugador}
         club = self.club_de(jugador)
         posicion = next((p for e, p in self.vinculos.get(jugador, []) if e == club), None)

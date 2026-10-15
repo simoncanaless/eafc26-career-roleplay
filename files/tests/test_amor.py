@@ -137,7 +137,6 @@ class TestTarjetaEnVida(ayuda.PruebaDeInterfaz):
         mock.patch.object(partida_real, "identificar_jugadores", return_value={}).start()
         mock.patch.object(partida_real, "identificar_competiciones", return_value={}).start()
         mock.patch.object(hinchada, "comentar_eventos", return_value={}).start()
-        mock.patch.object(eventos, "generar_json", return_value=eventos.NoticiaEvento(titular="Anillo", cuerpo="C")).start()
         mock.patch.object(eventos, "PROBABILIDAD_POR_SEMANA", 0).start()
         mock.patch.object(amor, "PROBABILIDAD_POR_SEMANA", 0).start()
         self.addCleanup(mock.patch.stopall)

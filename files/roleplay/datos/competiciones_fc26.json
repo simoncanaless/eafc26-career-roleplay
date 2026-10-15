@@ -1,0 +1,17 @@
+{
+ "_que_es": "Nombres de las copas que la partida de FC 26 no nombra, por id de EA. Son los mismos en todas las partidas. Revisadas contra la partida el 2026-10-15 (851 no era Ligue 1 sino la Copa de Francia).",
+ "competiciones": {
+  "106": "UEFA Nations League",
+  "122": "UEFA Champions League",
+  "221": "UEFA Europa League",
+  "300": "UEFA Europa Conference League",
+  "374": "UEFA Women's Champions League",
+  "501": "FA Cup",
+  "617": "Carabao Cup",
+  "851": "Copa de Francia",
+  "937": "DFB-Pokal",
+  "1322": "Copa del Rey",
+  "1862": "Copa Mundial de la FIFA",
+  "1865": "Copa Mundial Femenina de la FIFA"
+ }
+}

@@ -2,7 +2,7 @@
 Metas de temporada: el usuario se propone algo ("30 goles", "terminar entre
 los 4 primeros") y la app sigue el avance con los datos reales de la
 partida. Cumplirla o no es noticia y mueve la reputacion; la prensa y las
-entrevistas las conocen (texto_para_prompt).
+entrevistas las conocen (servicios/cruce.py: la meta que esta cerca).
 
 Solo metas que la partida permite medir: contar goles o asistencias y la
 posicion final del club en la liga.
@@ -105,31 +105,3 @@ def evaluar_metas(carrera: Carrera, metas: list[dict]) -> tuple[list[dict], dict
             hitos.append({"tipo": "meta_fallida", "valor": texto_meta(meta)})
         cambios[meta["id"]] = cambio
     return hitos, cambios
-
-
-def texto_para_prompt(carrera: Optional[Carrera], metas: list[dict]) -> str:
-    """Las metas de esta temporada para las preguntas y las noticias:
-    "Metas que se propuso: Marcar 30 goles en la temporada (lleva 22)"."""
-    if not metas:
-        return ""
-    temporada = temporada_de(carrera.fecha_actual()) if carrera and carrera.fecha_actual() else None
-    lineas = []
-    for meta in metas:
-        if temporada and meta["temporada"] != temporada:
-            continue
-        if meta.get("estado") == "cumplida":
-            detalle = "ya la cumplio"
-        elif meta.get("estado") == "fallida":
-            detalle = "no la cumplio"
-        else:
-            actual = progreso(carrera, meta) if carrera else meta.get("actual")
-            if actual is None:
-                detalle = "en curso"
-            elif meta["tipo"] == "top_liga":
-                detalle = f"su club va {actual}°"
-            else:
-                detalle = f"lleva {actual}"
-        lineas.append(f"- {texto_meta(meta)} ({detalle}).")
-    if not lineas:
-        return ""
-    return "Metas que el jugador se propuso publicamente esta temporada:\n" + "\n".join(lineas)

@@ -19,7 +19,7 @@ historia lo pide aparece una decision: hacer oficial el romance con la
 famosa o negarlo, proponer casamiento (con anillo: cuesta), la boda (a lo
 grande o intima) y que hacer en una crisis (darle prioridad o terminar).
 Lo que provoca (relacion, seguidores, reputacion, plata) lo decide el
-codigo; la IA solo escribe la noticia y los comentarios (eventos.contar).
+codigo; la noticia y los comentarios, el motor narrativo (eventos.contar).
 
 Como los eventos inesperados, se sortea una vez por semana del juego con
 una semilla propia (jugador + semana), a lo sumo una cosa por revision.

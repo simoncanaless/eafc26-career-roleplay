@@ -1,6 +1,7 @@
 import io
 import unittest
 import wave
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -90,12 +91,48 @@ class TestGrabador(unittest.TestCase):
             microfonos, [audio.Microfono(None, "Predeterminado de Windows"), audio.Microfono(1, "HyperX (MME)")]
         )
 
-    def test_transcribir_manda_el_audio_y_la_pregunta(self):
-        with mock.patch.object(audio, "generar_json", return_value=audio.Transcripcion(texto="  Hola  ")) as llamada:
+    def _reconocedor(self, salida=b"", codigo=0, error=b""):
+        """subprocess.run falso: anota el WAV que le llego y responde como PowerShell."""
+        vistos = {}
+
+        def correr(comando, **opciones):
+            ruta = Path(opciones["env"]["EAFC_WAV"])
+            vistos.update(comando=comando, wav=ruta.read_bytes(), ruta=ruta)
+            return mock.Mock(returncode=codigo, stdout=salida, stderr=error)
+
+        return correr, vistos
+
+    def test_transcribir_usa_el_reconocedor_de_windows(self):
+        correr, vistos = self._reconocedor("  estoy muy feliz  ".encode("utf-8"))
+        with mock.patch.object(audio.subprocess, "run", correr):
             texto = audio.transcribir(b"RIFF", pregunta="Que sentiste?")
-        self.assertEqual(texto, "Hola")
-        self.assertEqual(llamada.call_args.kwargs["adjunto"], (b"RIFF", "audio/wav"))
-        self.assertIn("Que sentiste?", llamada.call_args.args[0])
+        self.assertEqual(texto, "Estoy muy feliz")
+        self.assertEqual(vistos["wav"], b"RIFF")
+        self.assertEqual(vistos["comando"][0], "powershell")
+        self.assertIn("System.Speech", vistos["comando"][-1])  # offline: nada sale del PC
+        self.assertFalse(vistos["ruta"].exists())  # el audio temporal no queda en disco
+
+    def test_sin_reconocedor_en_espanol_se_explica(self):
+        correr, _ = self._reconocedor(codigo=3)
+        with mock.patch.object(audio.subprocess, "run", correr):
+            with self.assertRaises(RuntimeError) as ctx:
+                audio.transcribir(b"RIFF")
+        self.assertEqual(str(ctx.exception), audio.SIN_RECONOCEDOR)
+
+    def test_si_falla_powershell_se_avisa(self):
+        correr, _ = self._reconocedor(codigo=1, error=b"linea 1\nAlgo se rompio")
+        with mock.patch.object(audio.subprocess, "run", correr):
+            with self.assertRaises(RuntimeError) as ctx:
+                audio.transcribir(b"RIFF")
+        self.assertIn("Algo se rompio", str(ctx.exception))
+        with mock.patch.object(audio.subprocess, "run", side_effect=audio.subprocess.TimeoutExpired("powershell", 1)):
+            with self.assertRaises(RuntimeError):
+                audio.transcribir(b"RIFF")
+
+    def test_sin_voz_entendida_queda_vacio(self):
+        correr, _ = self._reconocedor(b"")
+        with mock.patch.object(audio.subprocess, "run", correr):
+            self.assertEqual(audio.transcribir(b"RIFF"), "")
 
 
 class TestVozEnLaEntrevista(ayuda.PruebaDeInterfaz):

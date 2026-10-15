@@ -33,7 +33,7 @@ class TestVistaTemporada(ayuda.PruebaConBase):
     def setUp(self):
         super().setUp()
         self.c = construir(f.construir_bytes(), "falsa")
-        self.ia_jugadores = mock.patch.object(
+        self.base_de_nombres = mock.patch.object(
             partida_real, "identificar_jugadores", return_value={f.HAALAND: ("Erling Haaland", True)}
         ).start()
         mock.patch.object(
@@ -99,12 +99,12 @@ class TestVistaTemporada(ayuda.PruebaConBase):
         self.assertEqual((otra.resultados, otra.proximos), ([], []))
         self.assertEqual([(p.local, p.marcador) for p in otra.ultima_fecha], [("SSC Napoli", "2-0")])
 
-    def test_sin_ia_se_ve_igual(self):
-        self.ia_jugadores.side_effect = RuntimeError("sin cuota")
+    def test_sin_nombre_se_describe_y_no_se_inventa(self):
+        self.base_de_nombres.return_value = {}
         v = vista_temporada(self.c)
         self.assertEqual(len(v.tabla), 5)
         self.assertIn("el delantero centro del Manchester City", [g.nombre for g in v.goleadores])
-        self.assertEqual(database.get_nombres_conocidos("jugador", {f.HAALAND}), {})  # se pregunta la proxima
+        self.assertEqual(database.get_nombres_conocidos("jugador", {f.HAALAND}), {})  # leer no guarda nada
 
 
 class TestPaginaTemporada(ayuda.PruebaDeInterfaz):
@@ -196,7 +196,7 @@ class TestPaginaTemporada(ayuda.PruebaDeInterfaz):
         from roleplay.ui import temporada as ui
 
         c = con_otra_liga(construir(f.construir_bytes()))
-        with mock.patch.object(ui, "leer_temporada", lambda comp=None: vista_temporada(c, comp, preguntar=False)):
+        with mock.patch.object(ui, "leer_temporada", lambda comp=None: vista_temporada(c, comp)):
             self.pagina.actualizar()
             ayuda.esperar_tareas()
             combo = self.pagina.otras_combo

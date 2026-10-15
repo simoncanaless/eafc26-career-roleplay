@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS partido_entrevista (
 );
 
 -- Nombres que la partida de FC 26 no trae (jugadores, copas), reconocidos
--- una vez por la IA y guardados para siempre. nombre '' = no lo reconocio.
+-- por la IA en versiones viejas. YA NO SE LEE: 8 de 20 estaban mal (los nombres van en roleplay/datos).
 CREATE TABLE IF NOT EXISTS nombre_conocido (
     tipo TEXT NOT NULL,      -- 'jugador' | 'competicion'
     id INTEGER NOT NULL,     -- id de EA
@@ -395,6 +395,18 @@ def set_estado_eventos(player_id: int, estado_eventos: dict) -> None:
         estado["eventos"] = estado_eventos
 
 
+def get_narrador_usados(player_id: int) -> dict:
+    """La memoria anti-repeticion del motor narrativo (servicios/narrador.py):
+    estado_json.narrador_usados = {"bloques": {simbolo: [indices]}, "textos": [huellas]}."""
+    leido = _leer_estado(player_id)
+    return dict(leido[0].get("narrador_usados", {})) if leido else {}
+
+
+def set_narrador_usados(player_id: int, usados: dict) -> None:
+    with _editar_estado(player_id) as (estado, _):
+        estado["narrador_usados"] = usados
+
+
 def get_estado_amor(player_id: int) -> dict:
     """La vida sentimental (servicios/amor.py): estado_json.amor."""
     leido = _leer_estado(player_id)
@@ -491,7 +503,7 @@ def set_estado_hinchada(player_id: int, estado_hinchada: dict) -> None:
 
 def get_nombres_conocidos(tipo: str, ids) -> dict[int, tuple[str, bool]]:
     """{id: (nombre, seguro)} de los que ya se preguntaron (incluye los que
-    la IA no reconocio, con nombre '', para no volver a preguntar)."""
+    no se conocen, con nombre '')."""
     ids = list(ids)
     if not ids:
         return {}

@@ -2,9 +2,14 @@
 
 App de escritorio (Python + PySide6) que agrega una capa de roleplay narrativo al
 Modo Carrera Jugador de EAFC 26 **sin modificar el juego** (corre al lado, como
-Discord/OBS: lee la pantalla, nunca archivos ni memoria del juego): creacion de personaje con backstory, entrevistas
+Discord/OBS: lee la partida guardada, nunca escribe archivos ni toca la memoria del juego): creacion de personaje con backstory, entrevistas
 post-partido (escritas o por voz), prensa espontanea, Instagram ficticio y reputacion
 que evoluciona. Proyecto personal de Simon (estudiante de Ing. Informatica, Chile).
+
+**SIN IA desde el 2026-10-15** (Pilar 1 de la evolucion pedida por Simon): todos los
+textos los arma un motor narrativo local (`servicios/narrador.py` + `roleplay/datos/`),
+offline, al instante y sin clave. `roleplay/gemini.py`, `servicios/contexto.py`, la clave
+(`DialogoClave`) y la lectura de la captura con IA ya no existen. No volver a meter IA.
 Corre en Windows, desde `C:\Users\canal\Desktop\Proyecto Fifa\files`, con un venv en
 `.venv` (Python 3.11.9). Repo git en `Proyecto Fifa\` (rama `main`; identidad
 configurada solo en este repo).
@@ -28,11 +33,11 @@ configurada solo en este repo).
 (la app con `--jugar`: abre el MISMO juego por su plataforma y la app). El FC 26 de Simon
 esta en Steam, biblioteca `F:\SteamLibrary` (EA app instalada, la usa Steam).
 
-**Paquete para amigos**: `dist\EAFC Roleplay (amigos).zip` (~71 MB; carpeta 170 MB) con
+**Paquete para amigos**: `dist\EAFC Roleplay (amigos).zip` (~195 MB, casi todo Chromium) con
 `EAFC Roleplay.exe` (PyInstaller onedir, no necesita Python) y `LEEME.txt`. Sin datos
-personales (el script lo verifica). Empaquetada, los datos van a
-`%APPDATA%\EAFC26 Roleplay` y la primera vez pide la clave de Gemini de CADA amigo
-(nunca repartir la de Simon). `build/` y `dist/` estan en `.gitignore`.
+personales y CON `roleplay/datos` (los corpus; el script verifica las dos cosas). Empaquetada,
+los datos van a `%APPDATA%\EAFC26 Roleplay`; no pide ninguna clave. `build/` y `dist/` estan
+en `.gitignore`.
 
 Doble click: `files\EAFC Roleplay.exe` o el acceso "EAFC 26 Roleplay" del escritorio.
 El .exe es un lanzador de 39 KB (`scripts/lanzador/Lanzador.cs`, compilado con el
@@ -40,8 +45,8 @@ El .exe es un lanzador de 39 KB (`scripts/lanzador/Lanzador.cs`, compilado con e
 corre siempre el codigo actual, no hay que recompilarlo al cambiar Python. Esta en
 `.gitignore`; se regenera con `crear_acceso_directo.py` (tambien rehace `app.ico`).
 
-Requiere un `.env` en `files/` con `GEMINI_API_KEY=...` (o `GEMINI_API_KEYS=k1,k2`).
-Nunca imprimir, loguear ni pegar la key en ningun lado.
+No requiere `.env` ni clave. Si queda un `.env` viejo de cuando habia Gemini, se ignora;
+igual nunca imprimir, loguear ni pegar su contenido.
 
 ## Arquitectura
 
@@ -51,58 +56,61 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 | Archivo | Rol |
 |---|---|
 | `app.py` | Unico entry point; argumento opcional para abrir un modulo suelto. Icono de ventana, AppUserModelID (barra de tareas) y `sys.excepthook` -> `errores.log` + QMessageBox (con pythonw no hay consola) |
-| `roleplay/config.py` | Rutas. Recursos desde la carpeta del codigo; DATOS (`DB_PATH`, `.env`, `ajustes.json`, `errores.log`) en `CARPETA_DATOS`: raiz del proyecto corriendo desde codigo, `%APPDATA%\EAFC26 Roleplay` empaquetada, o `EAFC_ROLEPLAY_DATOS` si esta en el entorno |
-| `roleplay/ajustes.py` | `ajustes.json` de cada persona (`juego` elegido a mano, `sin_ia`); leer nunca falla |
-| `roleplay/diagnostico.py` | `revisar()`: modo, clave, base, juego, microfonos, una captura de prueba (solo el tamano) |
+| `roleplay/config.py` | Rutas. Recursos desde la carpeta del codigo; DATOS (`DB_PATH`, `ajustes.json`, `errores.log`, `garage/`, `navegador/`) en `CARPETA_DATOS`: raiz del proyecto corriendo desde codigo, `%APPDATA%\EAFC26 Roleplay` empaquetada, o `EAFC_ROLEPLAY_DATOS` si esta en el entorno |
+| `roleplay/ajustes.py` | `ajustes.json` de cada persona (`juego` elegido a mano, `en_vivo`...); leer nunca falla |
+| `roleplay/diagnostico.py` | `revisar()`: modo, motor narrativo (cuantos archivos en `roleplay/datos`), base, juego, microfonos, una captura de prueba (solo el tamano), navegador |
+| `roleplay/datos/` | **Los datos del motor narrativo** (JSON, sin tildes; los emojis si van): `corpus_entrevista.json` (preguntas de los 3 periodistas, reacciones, previa), `corpus_prensa.json` (titulares/cuerpos por hito, cruces `x_*`, mundo, ambiente con clubes ficticios `#club_ficticio#`), `corpus_redes.json` (comentarios por tipo y tono, autores, posts sugeridos por personalidad), `corpus_vida.json` (backstory y ganchos), `lexico.json` (5 ejes con pesos por palabra/frase, negaciones, promesas), `jugadores_fc26.json` / `competiciones_fc26.json` (nombres por id de EA CON fecha de nacimiento: si la de la partida no calza, es otra persona y queda sin nombre; se suman con `scripts/nombres_faltantes.py --agregar`). Claves que empiezan con `_` son comentarios |
+| `roleplay/servicios/narrador.py` | **Motor de gramaticas**: `Narrador(*corpus, usados=, dado=, ricas=)`: `decir(simbolo, **datos)` (texto nuevo, anotado), `elegir()` (pieza sin anotar), `puede()`, `tiene()`. Alternativas con `{variable}` (solo entran si estan todos los datos) y `#simbolo#` (recursivo). Anti-repeticion: por simbolo los ultimos bloques (min(40, n-1): siempre queda uno libre) + huellas de los ultimos 40 textos; si sale uno reciente se rearma sorteando entre TODAS las piezas (con la rueda, dos piezas iguales rotan en fila). `narrador(player_id, *corpus)` (context manager) carga/guarda `estado_json.narrador_usados`; sin perfil (o borrado), sin memoria. `unir()`/`limpiar()` (espacios, mayuscula tras punto) |
+| `roleplay/servicios/lexico.py` | **Evaluador lexico**: `puntuar(texto)` (5 ejes: humildad_equipo, amor_hinchada, ego_confianza, excusa_polemica, ambicion_foco; tildes y mayusculas no importan; una negacion en las 2 palabras previas invierte el peso), `leer(respuestas) -> Lectura` (eje dominante o `neutro` bajo 1.5, intensidad, `cita` = la oracion mas jugosa recortada a 150, `promesa`, palabras) |
+| `roleplay/servicios/cruce.py` | **Estado cruzado**: `cruces(player_id, rival=, rating=, carrera=)` -> lista de `Cruce(tipo, peso, datos)` del mas jugoso al menos: compra cara (>= 150.000, ultimos 45 dias; con rating < 6.2 `compra_mal` con modelo y precio), pareja real/famosa/rumor/crisis, meta cerca (con la partida, lo que lleva HOY) o complicada, ex club (traidor/idolo/mala salida), hinchada en contra/idolo, evento reciente (21 dias). Solo lee. Importa `metas` adentro de la funcion (ciclo metas -> partida_real -> prensa -> cruce) |
 | `roleplay/models.py` | Dataclasses `PlayerProfile`, `MatchInterviewRecord`, `NoticiaPrensa`, `InstagramPost` + catalogos del quiz |
 | `roleplay/database.py` | SQLite. Mapeo GENERICO dataclass <-> fila (`TABLAS`, `_insertar`, `_desde_fila`); `_editar_estado` para leer-modificar-escribir `estado_json` en una transaccion |
-| `roleplay/gemini.py` | **Unico punto de llamada a Gemini**: `generar_json(prompt, Esquema, que_hacer, adjunto=(bytes, mime))` sobre `generate_content_with_fallback` |
-| `roleplay/servicios/contexto.py` | `ficha_jugador(perfil, backstory=, ganchos=)`: como se describe el jugador en TODOS los prompts |
-| `roleplay/servicios/backstory.py` | Backstory + ganchos narrativos |
-| `roleplay/servicios/entrevista.py` | Preguntas y evaluacion de respuestas (reaccion + delta de reputacion, tope ±15) |
-| `roleplay/servicios/prensa.py` | Hitos deterministas (rachas, goles, rating ultimos 5) + noticias; `calcular_estadisticas_acumuladas` tambien alimenta la carta del Resumen |
-| `roleplay/servicios/instagram.py` | Comentarios, likes, seguidores de un post |
-| `roleplay/servicios/vision.py` | `MatchStats` + lectura de la captura con Gemini Vision |
-| `roleplay/servicios/captura.py` | Captura con dxcam en BGRA + PNG con Qt: **sin OpenCV** (se saco el 2026-10-14) |
+| `roleplay/servicios/backstory.py` | `generar_backstory(perfil, dado=)`: 3 parrafos (origen, personalidad+motivacion, vida personal+anecdota+cierre) con `ricas=True` (prefiere las alternativas que usan mas datos del quiz) + 3-4 ganchos distintos |
+| `roleplay/servicios/entrevista.py` | **Tres periodistas** (`PERIODISTAS`): Ignacio Ferrada (Pizarra Tactica: numeros, tabla, racha), Valentina Aros (Radio Tribuna: vestuario, hinchada, metas, ex club) y Rocco Salinas (El Picante: compras, pareja, eventos, contradicciones). `generar_entrevista(perfil, stats)`: cada uno elige la pregunta de mas prioridad que el corpus pueda escribir; `_memoria()` mira las ultimas 10 entrevistas (sequia rota >= 3, racha, caida de nota, mismo rival antes, contradiccion: ego la fecha pasada y hoy derrota) y `_tabla()` la tabla antes/despues del partido. `evaluar_respuestas()`: `lexico.leer` -> delta (BASE por eje x resultado, intensidad, personalidad, rating, respuestas secas, promesa; tope ±15), `delta_carino` (lo aplica la sala a `clubes.sumar_carino`), cita y gancho si prometio algo. `reaccionar()` = apertura + nucleo + cruce + cierre |
+| `roleplay/servicios/prensa.py` | Hitos deterministas (rachas, goles, rating ultimos 5) + noticias del motor: `noticia_de_hitos` (apertura + un nucleo por hito + un cruce `x_*` + cierre), `noticia_de_entrevista` (la cita entre «», una vez por entrevista: `estado_prensa.entrevista_reportada`), `noticia_del_mundo(hecho)` (dict de partida_real o texto suelto), `noticia_de_ambiente`. `revisar_prensa` no falla ni espera. `calcular_estadisticas_acumuladas` tambien alimenta la carta del Resumen |
+| `roleplay/servicios/instagram.py` | `generar_reaccion_post(perfil, texto, rep, seg)`: lee el post con `lexico` (humilde/hinchada suma; ego/polemica junta de todo y con reputacion < 40 resta), comentarios del corpus y likes >= 0; `sugerir_post(perfil, ultimo_partido)` por personalidad y resultado. `ComentarioIA`/`InstagramReaccionIA` quedaron con el nombre viejo |
+| `roleplay/servicios/vision.py` | Solo `MatchStats`. `extraer_stats_partido` lanza RuntimeError: leer la captura de fin de partido necesitaba IA y no hay forma confiable sin ella (quedan "Cargar de mi partida" y escribir las stats a mano) |
+| `roleplay/servicios/captura.py` | Captura con dxcam en BGRA + PNG con Qt: **sin OpenCV** (se saco el 2026-10-14). Hoy solo la usa el diagnostico |
 | `roleplay/servicios/juego.py` | Encontrar FC 26 (elegido a mano > Steam > EA app > Epic; registro inyectable) y abrirlo con `os.startfile` por su plataforma |
 | `roleplay/servicios/accesos.py` | Los dos iconos del escritorio (.url para URLs, .lnk via WScript.Shell por PowerShell) |
-| `roleplay/servicios/audio.py` | Voz: `listar_microfonos` (solo la API de audio por defecto), `GrabadorMicrofono` (WAV mono 16 kHz, tope 120 s, `crear_stream` inyectable), `transcribir(wav, pregunta)` |
+| `roleplay/servicios/audio.py` | Voz: `listar_microfonos` (solo la API de audio por defecto), `GrabadorMicrofono` (WAV mono 16 kHz, tope 120 s, `crear_stream` inyectable), `transcribir(wav, pregunta)`: **offline** con System.Speech de Windows (`GUION_RECONOCER` por PowerShell, `DictationGrammar` sobre el WAV temporal que se pasa en `EAFC_WAV`, `CREATE_NO_WINDOW`, se borra al terminar). Codigo 3 = no hay reconocedor en espanol (`SIN_RECONOCEDOR` explica como agregarlo). En el PC de Simon esta es-ES "Microsoft Speech Recognizer 8.0" |
 | `roleplay/partida/formato.py` | Bytes del guardado de FC 26 -> registros (bases de datos de EA, secciones `teams`/`stagadv`/`stndgs`/`compavg`). Valida todo; si algo no calza, `FormatoDesconocido` |
 | `roleplay/partida/carrera.py` | `construir(datos) -> Carrera`: equipos, competiciones, partidos, `actuaciones_en(partido)` (quien jugo/marco, de los ultimos 5 partidos de cada jugador), `tabla()` calculada con los resultados, `goleadores()`, `ficha(jugador)`. Los codigos de tablas/campos de FC 26 estan arriba del archivo |
 | `roleplay/partida/lector.py` | `carrera_actual()`: el `CmPlr*` mas reciente (o el elegido en Ajustes) de `%LOCALAPPDATA%\EA SPORTS FC 26\settings`, con cache por fecha/tamano. Solo lee. `EAFC_FC26_GUARDADOS` cambia la carpeta |
-| `roleplay/servicios/partida_real.py` | Lo que la app hace con la partida: `ultimo_partido()` (stats del ultimo partido; asistencias/tarjetas/figura por diferencia con la lectura anterior, `estado_json.partida`), `contexto_temporada()` (para los prompts), `hechos_destacados()` (hat-trick > goleada > choque de punta, elegidos por codigo), `revisar_prensa_con_partida()`, `resumen_temporada()`, `leer_para_entrevista()` |
-| `roleplay/servicios/identificar.py` | La IA pone nombre a jugadores (por su ficha: club, posicion, seleccion, nacimiento) y copas (por sus equipos). Sin seguridad -> nombre vacio. Cache en la tabla `nombre_conocido` |
+| `roleplay/servicios/partida_real.py` | Lo que la app hace con la partida: `ultimo_partido()` (stats del ultimo partido; asistencias/tarjetas/figura por diferencia con la lectura anterior, `estado_json.partida`), `hechos_destacados()` (hat-trick > goleada > choque de punta, elegidos por codigo) y `hecho_para_prensa()`/`premio_para_prensa()`/`mercado_para_prensa()` (el hecho como dict con sus datos sueltos para el titular), `revisar_prensa_con_partida()`, `resumen_temporada()`, `leer_para_entrevista()`. `nombres_de_jugadores()`: editados en la partida > base local; el resto se describe. La tabla `nombre_conocido` (lo que adivino la IA en versiones viejas) ya NO se lee |
+| `roleplay/servicios/identificar.py` | Nombres desde `roleplay/datos/jugadores_fc26.json` y `competiciones_fc26.json` por id de EA. Si la base trae el nacimiento y no calza con la ficha, nombre vacio (otra persona). **Nunca inventar nombres** |
 | `roleplay/ui/vigilante.py` | **Modo en vivo**: `VigilantePartida` mira el guardado cada 5 s (sin abrirlo); si cambio y se asento, lo lee en un hilo. `partido_nuevo` si el club del usuario jugo un partido que no se aviso (`estado_json.partida.avisado`; la primera lectura solo marca); si no, `dia_nuevo` cuando avanzo la fecha del juego (`partida.dia_visto`: jugaron otros). Ajustes `en_vivo.vigilar` / `en_vivo.preguntas_solas` |
 | `roleplay/ui/overlay.py` | `SalaFlotante`: panel semitransparente siempre encima (Tool + Frameless + StaysOnTop, `WA_ShowWithoutActivating`: no le quita el foco al juego). Es un ESPEJO de la sala de prensa: lee su estado al recibir `InterviewWindow.cambio` y sus botones llaman a los de la sala (una sola entrevista) |
 | `roleplay/ui/atajo.py` | `AtajoGlobal`: Ctrl+Shift+F12 con `RegisterHotKey` (ctypes) + `QAbstractNativeEventFilter`. Ojo: el tipo de evento llega como QByteArray (comparar con `bytes(tipo)`). Si la combinacion esta tomada, `registrar()` da False y la app sigue |
 | `roleplay/ui/comun.py` | `ejecutar_en_hilo`, `esc` (escape HTML), `miles`, `fecha_corta`, `con_scroll` (pagina transparente) |
 | `roleplay/ui/estilos.py` | Tema oscuro estilo EA FC: colores (unico lugar), `fuente_titulo()`, QSS, paleta forzada |
 | `roleplay/ui/componentes.py` | `icono()` (SVG propios coloreados), `titulo_pagina`, `titulo_seccion`, `Tarjeta`, `Mosaico`, `chip`/`chip_tono`, `chip_alternable`, `fila` (None = estirable), `CartaJugador` (carta FUT pintada; nivel por reputacion: bronce <45, plata, oro >=70, elite >=85), `Avatar`, `FondoEstadio`, `agregar_noticia`, `limpiar_layout` |
-| `roleplay/servicios/economia.py` | Vida y patrimonio: el sueldo real (`Carrera.sueldo_usuario`, campo `cmGX` de `mPrV`) se acredita con los dias del juego (`acreditar()`, neto 55%; la primera vez, lo cobrado desde el 1 de julio), catalogo sin marcas (casas, autos, relojes, moda, yate, jet) y donaciones; `efecto()` decide seguidores, reputacion, si es noticia y el tono (donar suma; presumir en mala racha resta, mas si es humilde/reservado); `repercusion()` (hilo) escribe la noticia y los comentarios, con respaldo sin IA. Todo en `estado_json.economia` |
+| `roleplay/servicios/economia.py` | Vida y patrimonio: el sueldo real (`Carrera.sueldo_usuario`, campo `cmGX` de `mPrV`) se acredita con los dias del juego (`acreditar()`, neto 55%; la primera vez, lo cobrado desde el 1 de julio), catalogo sin marcas (casas, autos, relojes, moda, yate, jet) y donaciones; `efecto()` decide seguidores, reputacion, si es noticia y el tono (donar suma; presumir en mala racha resta, mas si es humilde/reservado); `repercusion()` (hilo) arma la noticia y los comentarios con `eventos.contar`. Todo en `estado_json.economia` |
 | `roleplay/servicios/autos.py` | El concesionario (`Modelo.configurador`: la web oficial de cada modelo, sacada de los botones "Configure" de cada marca el 2026-10-15; SF90 y Roma ya no se venden y van al configurador general de Ferrari, Lamborghini y Rolls-Royce eligen el modelo adentro, Bugatti no tiene configurador y va la pagina del Tourbillon): modelos de marcas REALES (solo el nombre como texto; decision de Simon: la app es entre amigos; nunca logos ni modelos 3D de las marcas), precio base aproximado, opciones con recargo (`precio()`), `describir()` y `Configuracion` (se guarda como dict en el pedido) |
 | `roleplay/ui/configurador.py` | `Configurador` (QDialog): a la IZQUIERDA la web oficial de la marca adentro de la app (`crear_navegador` -> `ui/navegador.py`), a la DERECHA el panel del juego (pintura, llantas, pinzas, franjas, interior, extras, patente, precio y PEDIR). La foto del garage: "Sacar foto" (con `RecortarFoto` para quedarse con el auto), "Pegar imagen" del portapapeles, o se saca sola al pedir; `guardar_foto` la deja en `config.CARPETA_GARAGE` (<id del pedido>.jpg, 960 de ancho) y `miniatura()` la muestra en Vida (o el dibujo si no hay foto). Sin navegador (sin pantalla, o sin QtWebEngine) queda el dibujo: `svg_auto(config)` con `SILUETAS`, 14 carrocerias **calcadas a mano de fotos reales de perfil** (el archivo de origen va en un comentario arriba de cada una). Solo el contorno: nunca logos ni modelos 3D de las marcas ni de GTA. **QtSvg no soporta clip-path**: franjas y fibra van como cortes del degradado (`_pintura`), y los parantes se cortan contra la ventana (`_ventana_en`). Con la pantalla al 300%, las imagenes se escalan con `_nitida` (si no, se ven a un tercio) |
 | `roleplay/ui/navegador.py` | El navegador integrado (QtWebEngine): `Navegador(url)` con atras, recargar y "abrir en tu navegador"; perfil persistente en `<datos>/navegador` (el aviso de cookies se contesta una vez); los enlaces a otra ventana se abren en la misma; `foto()` devuelve lo que se ve en pixeles de verdad. **Se importa recien al abrir el configurador** (TestArranque vigila que abrir la app no cargue QtWebEngine) y `app.py` pone `AA_ShareOpenGLContexts` antes de crear la QApplication. **No se tocan encabezados de seguridad**: la web es la pagina principal (no un iframe), asi que X-Frame-Options/frame-ancestors no aplican. Sin pantalla (offscreen, las pruebas) `disponible()` es False: Chromium no dibuja y la foto saldria en blanco (tampoco con la ventana oculta: para probarlo de verdad, una ventana visible fuera de la pantalla) |
 | `scripts/trazar_silueta.py` + `docs/siluetas.md` | Como se calca un auto nuevo: buscar la foto de perfil en Commons, medirla en el navegador (`medirAuto` automatico o la rejilla `ver()` a mano), y `trazar_silueta.py medidas.json --puntos --insertar <modelo> --fuente "..."` la pega en `SILUETAS`. Endereza la perspectiva (`perspectiva`, `ejes_sobre_radio`) y achica la escala si el auto es mas alto que el dibujo (G 63). Las medidas de cada auto quedan en `docs/siluetas/*.json` |
-| `roleplay/servicios/amor.py` | Vida sentimental (`estado_json.amor`). Arranca del personaje (`estado_relacion`, `nombre_pareja`): novia real -> en pareja; celebridad o soltero -> soltero (la famosa es mas probable con "celebridad"). Sorteo semanal como los eventos (25%, semilla propia `amor:jugador:semana`): cena, tribuna, vacaciones (junio-julio), un viaje sorpresa, roces por tantos viajes, aniversario; con una famosa tambien alfombra roja, rumores de crisis, entrevista. **La novia real es una persona real**: solo momentos lindos o roces leves, nunca prensa del corazon, y terminar con ella sale en tono neutral; la noticia lleva la consigna de tratarla con respeto. **Las famosas son INVENTADAS** (`NOMBRES` x `APELLIDOS` x `OFICIOS`): nunca personas reales. Decisiones: hacerlo oficial o negarlo, proponer casamiento (relacion >= 80 y 180 dias; el anillo cuesta 6 semanas), la boda (a los 120 dias: a lo grande o intima) y la crisis (< 25). Tarjeta "Vida sentimental" en Vida |
+| `roleplay/servicios/amor.py` | Vida sentimental (`estado_json.amor`). Arranca del personaje (`estado_relacion`, `nombre_pareja`): novia real -> en pareja; celebridad o soltero -> soltero (la famosa es mas probable con "celebridad"). Sorteo semanal como los eventos (25%, semilla propia `amor:jugador:semana`): cena, tribuna, vacaciones (junio-julio), un viaje sorpresa, roces por tantos viajes, aniversario; con una famosa tambien alfombra roja, rumores de crisis, entrevista. **La novia real es una persona real**: solo momentos lindos o roces leves, nunca prensa del corazon, y lo negativo sale en tono neutral (sin titulares de "Polemica"). **Las famosas son INVENTADAS** (`NOMBRES` x `APELLIDOS` x `OFICIOS`): nunca personas reales. Decisiones: hacerlo oficial o negarlo, proponer casamiento (relacion >= 80 y 180 dias; el anillo cuesta 6 semanas), la boda (a los 120 dias: a lo grande o intima) y la crisis (< 25). Tarjeta "Vida sentimental" en Vida |
 | `roleplay/servicios/clubes.py` | Tu hinchada: carino (0-100) de la hinchada de cada club (`estado_json.clubes`). Arranca en 50; cada partido del club lo mueve (ganar +1, perder -1, cada gol +2 hasta 6, nota >= 8 +2, < 6 -2) y los eventos inesperados tambien (`por_evento`). El club sale del CONTRATO (`club_de`), no de los partidos: un traspaso se ve apenas se firma. Al cambiar de club: salida como idolo (>= 70), normal o por la puerta de atras (<= 30); si eras idolo y te vas a un club de LA MISMA LIGA, traidor (-30; la partida no guarda rivalidades); volver a un club te recibe segun como te fuiste. Decisiones (`DECISIONES`): hinchada en contra (< 25), polemica (despues de la polemica en redes o la fiesta del yate) y un grande que pregunta por el idolo (>= 85 y reputacion >= 70, una vez por temporada); `elegir()` mueve carino, reputacion y seguidores y puede traer un reto. Se contestan en el Resumen (tarjeta "Tu hinchada"); todo es noticia via `eventos.contar()` |
-| `roleplay/servicios/eventos.py` | Eventos inesperados, buenos y malos (multa con su auto, choque, robo en su casa, fiesta filtrada en el yate, gripe, molestias, multa del club, polemica en redes, hinchas que lo increpan; campana publicitaria, video viral, visita a un hospital, TV, jugador del mes, la camiseta a un nene). `revisar()` sortea una vez por SEMANA del juego (30%, semilla jugador+semana: la misma partida da los mismos eventos), a lo sumo uno por revision, con reglas (`requiere`: auto/casa/yate/mala_racha/buena_racha/reputacion:N; `pesos` por personalidad; no repite los ultimos 4). El codigo decide reputacion, seguidores (la escala de la hinchada) y plata (semanas de sueldo neto); `contar()` (hilo; la usa tambien la hinchada) escribe noticia y comentarios, con respaldo sin IA. Algunos traen un `reto` de roleplay (arrancar en el banco, no jugar el proximo): la app no toca el juego, es una propuesta. `estado_json.eventos` |
+| `roleplay/servicios/eventos.py` | Eventos inesperados, buenos y malos (multa con su auto, choque, robo en su casa, fiesta filtrada en el yate, gripe, molestias, multa del club, polemica en redes, hinchas que lo increpan; campana publicitaria, video viral, visita a un hospital, TV, jugador del mes, la camiseta a un nene). `revisar()` sortea una vez por SEMANA del juego (30%, semilla jugador+semana: la misma partida da los mismos eventos), a lo sumo uno por revision, con reglas (`requiere`: auto/casa/yate/mala_racha/buena_racha/reputacion:N; `pesos` por personalidad; no repite los ultimos 4). El codigo decide reputacion, seguidores (la escala de la hinchada) y plata (semanas de sueldo neto); `contar()` (hilo; la usan tambien la economia, la hinchada y el amor) arma noticia (`t_vida_<tono>` + la descripcion + `c_vida_<tono>`) y comentarios. Algunos traen un `reto` de roleplay (arrancar en el banco, no jugar el proximo): la app no toca el juego, es una propuesta. `estado_json.eventos` |
 | `roleplay/ui/vida.py` | `PaginaVida`: saldo, sueldo neto, gastos fijos, patrimonio; tienda por categoria, lo que tenes (vender al 70%), filantropia y movimientos. `acreditar_con(carrera)` la llama el menu en cada autoguardado (cobra, entrega autos y sortea los eventos inesperados: tarjeta "Lo que te paso" y aviso en la bandeja con `evento_inesperado`). Los botones se identifican por la propiedad `articulo` (el objectName es el del estilo) |
-| `roleplay/servicios/metas.py` | Metas de temporada que se propone el usuario (`estado_json.metas`: goles, goles en liga, asistencias, top N de la liga). `evaluar_metas()` las decide con la partida (contables apenas se llega; el puesto al terminar la liga; las de una temporada pasada fallan) y `texto_para_prompt()` las pone en el contexto de entrevistas y prensa. La prensa devuelve `resultado["metas"]` y la sala lo guarda con `database.actualizar_metas` (que no revive una meta borrada) |
-| `roleplay/servicios/mercado.py` | Fichajes reales: `clubes_de_jugadores(carrera)` (hombres, club de hoy) contra la foto anterior de la misma partida (tabla `club_visto`, `database.get/guardar_clubes_vistos`) -> `detectar_traspasos()` (noticia: tu club, media >= 82, o tu liga con media >= 75), `traspaso_del_usuario()` (hito `nuevo_club`). La foto se guarda recien despues de que la IA redacto: si falla, se detectan de nuevo |
-| `roleplay/servicios/previa.py` | Conferencia PREVIA al proximo partido: `previa_del_proximo(carrera)` arma los datos reales (tabla de los dos, rachas, ultimo partido del rival, cruces de la temporada, goleador rival; `ya_hecha` con `estado_json.partida.previa`), `generar_previa` / `evaluar_previa` (delta acotado a ±10) y `noticia_de_previa`. NO se guarda como partido (no suma PJ ni goles) |
+| `roleplay/servicios/metas.py` | Metas de temporada que se propone el usuario (`estado_json.metas`: goles, goles en liga, asistencias, top N de la liga). `evaluar_metas()` las decide con la partida (contables apenas se llega; el puesto al terminar la liga; las de una temporada pasada fallan); las entrevistas y la prensa las conocen por `cruce.py` (la meta a punto de cumplirse o complicada). La prensa devuelve `resultado["metas"]` y la sala lo guarda con `database.actualizar_metas` (que no revive una meta borrada) |
+| `roleplay/servicios/mercado.py` | Fichajes reales: `clubes_de_jugadores(carrera)` (hombres, club de hoy) contra la foto anterior de la misma partida (tabla `club_visto`, `database.get/guardar_clubes_vistos`) -> `detectar_traspasos()` (noticia: tu club, media >= 82, o tu liga con media >= 75), `traspaso_del_usuario()` (hito `nuevo_club`). La foto se guarda recien despues de armar la prensa: si algo falla, se detectan de nuevo |
+| `roleplay/servicios/previa.py` | Conferencia PREVIA al proximo partido: `previa_del_proximo(carrera)` arma los datos reales (tabla de los dos, rachas, ultimo partido del rival, cruces de la temporada, goleador rival; `ya_hecha` con `estado_json.partida.previa`), `generar_previa` / `evaluar_previa` (los mismos periodistas y el mismo evaluador; `BASE_PREVIA` sin resultado, delta acotado a ±10, titular con la cita si hay) y `noticia_de_previa`. NO se guarda como partido (no suma PJ ni goles) |
 | `roleplay/servicios/temporada.py` | `vista_temporada(carrera, competicion)`: lo que muestra la pagina Temporada (tabla con el club marcado, goleadores con el jugador del usuario marcado, resultados y proximos del club, la ultima fecha). Liga primero; una competicion ajena cae en la del club |
 | `roleplay/ui/temporada.py` | `PaginaTemporada`: chips para elegir competicion, tabla (QGridLayout de QLabel; la fila del club lleva un QFrame resaltado DEBAJO, en la misma celda), goleadores, tus partidos y la ultima fecha. Si se cambia de competicion mientras lee, vuelve a leer al terminar |
 | `roleplay/ui/menu.py` | `MainMenuWindow(pagina_inicial)` (lateral con JUGAR FC 26 y AJUSTES + `FondoEstadio`) + `PaginaResumen` (carta, mosaicos, historia, tramas, central de noticias) |
-| `roleplay/ui/ajustes.py` | `DialogoClave` (bienvenida: clave de Gemini, la prueba con `models.list` y la guarda), `DialogoAjustes` (clave, juego, iconos, diagnostico), `abrir_juego_o_preguntar` |
+| `roleplay/ui/ajustes.py` | `DialogoAjustes` (juego, partida, modo en vivo, iconos, diagnostico), `abrir_juego_o_preguntar`. Ya no hay bienvenida ni clave |
 | `roleplay/ui/personaje.py` | `CharacterWizard` (ClassicStyle; titulos en rich text con "PASO n/8"; backstory editable o escrito a mano) |
-| `roleplay/ui/entrevista.py` | `InterviewWindow` "Sala de prensa": marcador -> preguntas (cada una con boton de voz) -> reaccion -> prensa |
+| `roleplay/ui/entrevista.py` | `InterviewWindow` "Sala de prensa": marcador ("Cargar de mi partida" o a mano; no hay captura) -> preguntas de los 3 periodistas (cada una con boton de voz) -> reaccion -> prensa. Despues de evaluar, `_mover_carino()` aplica `delta_carino` a la hinchada del club |
 | `roleplay/ui/instagram.py` | `InstagramWindow`: perfil (avatar + mosaicos), nuevo post, resultado, "Tus hinchas" (actividad sin publicar) y feed en tarjetas. `revisar_hinchada()`: una a la vez; si se pide otra mientras corre, se hace al terminar |
-| `roleplay/servicios/hinchada.py` | El Instagram que se mueve solo: `eventos_nuevos()` (partidos del usuario y noticias sobre el desde `estado_json.hinchada`; la primera vez solo el ultimo partido), `crecimiento_por_partido/noticia()` (los seguidores los decide el codigo), `comentar_eventos()` (la IA, una consulta; si falla, sin comentarios). Se guarda en la tabla `actividad_instagram` |
+| `roleplay/servicios/hinchada.py` | El Instagram que se mueve solo: `eventos_nuevos()` (partidos del usuario y noticias sobre el desde `estado_json.hinchada`; la primera vez solo el ultimo partido), `crecimiento_por_partido/noticia()` (los seguidores los decide el codigo), `comentar_eventos()` y `comentarios()` (2-3 del corpus: el tono sigue a los seguidores, con algun gracioso o rival). Se guarda en la tabla `actividad_instagram` |
 | `roleplay/ui/iconos/` | Flechas/check de la QSS (SVG) y `app.ico` (lo genera el script del acceso directo) |
 | `scripts/seed_test_matches.py` | Siembra/borra partidos "Rival de prueba N" en el ultimo personaje (base REAL) |
 | `scripts/crear_acceso_directo.py` + `scripts/lanzador/Lanzador.cs` | Icono, .exe lanzador (dev) y los dos iconos del escritorio |
-| `scripts/empaquetar.py` + `scripts/LEEME_AMIGOS.txt` | Paquete PyInstaller + zip para amigos |
-| `tests/` | `ayuda.py` (base temporal, Gemini bloqueado, dialogos mudos) + `test_*.py` |
+| `scripts/empaquetar.py` + `scripts/LEEME_AMIGOS.txt` | Paquete PyInstaller + zip para amigos (`--add-data` de `ui/iconos` y `roleplay/datos`; `podar_chromium`) |
+| `scripts/nombres_faltantes.py` | Lista los goleadores de las competiciones del usuario que no tienen nombre (id, club, posicion, seleccion, nacimiento) y `--agregar ID "Nombre"` los suma a `jugadores_fc26.json` con el nacimiento de la partida. **Solo nombres seguros**: el 2026-10-15 se verifico la base vieja contra la partida y la IA se habia equivocado en 8 de 20 (ej. el id de Vinicius Jr como Haaland; 851 era la Copa de Francia, no la Ligue 1) |
+| `tests/` | `ayuda.py` (base temporal, dialogos mudos, `texto_de_noticias`) + `test_*.py`; `test_narrador.py` prueba el motor (gramatica, cola de 40, corpus completos y sin tildes, lexico, cruces, memoria de entrevistas, backstory) |
 
 ## Convenciones (respetarlas)
 
@@ -123,34 +131,37 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
   temporada (se reinician por temporada, julio a junio), maximo goleador, partidazo,
   liderato ganado/perdido, campeon. Se suman a los hitos del historial de entrevistas.
 - **La partida de FC 26 se LEE, nunca se escribe** (y no se toca el juego). Los numeros
-  (resultados, goles, tablas, quien es noticia) los decide el codigo; la IA solo pone
-  nombres que la partida no trae (con cache) y redacta. Un nombre dudoso va vacio y el
-  jugador se describe ("el delantero centro del Arsenal"): nunca inventar.
+  (resultados, goles, tablas, quien es noticia) los decide el codigo; los nombres que la
+  partida no trae salen de la base local (`roleplay/datos`). Un nombre que no esta (o cuyo
+  nacimiento no calza) va vacio y el jugador se describe ("el delantero centro del
+  Arsenal"): nunca inventar.
 - **El juego nunca se toca**: ni archivos, ni memoria, ni inyeccion. Se abre por su
-  plataforma (`os.startfile` de la URL/acceso) y la app solo lee la pantalla. Por eso no
+  plataforma (`os.startfile` de la URL/acceso) y la app solo lee su guardado. Por eso no
   lo rompe, las actualizaciones del juego no la rompen y se puede jugar online.
-- **Toda llamada a Gemini pasa por `gemini.generar_json`**, que pide
-  `response_mime_type="application/json"` + `response_schema=<modelo pydantic>` y
-  valida. `que_hacer` es la frase final del error ("apreta X de nuevo"). No
-  hardcodear "error 503".
-- Fallback: 429 -> siguiente modelo con la misma key; 401/403 -> siguiente key; 5xx ->
-  siguiente modelo; otros (400) fallan rapido. Usar `exc.code` (int), **no** `exc.status`.
-  El SDK reintenta solo 5xx (3 intentos); el 429 NO se reintenta (era ~1 min de espera
-  por modelo con la cuota diaria agotada). Sin key: `FaltaApiKey`, sin "reintenta".
-- `google.genai`, `dxcam`, `cv2` y `sounddevice` se importan DENTRO de las funciones
+- **Textos nuevos = corpus, no codigo**: una frase nueva va en `roleplay/datos/corpus_*.json`
+  (sin tildes, `{variables}` que el codigo pase y `#simbolos#` que existan: `test_narrador.py`
+  lo revisa). El codigo elige el SIMBOLO (que es noticia, que pregunta, que tono) y pasa los
+  datos; nunca arma frases con f-strings para mostrar como prensa. Todo lo que se escribe
+  para un jugador va con `narrador(perfil.id, ...)` (memoria anti-repeticion); `decir()`
+  para el texto final, `elegir()` para piezas que se juntan con `unir()`.
+- **Nada de texto "para la IA"** en lo que se muestra: los `detalle`/`descripcion` de
+  eventos, compras y amor terminan TAL CUAL en el cuerpo de la noticia (en tercera persona,
+  despues del nombre). Ya paso: la consigna "tratarla con respeto" iba a salir impresa.
+- `dxcam`, `cv2`, `sounddevice` y QtWebEngine se importan DENTRO de las funciones
   (arranque 1,9 s -> 0,35 s). `tests/test_ui.py::TestArranque` falla si alguien los
-  vuelve a importar arriba. Los microfonos se listan recien al mostrar preguntas.
-- **Toda llamada a la API desde la UI usa `ui.comun.ejecutar_en_hilo(func, *args,
-  al_completar=metodo, al_fallar=metodo)`**. Nada de clases QThread nuevas ni de
-  guardar el hilo en un atributo: el registro `_TareasVivas` lo mantiene vivo hasta
-  que termina. Pasar METODOS de la ventana, no lambdas (PySide desconecta los metodos
-  si la ventana se destruye).
-- Lo que se manda a la IA y vuelve despues se guarda contra el jugador/datos de ESE
+  vuelve a importar arriba (y si alguien importa `google.genai`). Los microfonos se
+  listan recien al mostrar preguntas.
+- **Todo lo lento desde la UI usa `ui.comun.ejecutar_en_hilo(func, *args,
+  al_completar=metodo, al_fallar=metodo)`** (leer la partida, revisar la prensa, evaluar).
+  Nada de clases QThread nuevas ni de guardar el hilo en un atributo: el registro
+  `_TareasVivas` lo mantiene vivo hasta que termina. Pasar METODOS de la ventana, no
+  lambdas (PySide desconecta los metodos si la ventana se destruye).
+- Lo que corre en un hilo y vuelve despues se guarda contra el jugador/datos de ESE
   momento (ver `_evaluando`, `_prensa_player_id`, `_publicando`), no contra
   `self.perfil` ni el formulario actual.
 - Botones de la entrevista: solo `_refrescar_botones()` decide cuales estan activos
   (incluye grabando/transcribiendo: mientras hay voz en curso no se regenera ni se envia).
-- Todo texto de la IA o del usuario que va a un QLabel con formato pasa por `esc()`;
+- Todo texto del motor o del usuario que va a un QLabel con formato pasa por `esc()`;
   un `<3` sin escapar se comia el resto del comentario.
 - Numeros con separador de miles: `miles(n)`; contadores cortos: `compacto(n)` (1,5K).
 - **Estilo**: colores y fuentes solo en `estilos.py`; piezas en `componentes.py`. Los
@@ -161,7 +172,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 - Las paginas van dentro de `con_scroll` y son transparentes: el fondo lo pinta
   `FondoEstadio`. Para reemplazar contenido usar `limpiar_layout` (esconde antes de
   `deleteLater`; si no, lo viejo se ve encima de lo nuevo hasta la proxima vuelta).
-- Lo que genera la IA queda **editable** antes de guardarse (backstory, ganchos, stats,
+- Lo que genera la app queda **editable** antes de guardarse (backstory, ganchos, stats,
   transcripciones).
 - Estado de modulos nuevos va en `player_profile.estado_json` (ej: `reputacion_actual`,
   `historial_reputacion`, `prensa`, `seguidores_instagram`) para no migrar el esquema.
@@ -169,12 +180,14 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
   (la DB del usuario ya existe y tiene datos). Un campo nuevo en un dataclass necesita
   su columna: el mapeo generico falla fuerte si falta.
 - Las paginas del menu exponen `actualizar()`, que recarga el perfil; el menu lo llama al navegar.
-- Strings de UI en espanol (voseo/chileno informal), sin tildes en el codigo.
-- Los prompts piden no inventar nombres de personas/jugadores reales.
+- Strings de UI en espanol (voseo/chileno informal), sin tildes en el codigo ni en los corpus.
+- Nunca inventar nombres de personas/jugadores reales: los clubes y jugadores de las
+  noticias de ambiente son ficticios (`#club_ficticio#`, `#jugador_ficticio#`) y las
+  famosas de la vida sentimental, inventadas.
 
 ## Testing
 
-`.venv\Scripts\python.exe -m unittest discover -s tests` (282 pruebas, ~20 s). `tests/ayuda.py`:
+`.venv\Scripts\python.exe -m unittest discover -s tests` (314 pruebas, ~20 s). `tests/ayuda.py`:
 - Fija `EAFC_FC26_GUARDADOS` a una carpeta vacia: las pruebas no leen la partida real.
   `tests/fabrica_partida.py` arma un guardado FALSO con el mismo formato (para todo lo de
   `roleplay/partida`). `TestPartidaRealDelPC` lee la partida real si existe (solo lectura,
@@ -183,8 +196,13 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
   pruebas ni sus subprocesos escriben en la carpeta del proyecto.
 - `PruebaConBase`: base temporal por prueba (`config.DB_PATH` parcheado).
 - `PruebaDeInterfaz`: + QApplication offscreen + `QMessageBox.information/warning` mudos (en `self.avisos`).
-- Gemini queda bloqueado: si algo llama a `_cliente` de verdad, la prueba falla.
-  Mockear `generar_json` en el modulo del servicio (ej. `roleplay.servicios.prensa.generar_json`).
+- El motor narrativo corre DE VERDAD en las pruebas (es local): se prueba lo que sale
+  (titular con el apellido o el modelo del auto, `hitos`, `tono`, que no queden `{}` ni
+  `#simbolos#` sin expandir, que no se repita), no se mockea. El perfil tiene que estar
+  guardado para que la memoria (`narrador_usados`) quede. Para ver que hechos llegan a la
+  prensa, espiar `prensa.noticia_del_mundo` (ver `test_mercado.py`). Las pruebas con azar se
+  corrieron 30 veces seguidas sin fallar; si una nueva depende del azar, pasarle `dado`.
+- Voz: `audio.subprocess.run` mockeado (ver `test_audio.py`): nunca correr el reconocedor real.
 - Microfono: `GrabadorMicrofono(crear_stream=StreamFalso(...))` (ver `tests/test_audio.py`);
   nunca grabar el microfono real en una prueba.
 - `esperar_tareas()` en vez de `hilo.wait()` + `processEvents()`.
@@ -196,16 +214,18 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
   y `grab().save(...)`. Hacerlo sobre una COPIA de la base. (Con `QT_QPA_PLATFORM=offscreen`
   no hay fuentes de Windows salvo con `QT_QPA_FONTDIR=C:/Windows/Fonts`.)
 - Paquete: probarlo como amigo nuevo con `EAFC_ROLEPLAY_DATOS=<carpeta vacia>` y
-  `"dist\EAFC Roleplay\EAFC Roleplay.exe" --diagnostico` (sale 1 solo por falta de clave).
-- No probado automaticamente: microfono real, respuestas reales de Gemini y abrir el juego
+  `"dist\EAFC Roleplay\EAFC Roleplay.exe" --diagnostico`.
+- No probado automaticamente: microfono real, el reconocedor de voz real y abrir el juego
   de verdad (`os.startfile` va mockeado; no lanzar FC 26 en el PC de Simon sin preguntar).
 
 ## Gotchas conocidos
 
 - Windows en modo oscuro deja labels invisibles si no se fuerza la paleta (por eso `estilos.py`).
-- `.env` en Windows suele quedar como `.env.txt`; crearlo desde VS Code.
 - Paths en PowerShell: `.venv\Scripts\python.exe`, no `/c:/...`.
-- Tier gratis de Gemini: 503 por demanda y 429 por cuota son frecuentes; el fallback lo maneja.
+- Los heredoc de Bash con caracteres no ASCII (°, «, emojis) cortan el script ("unexpected
+  EOF"): para parchar archivos con esos caracteres, escribir el script a un archivo y correrlo.
+- Ciclo de imports: `metas -> partida_real -> prensa -> cruce -> metas`. Por eso `cruce`
+  importa `metas` adentro de `_meta`, y `partida_real` importa `metas`/`previa` adentro.
 - dxcam convierte colores con OpenCV SALVO que se pida `output_color="BGRA"` con
   `processor_backend="numpy"`: asi se saco OpenCV (110 MB). PyInstaller necesita
   `--collect-submodules dxcam` (carga sus procesadores con `import_module`).
@@ -228,7 +248,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 
 Hecho:
 1. Quiz de personaje + backstory editable (o escrito a mano)
-2. Entrevistas post-partido (captura + Gemini Vision, o stats a mano; respuestas escritas
+2. Entrevistas post-partido (stats de la partida o a mano; respuestas escritas
    o por voz; reaccion + reputacion evolutiva)
 3. Prensa: hitos del jugador + noticias generales del mundo
 4. Instagram: posts, comentarios, likes, seguidores
@@ -236,8 +256,24 @@ Hecho:
 6. Lanzador .exe + icono + acceso directo; pruebas automaticas (unittest)
 
 Hecho tambien: iconos "EA FC 26" / "EA FC 26 + Roleplay", boton JUGAR, Ajustes con
-diagnostico, el paquete para amigos (cada uno con su clave y sus datos en APPDATA) y
+diagnostico, el paquete para amigos (cada uno con sus datos en APPDATA) y
 la lectura de la partida de FC 26 (ver arriba).
+
+**Evolucion en 4 pilares (pedida por Simon el 2026-10-15, en orden; correr la bateria
+despues de cada uno y actualizar este archivo):**
+1. **Sin IA: HECHO el 2026-10-15.** Motor de gramaticas + cola de 40, cruces, memoria
+   de entrevistas, 3 periodistas, evaluador lexico de 5 ejes con negaciones, nombres de
+   base local, backstory combinatorio, voz con System.Speech. La lectura de la captura se
+   saco (no hay reemplazo confiable sin IA).
+2. Configurador con la web oficial (`url_configurador` = `Modelo.configurador`) y la foto:
+   ya estaba hecho (`ui/navegador.py`). La foto queda en `garage/<id>.jpg` (no en
+   `autos_comprados/<id>.png` como decia el pedido). Los encabezados de seguridad NO se
+   tocan (no hace falta: la web es la pagina principal, no un iframe).
+3. Tienda universal (`DialogoTiendaReal`: casas, relojes y joyas, moda, yates, aviones,
+   tecnologia, muebles con las webs oficiales; autocompletar nombre/precio por OpenGraph,
+   foto, COMPRAR por `economia`, "PRESUMIR EN INSTAGRAM"): pendiente.
+4. Overlay bimodal (HUD que deja pasar los clicks con toasts + centro de mando con
+   Ctrl+Shift+F12 que devuelve el foco al juego con `SetForegroundWindow`): pendiente.
 
 Siguiente (decidido con Simon el 2026-10-14):
 - **Overlay**: hecho (ver arriba). En pantalla completa EXCLUSIVA ninguna ventana se puede
@@ -284,7 +320,7 @@ Siguiente (decidido con Simon el 2026-10-14):
 - **Conferencia previa al proximo partido: HECHO el 2026-10-14** (modo de la sala de prensa: `InterviewWindow._modo` "post"/"previa"; la sala flotante lo refleja con `texto_contexto()`).
 - **Leer la partida guardada: HECHO el 2026-10-14** (`roleplay/partida/`). La sala de
   prensa carga sola el ultimo partido, el Resumen muestra la temporada real y sincroniza
-  el club, la prensa escribe sobre hechos reales con nombres reconocidos. Formato y
+  el club, la prensa escribe sobre hechos reales con nombres de la base local. Formato y
   hallazgos en `files/docs/partida-fc26.md`. Ideas que siguen: hitos de prensa con los
   totales reales (no solo con las entrevistas), traspasos (tablas `YMgA`/`NgwF`/`TtHG`
   sin confirmar), contexto real en Instagram.
@@ -308,4 +344,4 @@ Pendiente (ideas del usuario):
 - Respuestas directas y practicas, en espanol.
 - A veces implementa partes el mismo: antes de reescribir algo, revisar lo que ya hizo y
   preguntar si hace falta. Si pide revision, revisar y corregir bugs reales (con prueba que los demuestre).
-- Entregar cambios probados; avisar explicitamente lo que no se pudo probar (dxcam, microfono real).
+- Entregar cambios probados; avisar explicitamente lo que no se pudo probar (microfono y voz reales, overlay encima del juego).

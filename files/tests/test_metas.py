@@ -61,19 +61,6 @@ class TestMetas(ayuda.PruebaConBase):
         self.assertEqual(cambios, {vieja["id"]: {"estado": "fallida"}})
         self.assertEqual(hitos, [{"tipo": "meta_fallida", "valor": "Marcar 50 goles en la temporada (2025/26)"}])
 
-    def test_el_texto_para_las_preguntas(self):
-        texto = metas.texto_para_prompt(self.c, [
-            meta("goles", 30), meta("top_liga", 4), dict(meta("asistencias", 2), estado="cumplida"),
-            meta("goles", 99, "2025/26"),  # de otra temporada: no va
-        ])
-        self.assertEqual(texto, (
-            "Metas que el jugador se propuso publicamente esta temporada:\n"
-            "- Marcar 30 goles en la temporada (lleva 8).\n"
-            "- Terminar entre los 4 primeros de la liga (su club va 2°).\n"
-            "- Dar 2 asistencias en la temporada (ya la cumplio)."
-        ))
-        self.assertEqual(metas.texto_para_prompt(self.c, []), "")
-
 
 class TestMetasEnLaPrensa(ayuda.PruebaConBase):
     def setUp(self):
@@ -82,30 +69,30 @@ class TestMetasEnLaPrensa(ayuda.PruebaConBase):
         self.perfil.id = database.save_profile(self.perfil)
         mock.patch.object(partida_real, "identificar_jugadores", return_value={}).start()
         mock.patch.object(partida_real, "identificar_competiciones", return_value={}).start()
-        self.prompts = []
-
-        def redactar(prompt, _api_key):
-            self.prompts.append(prompt)
-            return prensa.NoticiaIA(titular="T", cuerpo="C", tono="positiva")
-
-        mock.patch.object(prensa, "_redactar", redactar).start()
         self.addCleanup(mock.patch.stopall)
 
     def test_la_prensa_las_evalua_y_las_conoce(self):
-        lograda, pendiente = meta("goles", 5), meta("goles", 30)
+        lograda, pendiente = meta("goles", 5), meta("goles", 10)
         database.agregar_meta(self.perfil.id, lograda)
         database.agregar_meta(self.perfil.id, pendiente)
         resultado = partida_real.revisar_prensa_con_partida(self.perfil, [], {}, construir(f.construir_bytes()))
         self.assertIn({"tipo": "meta_cumplida", "valor": "Marcar 5 goles en la temporada"}, resultado["hitos"])
         self.assertEqual(resultado["metas"][lograda["id"]]["estado"], "cumplida")
-        self.assertIn("Marcar 30 goles en la temporada (lleva 8)", self.prompts[0])
+        texto = ayuda.texto_de_noticias(resultado["noticias"])
+        self.assertIn("marcar 5 goles en la temporada", texto.lower())
+        self.assertIn("2 goles", texto)  # la pendiente (lleva 8 de 10): el cruce de la meta cerca
         self.assertEqual(resultado["delta_reputacion"], prensa.BONOS_REPUTACION["meta_cumplida"])
 
     def test_las_entrevistas_tambien(self):
-        database.agregar_meta(self.perfil.id, meta("goles", 30))
-        with mock.patch.object(lector, "carrera_actual", return_value=construir(f.construir_bytes())):
-            lectura = partida_real.leer_para_entrevista(self.perfil.id)
-        self.assertIn("Marcar 30 goles en la temporada (lleva 8)", lectura.contexto)
+        from roleplay.servicios import entrevista
+        from roleplay.servicios.vision import MatchStats
+
+        database.agregar_meta(self.perfil.id, meta("goles", 10))  # lleva 8: esta cerca
+        stats = MatchStats(goles_equipo=1, goles_rival=1, equipo_rival="Leeds", rating_jugador=6.9, minutos_jugados=90)
+        with mock.patch.object(entrevista, "_carrera", return_value=construir(f.construir_bytes())):
+            vestuario = entrevista.generar_entrevista(self.perfil, stats)[1]
+        self.assertTrue(vestuario.startswith("Valentina Aros (Radio Tribuna): "))
+        self.assertRegex(vestuario, r"2 goles|8 de 10")  # le faltan 2: la cuenta regresiva
 
     def test_actualizar_no_revive_una_borrada(self):
         m = meta("goles", 30)

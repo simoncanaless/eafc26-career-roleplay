@@ -16,8 +16,6 @@ real en 3D, y saca la foto de lo que se ve para el garage.
   el configurador vuelve al dibujo propio.
 """
 
-from typing import Optional
-
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QDesktopServices, QGuiApplication, QImage
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QProgressBar, QVBoxLayout, QWidget

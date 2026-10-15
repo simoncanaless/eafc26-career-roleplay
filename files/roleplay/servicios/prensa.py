@@ -3,17 +3,18 @@ Motor de prensa: noticias sobre el jugador, disparadas por hitos de su
 historial (rachas, goles totales, rating), y noticias generales del mundo
 del futbol, de ambiente.
 
-La deteccion de hitos es deterministica (Python); la IA solo redacta.
+La deteccion de hitos es deterministica (Python), y la redaccion tambien:
+servicios/narrador.py con roleplay/datos/corpus_prensa.json, cruzando con el
+resto de su vida (servicios/cruce.py). Despues de cada entrevista sale una
+nota con su frase mas jugosa entre «».
 """
 
 import random
 from typing import Optional
 
-from pydantic import BaseModel
-
-from roleplay.gemini import generar_json
 from roleplay.models import MatchInterviewRecord, NoticiaPrensa, PlayerProfile
-from roleplay.servicios.contexto import ficha_jugador
+from roleplay.servicios import cruce, lexico
+from roleplay.servicios.narrador import narrador, unir
 
 # ---- Umbrales de hitos (ajustables) ----
 
@@ -169,6 +170,22 @@ def detectar_nuevos_hitos(stats: dict, estado_prensa: dict) -> tuple[list[dict],
     return hitos, estado
 
 
+TONO_HITO = {
+    "hito_goles_totales": "positiva", "racha_goleadora": "positiva", "buen_momento": "positiva",
+    "goles_temporada": "positiva", "lider_goleadores": "positiva", "partidazo": "positiva", "lider_liga": "positiva",
+    "campeon": "positiva", "maximo_goleador": "positiva", "jugador_del_mes": "positiva", "meta_cumplida": "positiva",
+    "racha_sin_gol": "negativa", "mal_momento": "negativa", "perdio_liderato": "negativa", "meta_fallida": "negativa",
+}
+# el titular sale del hito mas importante
+PRIORIDAD_HITOS = (
+    "campeon", "maximo_goleador", "jugador_del_mes", "nuevo_club", "fin_de_temporada", "meta_cumplida", "meta_fallida",
+    "partidazo", "lider_goleadores", "hito_goles_totales", "racha_goleadora", "lider_liga", "perdio_liderato",
+    "goles_temporada", "buen_momento", "racha_sin_gol", "mal_momento",
+)
+NUCLEOS_POR_NOTICIA = 3
+PALABRAS_PARA_CITAR = 8
+
+
 def _describir_hitos(hitos: list[dict]) -> str:
     return "\n".join(
         "- " + DESCRIPCIONES_HITOS.get(hito["tipo"], "{tipo}: {valor}").format(**hito)
@@ -176,160 +193,124 @@ def _describir_hitos(hitos: list[dict]) -> str:
     )
 
 
-class NoticiaIA(BaseModel):
-    titular: str
-    cuerpo: str
-    tono: str  # "positiva" | "negativa" | "mixta" | "neutral"
+def tono_de_hitos(hitos: list[dict]) -> str:
+    tonos = {TONO_HITO.get(h["tipo"], "neutral") for h in hitos} - {"neutral"}
+    return "mixta" if len(tonos) > 1 else tonos.pop() if tonos else "neutral"
 
 
-def _bloque_real(contexto_real: str) -> str:
-    if not contexto_real:
-        return ""
-    return f"\n{contexto_real}\n(Estos datos son reales de su partida: usalos y no los contradigas.)\n"
+def _base(perfil: PlayerProfile) -> dict:
+    partes = perfil.nombre_jugador.split()
+    return {"nombre": perfil.nombre_jugador, "apellido": partes[-1] if partes else "El jugador",
+            "club": perfil.club_actual or "su club"}
 
 
-def _build_prompt_noticia_jugador(
-    perfil: PlayerProfile, stats: dict, hitos: list[dict], contexto_real: str = ""
-) -> str:
-    return f"""
-Sos un periodista deportivo escribiendo una noticia espontanea (no una
-entrevista) sobre {perfil.nombre_jugador}, en un modo carrera roleplay
-de EAFC 26.
-
-{ficha_jugador(perfil, backstory=True)}
-{_bloque_real(contexto_real)}
-Datos acumulados de su carrera hasta ahora:
-- Partidos jugados: {stats['partidos_jugados']}
-- Goles totales: {stats['goles_totales']}
-- Rating promedio ultimos 5 partidos: {stats['rating_promedio_ultimos_5']:.1f}
-
-Motivo de esta noticia:
-{_describir_hitos(hitos)}
-
-Escribi una noticia deportiva corta (titular + 3-5 frases de cuerpo, en
-espanol) sobre esto. Si los hitos son positivos (rachas goleadoras, buen
-rating, muchos goles), el tono puede incluir comparaciones con leyendas
-del futbol o rumores de premios individuales (Balon de Oro, mejor
-jugador de la liga) SIN inventar nombres de jugadores reales que
-compitan por el premio. Si son negativos (sequia de gol, mal momento),
-el tono puede incluir criticas de la prensa o dudas sobre su nivel. Si
-hay mezcla, reflejalo con tono mixto.
-
-Clasifica el tono general como "positiva", "negativa" o "mixta".
-""".strip()
+def _con_valor(base: dict, hito: dict) -> dict:
+    valor = str(hito["valor"])
+    return {**base, "valor": valor, "valor_min": valor[:1].lower() + valor[1:]}
 
 
-def _build_prompt_noticia_general(perfil: PlayerProfile) -> str:
-    return f"""
-Sos un periodista deportivo escribiendo una noticia GENERAL del mundo
-del futbol (no directamente sobre {perfil.nombre_jugador}), para darle
-ambiente al modo carrera roleplay de EAFC 26 en el que juega. Club
-actual del jugador (para ambientar, no tiene que ser el protagonista):
-{perfil.club_actual or "(desconocido)"}.
-
-Escribi una noticia corta e INVENTADA (titular + 2-4 frases) sobre algo
-que este pasando en el mundo del futbol alrededor del jugador: un
-rumor de transferencia de otro jugador ficticio, una sorpresa en la
-tabla de posiciones, una polemica arbitral, un cambio de tecnico en
-otro club, etc. No inventes nombres de jugadores, clubes o personas
-reales: todo ficticio, ambientado en el mismo universo del modo
-carrera. Clasifica el tono como "positiva", "negativa" o "neutral".
-""".strip()
-
-
-def _build_prompt_noticia_real(perfil: PlayerProfile, hecho: str, contexto_real: str) -> str:
-    return f"""
-Sos un periodista deportivo. Escribi una noticia corta (titular + 2-4
-frases, en espanol) sobre este hecho REAL del modo carrera de EAFC 26 en
-el que juega {perfil.nombre_jugador} (no es el protagonista):
-
-{hecho}
-{_bloque_real(contexto_real)}
-Reglas: los resultados, goles y posiciones son exactamente esos. Nombra
-solo a los jugadores que aparecen con nombre en el hecho; si aparece "el
-delantero del X", no le inventes un nombre. Podes agregar color (reaccion
-de los hinchas, lo que significa para la tabla) sin inventar otros datos.
-Clasifica el tono como "positiva", "negativa" o "neutral".
-""".strip()
+def noticia_de_hitos(escritor, perfil: PlayerProfile, hitos: list[dict], cruces: list) -> NoticiaPrensa:
+    """[apertura] + [lo que paso, un nucleo por hito] + [cruce] + [cierre]."""
+    base = _base(perfil)
+    orden = sorted(hitos, key=lambda h: PRIORIDAD_HITOS.index(h["tipo"]) if h["tipo"] in PRIORIDAD_HITOS else 99)
+    principal = orden[0]
+    tono = tono_de_hitos(hitos)
+    titular = escritor.decir(f"t_{principal['tipo']}", **_con_valor(base, principal))
+    if not titular:
+        titular = DESCRIPCIONES_HITOS.get(principal["tipo"], "{valor}").format(**principal)
+    nucleos = [escritor.elegir(f"n_{h['tipo']}", **_con_valor(base, h)) for h in orden[:NUCLEOS_POR_NOTICIA]]
+    extra = next((escritor.elegir(f"x_{c.tipo}", **{**base, **c.datos}) for c in cruces
+                  if escritor.puede(f"x_{c.tipo}", **{**base, **c.datos})), "")
+    cuerpo = unir(escritor.elegir(f"c_apertura_{tono}", **base), *nucleos, extra, escritor.elegir(f"c_cierre_{tono}", **base))
+    escritor.anotar(cuerpo)
+    return NoticiaPrensa(player_id=perfil.id, categoria="jugador", tono=tono, titular=titular, cuerpo=cuerpo,
+                         hitos=[f"{h['tipo']}:{h['valor']}" for h in hitos])
 
 
-def _redactar(prompt: str, api_key: Optional[str]) -> NoticiaIA:
-    return generar_json(
-        prompt, NoticiaIA, "No se pudo generar la noticia esta vez.", api_key=api_key
-    )
+def noticia_de_entrevista(escritor, perfil: PlayerProfile, registro: MatchInterviewRecord) -> Optional[NoticiaPrensa]:
+    """La nota de la ultima entrevista, con su frase mas jugosa entre «»."""
+    lectura = lexico.leer(registro.respuestas_jugador)
+    if not lectura.cita or lectura.palabras < PALABRAS_PARA_CITAR:
+        return None
+    delta = registro.delta_reputacion
+    tono = "positiva" if delta >= 2 else "negativa" if delta <= -2 else "mixta" if delta else "neutral"
+    datos = {**_base(perfil), "cita": lectura.cita, "rival": registro.equipo_rival or "su rival",
+             "marcador": f"{registro.goles_equipo}-{registro.goles_rival}"}
+    titular = escritor.decir(f"t_cita_{tono}", **datos)
+    cuerpo = unir(escritor.elegir("n_cita", **datos), registro.reaccion_prensa)
+    return NoticiaPrensa(player_id=perfil.id, categoria="jugador", tono=tono, titular=titular, cuerpo=cuerpo,
+                         hitos=[f"entrevista:{registro.id}"])
+
+
+def noticia_del_mundo(escritor, perfil: PlayerProfile, hecho) -> NoticiaPrensa:
+    """Un hecho real de la partida (dict de servicios/partida_real.py, o texto suelto)."""
+    if isinstance(hecho, str):
+        hecho = {"tipo": "texto", "texto": hecho}
+    tipo = hecho["tipo"]
+    datos = {clave: valor for clave, valor in hecho.items() if valor not in (None, "")}
+    if tipo == "hat_trick" and not escritor.puede("t_hat_trick", **datos):
+        titular = escritor.decir("t_hat_trick_sin_nombre", **datos)
+    elif escritor.tiene(f"t_{tipo}"):
+        titular = escritor.decir(f"t_{tipo}", **datos)
+    else:
+        titular = ""
+    if not titular:  # un texto suelto: el titular es su primera oracion
+        titular = hecho["texto"].split(". ")[0].split("\n")[0].rstrip(".:")
+    cierre = escritor.elegir(f"c_mundo_{tipo}", **datos) or escritor.elegir(f"c_{tipo}", **datos)
+    cuerpo = unir(hecho["texto"].replace("\n- ", " ").replace("\n", " "), cierre)
+    return NoticiaPrensa(player_id=perfil.id, categoria="general", tono=hecho.get("tono", "neutral"), titular=titular,
+                         cuerpo=cuerpo)
+
+
+def noticia_de_ambiente(escritor, perfil: PlayerProfile) -> NoticiaPrensa:
+    """Una noticia inventada del mundo del futbol, con clubes y jugadores ficticios."""
+    titular = escritor.decir("t_general")
+    cuerpo = unir(escritor.elegir("c_general"), escritor.elegir("c_general"))
+    return NoticiaPrensa(player_id=perfil.id, categoria="general", tono="neutral", titular=titular, cuerpo=cuerpo)
 
 
 def revisar_prensa(
     perfil: PlayerProfile,
     historial: list[MatchInterviewRecord],
     estado_prensa: dict,
-    api_key: Optional[str] = None,
     incluir_general: bool = True,
-    contexto_real: str = "",
-    hechos_reales: Optional[list[str]] = None,
+    hechos_reales: Optional[list] = None,
     hitos_reales: Optional[list[dict]] = None,
+    carrera=None,
 ) -> dict:
     """Busca hitos nuevos en el historial y, a veces, agrega una noticia
-    general de ambiente.
+    general de ambiente. Todo sale del motor narrativo: no falla ni espera.
 
-    Con la partida de FC 26 (servicios/partida_real.py): `contexto_real` va
-    a la noticia sobre el jugador, y si hay `hechos_reales` las noticias del
-    mundo son sobre los primeros (hasta MAXIMO_NOTICIAS_MUNDO, siempre), en
-    vez de una inventada al azar.
-    `hitos_reales` (los de la partida) se suman a los del historial.
+    Con la partida de FC 26 (servicios/partida_real.py): si hay
+    `hechos_reales` (dicts con "tipo" y "texto"), las noticias del mundo son
+    sobre los primeros (hasta MAXIMO_NOTICIAS_MUNDO), en vez de una
+    inventada al azar. `hitos_reales` (los de la partida) se suman a los del
+    historial. La ultima entrevista sin nota tiene la suya, con su cita.
 
     Devuelve {"noticias": list[NoticiaPrensa] (sin guardar),
               "hitos": list[dict],
               "estado_prensa": dict listo para database.set_estado_prensa,
               "delta_reputacion": int (bonos por premios y logros reales)}.
-
-    Si falla la noticia de ambiente pero ya hay una sobre el jugador, se
-    sigue sin la de ambiente: no vale la pena perder la importante.
     """
     stats = calcular_estadisticas_acumuladas(historial)
     hitos, nuevo_estado = detectar_nuevos_hitos(stats, estado_prensa)
     hitos = hitos + list(hitos_reales or [])
     noticias: list[NoticiaPrensa] = []
+    cruces = cruce.cruces(perfil.id, carrera=carrera) if perfil.id else []
 
-    if hitos:
-        redactada = _redactar(_build_prompt_noticia_jugador(perfil, stats, hitos, contexto_real), api_key)
-        noticias.append(
-            NoticiaPrensa(
-                player_id=perfil.id,
-                categoria="jugador",
-                tono=redactada.tono,
-                titular=redactada.titular,
-                cuerpo=redactada.cuerpo,
-                hitos=[f"{h['tipo']}:{h['valor']}" for h in hitos],
-            )
-        )
-
-    if hechos_reales:
-        prompts_mundo = [
-            _build_prompt_noticia_real(perfil, hecho, contexto_real) for hecho in hechos_reales[:MAXIMO_NOTICIAS_MUNDO]
-        ]
-    elif incluir_general and random.random() < PROBABILIDAD_NOTICIA_GENERAL:
-        prompts_mundo = [_build_prompt_noticia_general(perfil)]
-    else:
-        prompts_mundo = []
-
-    for prompt_general in prompts_mundo:
-        try:
-            redactada = _redactar(prompt_general, api_key)
-        except RuntimeError:
-            if not noticias:
-                raise
-            break
-        else:
-            noticias.append(
-                NoticiaPrensa(
-                    player_id=perfil.id,
-                    categoria="general",
-                    tono=redactada.tono,
-                    titular=redactada.titular,
-                    cuerpo=redactada.cuerpo,
-                )
-            )
+    with narrador(perfil.id, "prensa") as escritor:
+        if hitos:
+            noticias.append(noticia_de_hitos(escritor, perfil, hitos, cruces))
+        entrevistas = [r for r in historial if r.origen != "previa"]
+        if entrevistas and entrevistas[0].id is not None and entrevistas[0].id != estado_prensa.get("entrevista_reportada"):
+            nota = noticia_de_entrevista(escritor, perfil, entrevistas[0])
+            if nota is not None:
+                noticias.append(nota)
+            nuevo_estado["entrevista_reportada"] = entrevistas[0].id
+        if hechos_reales:
+            noticias += [noticia_del_mundo(escritor, perfil, h) for h in hechos_reales[:MAXIMO_NOTICIAS_MUNDO]]
+        elif incluir_general and random.random() < PROBABILIDAD_NOTICIA_GENERAL:
+            noticias.append(noticia_de_ambiente(escritor, perfil))
 
     return {
         "noticias": noticias,

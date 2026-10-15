@@ -119,27 +119,27 @@ class TestSorteo(ayuda.PruebaConBase):
 class TestRepercusion(ayuda.PruebaConBase):
     def setUp(self):
         super().setUp()
+        self.perfil = perfil()
+        self.perfil.id = database.save_profile(PlayerProfile(nombre_jugador="Simon Canales"))
         with mock.patch.object(eventos, "PROBABILIDAD_POR_SEMANA", 1), \
                 mock.patch.object(eventos, "TIPOS", [eventos.POR_ID["multa_velocidad"]]):
-            _, _, (self.ocurrido,) = eventos.revisar(perfil(), {"hasta": "2027-01-16"}, con_auto(), None,
+            _, _, (self.ocurrido,) = eventos.revisar(self.perfil, {"hasta": "2027-01-16"}, con_auto(), None,
                                                      HOY + timedelta(days=7), 10_000, 50)
 
-    def test_con_ia(self):
-        comentarios = {0: [{"usuario": "hincha", "texto": "Despacio, crack"}]}
-        with mock.patch.object(eventos, "generar_json", return_value=eventos.NoticiaEvento(titular="T", cuerpo="C")) as ia, \
-                mock.patch.object(hinchada, "comentar_eventos", return_value=comentarios):
-            noticia, actividad = eventos.repercusion(perfil(), self.ocurrido, "£")
-        self.assertIn("Porsche 911 Carrera", ia.call_args[0][0])
-        self.assertIn("le cuesta", ia.call_args[0][0])
-        self.assertEqual((noticia.titular, noticia.tono, noticia.hitos), ("T", "negativa", ["evento:multa_velocidad"]))
-        self.assertEqual((actividad.tipo, actividad.comentarios), ("evento", comentarios[0]))
+    def test_la_noticia_la_escribe_el_motor(self):
+        noticia, actividad = eventos.repercusion(self.perfil, self.ocurrido, "£")
+        self.assertIn("multa por exceso de velocidad con su porsche 911 carrera", noticia.titular.lower())
+        self.assertIn("Porsche 911 Carrera", noticia.cuerpo)
+        self.assertIn("le cuesta", noticia.cuerpo)
+        self.assertEqual((noticia.tono, noticia.hitos), ("negativa", ["evento:multa_velocidad"]))
+        self.assertEqual(actividad.tipo, "evento")
+        self.assertTrue(actividad.comentarios)  # los comentarios tambien salen del corpus, sin IA
+        self.assertTrue(all(c["autor"] and c["texto"] for c in actividad.comentarios))
 
-    def test_sin_ia_igual_sale(self):
-        with mock.patch.object(eventos, "generar_json", side_effect=RuntimeError("sin cuota")), \
-                mock.patch.object(hinchada, "comentar_eventos", side_effect=RuntimeError("sin cuota")):
-            noticia, actividad = eventos.repercusion(perfil(), self.ocurrido, "£")
-        self.assertEqual(noticia.titular, "Simon Canales: multa por exceso de velocidad con su Porsche 911 Carrera")
-        self.assertEqual(actividad.comentarios, [])
+    def test_el_mismo_evento_no_repite_titular(self):
+        titulares = [eventos.repercusion(self.perfil, self.ocurrido, "£")[0].titular for _ in range(3)]
+        self.assertEqual(len(set(titulares)), 3, titulares)
+        self.assertTrue(database.get_narrador_usados(self.perfil.id)["textos"])  # la memoria queda en estado_json
 
 
 class TestEnLaPaginaVida(ayuda.PruebaDeInterfaz):
@@ -151,7 +151,6 @@ class TestEnLaPaginaVida(ayuda.PruebaDeInterfaz):
         mock.patch.object(partida_real, "identificar_jugadores", return_value={}).start()
         mock.patch.object(partida_real, "identificar_competiciones", return_value={}).start()
         mock.patch.object(hinchada, "comentar_eventos", return_value={}).start()
-        mock.patch.object(eventos, "generar_json", return_value=eventos.NoticiaEvento(titular="Gripe", cuerpo="C")).start()
         mock.patch.object(eventos, "PROBABILIDAD_POR_SEMANA", 1).start()
         mock.patch.object(amor, "PROBABILIDAD_POR_SEMANA", 0).start()  # ni la vida sentimental
         mock.patch.object(eventos, "TIPOS", [eventos.POR_ID["gripe"]]).start()
@@ -178,7 +177,7 @@ class TestEnLaPaginaVida(ayuda.PruebaDeInterfaz):
         texto = ayuda.texto_visible(self.pagina.eventos_layout.itemAt(0).widget().text())
         self.assertIn("Una gripe lo deja en cama", texto)
         self.assertIn("Reto: Arranca el proximo partido en el banco", texto)
-        self.assertIn("En la prensa: Gripe", texto)
+        self.assertIn("gripe lo deja en cama", texto.lower().split("en la prensa:")[1])
         self.assertEqual([a.tipo for a in database.load_actividad_instagram(self.pid)], ["evento"])
         self.assertEqual(database.load_noticias_prensa(self.pid)[0].hitos, ["evento:gripe"])
         self.assertEqual(database.get_economia(self.pid)["saldo"] > 0, True)

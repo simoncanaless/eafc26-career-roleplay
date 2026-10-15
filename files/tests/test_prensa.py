@@ -1,7 +1,8 @@
 import unittest
 from unittest import mock
 
-import ayuda  # noqa: F401 - prepara el entorno de prueba
+import ayuda
+from roleplay import database
 from roleplay.models import MatchInterviewRecord, PlayerProfile
 from roleplay.servicios import prensa
 
@@ -69,38 +70,66 @@ class TestHitos(unittest.TestCase):
         self.assertEqual((stats["racha_goleadora"], stats["racha_sin_gol"]), (1, 0))
 
 
-class TestRevisarPrensa(unittest.TestCase):
-    perfil = PlayerProfile(id=7, nombre_jugador="Simon", club_actual="Palermo")
+class TestRevisarPrensa(ayuda.PruebaConBase):
+    """Las noticias las arma el motor narrativo: no fallan ni esperan."""
 
-    def _redactor(self, falla_la_general: bool):
-        def redactar(prompt, esquema, que_hacer, api_key=None):
-            if "GENERAL" in prompt:
-                if falla_la_general:
-                    raise RuntimeError("Gemini caido.")
-                return prensa.NoticiaIA(titular="Ambiente", cuerpo="c", tono="neutral")
-            return prensa.NoticiaIA(titular="Sobre Simon", cuerpo="c", tono="positiva")
+    def setUp(self):
+        super().setUp()
+        self.perfil = PlayerProfile(nombre_jugador="Simon Canales", club_actual="Palermo")
+        self.perfil.id = database.save_profile(self.perfil)
 
-        return redactar
+    def _revisar(self, historial, estado=None, azar=0.99):
+        with mock.patch.object(prensa.random, "random", return_value=azar):
+            return prensa.revisar_prensa(self.perfil, historial, estado or {})
 
-    def test_si_falla_la_de_ambiente_se_queda_la_del_jugador(self):
-        with mock.patch.object(prensa, "generar_json", self._redactor(falla_la_general=True)), \
-                mock.patch.object(prensa.random, "random", return_value=0.0):
-            resultado = prensa.revisar_prensa(self.perfil, partidos(*[(1, 7.0)] * 3), {})
-        self.assertEqual([n.titular for n in resultado["noticias"]], ["Sobre Simon"])
-        self.assertEqual(resultado["noticias"][0].player_id, 7)
-        self.assertEqual(resultado["noticias"][0].hitos, ["racha_goleadora:3"])
-
-    def test_si_falla_la_de_ambiente_y_no_hay_otra_se_avisa(self):
-        with mock.patch.object(prensa, "generar_json", self._redactor(falla_la_general=True)), \
-                mock.patch.object(prensa.random, "random", return_value=0.0):
-            with self.assertRaises(RuntimeError):
-                prensa.revisar_prensa(self.perfil, [], {})
+    def test_la_noticia_del_jugador(self):
+        resultado = self._revisar(partidos(*[(1, 7.0)] * 3))
+        (noticia,) = resultado["noticias"]  # azar alto: sin la de ambiente
+        self.assertEqual((noticia.categoria, noticia.tono, noticia.player_id), ("jugador", "positiva", self.perfil.id))
+        self.assertEqual(noticia.hitos, ["racha_goleadora:3"])
+        self.assertIn("Canales", noticia.titular)
+        self.assertIn("3", noticia.titular + noticia.cuerpo)
+        self.assertNotRegex(noticia.titular + noticia.cuerpo, r"[{}]|#\w+#")
+        self.assertEqual(noticia.cuerpo[0], noticia.cuerpo[0].upper())
 
     def test_las_dos_noticias(self):
-        with mock.patch.object(prensa, "generar_json", self._redactor(falla_la_general=False)), \
-                mock.patch.object(prensa.random, "random", return_value=0.0):
-            resultado = prensa.revisar_prensa(self.perfil, partidos(*[(1, 7.0)] * 3), {})
+        resultado = self._revisar(partidos(*[(1, 7.0)] * 3), azar=0.0)
         self.assertEqual([n.categoria for n in resultado["noticias"]], ["jugador", "general"])
+        ambiente = resultado["noticias"][1]
+        self.assertNotRegex(ambiente.titular + ambiente.cuerpo, r"[{}]|#\w+#")  # los #clubes# ficticios se expanden
+
+    def test_sin_hitos_solo_la_de_ambiente_si_toca(self):
+        self.assertEqual(self._revisar([])["noticias"], [])
+        self.assertEqual([n.categoria for n in self._revisar([], azar=0.0)["noticias"]], ["general"])
+
+    def test_los_titulares_de_ambiente_no_se_repiten(self):
+        titulares = [self._revisar([], azar=0.0)["noticias"][0].titular for _ in range(6)]
+        self.assertEqual(len(set(titulares)), 6, titulares)
+        self.assertTrue(database.get_narrador_usados(self.perfil.id)["textos"])
+
+    def test_la_entrevista_sale_con_su_cita(self):
+        registro = MatchInterviewRecord(
+            goles_equipo=2, goles_rival=1, equipo_rival="Inter", goles_jugador=1, rating_jugador=7.5,
+            respuestas_jugador=["Fue un triunfo de todo el equipo, el grupo trabajo muchisimo toda la semana."],
+            reaccion_prensa="La prensa valoro su humildad.", delta_reputacion=3,
+        )
+        registro.player_id = self.perfil.id
+        registro.id = database.save_match_interview(registro)
+        resultado = self._revisar([registro])
+        (nota,) = [n for n in resultado["noticias"] if n.hitos == [f"entrevista:{registro.id}"]]
+        self.assertIn("«", nota.titular)
+        self.assertIn("todo el equipo", nota.titular)
+        self.assertIn("La prensa valoro su humildad.", nota.cuerpo)
+        self.assertEqual(nota.tono, "positiva")
+        self.assertEqual(resultado["estado_prensa"]["entrevista_reportada"], registro.id)
+        otra_vez = self._revisar([registro], resultado["estado_prensa"])
+        self.assertFalse([n for n in otra_vez["noticias"] if n.hitos == [f"entrevista:{registro.id}"]])
+
+    def test_una_respuesta_corta_no_se_cita(self):
+        registro = MatchInterviewRecord(respuestas_jugador=["Bien."], equipo_rival="Inter")
+        registro.player_id = self.perfil.id
+        registro.id = database.save_match_interview(registro)
+        self.assertEqual(self._revisar([registro])["noticias"], [])
 
 
 if __name__ == "__main__":

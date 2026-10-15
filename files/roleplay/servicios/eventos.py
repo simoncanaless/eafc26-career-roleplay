@@ -12,7 +12,8 @@ premio de los hinchas solo en buena racha; y nunca se repite un evento de
 los ultimos.
 
 Como en la economia, lo que provocan lo decide el codigo (reputacion,
-seguidores, plata) y la IA solo escribe la noticia y los comentarios.
+seguidores, plata), y la noticia y los comentarios los escribe el motor
+narrativo (contar()).
 Algunos traen un reto de roleplay (ej. arrancar el proximo partido en el
 banco): la app no toca el juego, asi que es una propuesta para jugar la
 historia, no una regla.
@@ -34,13 +35,10 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Optional
 
-from pydantic import BaseModel
-
-from roleplay.gemini import generar_json
 from roleplay.models import ActividadInstagram, NoticiaPrensa, PlayerProfile
 from roleplay.partida.carrera import Carrera
 from roleplay.servicios import economia
-from roleplay.servicios.contexto import ficha_jugador
+from roleplay.servicios.narrador import narrador, unir
 
 PROBABILIDAD_POR_SEMANA = 0.3  # ~ un evento por mes de juego
 HISTORIAL_GUARDADO = 20
@@ -51,7 +49,7 @@ SIN_REPETIR = 4  # un evento no vuelve hasta que pasen otros tantos
 class TipoEvento:
     id: str
     titulo: str  # el titular corto; {auto}, {casa} se completan con lo que tiene
-    detalle: str  # lo que pasa, para la IA (tercera persona)
+    detalle: str  # lo que pasa, para la noticia (tercera persona)
     tono: str  # positiva | negativa | mixta | neutral
     reputacion: int
     seguidores: float  # veces la escala de la hinchada (la misma que mueve los partidos)
@@ -236,61 +234,37 @@ def revisar(perfil: PlayerProfile, estado: dict, e: dict, carrera: Optional[Carr
     return estado, e, []
 
 
-# ---- la repercusion: noticia y comentarios (la IA) ----
-
-
-class NoticiaEvento(BaseModel):
-    titular: str
-    cuerpo: str
+# ---- la repercusion: noticia y comentarios (motor narrativo) ----
 
 
 def contar(perfil: PlayerProfile, titulo: str, descripcion: str, tono: str, seguidores: int, fecha: str, hito: str,
-           tipo_actividad: str = "evento", contexto_real: str = "") -> tuple[NoticiaPrensa, ActividadInstagram]:
-    """Corre en un hilo. La noticia de algo que le paso al jugador (la
-    escribe la IA; sin IA, sale con `titulo`) y lo que comentan los hinchas
-    en Instagram. Los numeros ya se aplicaron antes: esto es solo el relato.
-    La usan los eventos inesperados y la hinchada de cada club."""
+           tipo_actividad: str = "evento") -> tuple[NoticiaPrensa, ActividadInstagram]:
+    """La noticia de algo que le paso al jugador y lo que comentan los
+    hinchas en Instagram (servicios/narrador.py). Los numeros ya se aplicaron
+    antes: esto es solo el relato. La usan los eventos inesperados, la
+    economia, la hinchada de cada club y la vida sentimental."""
     from roleplay.servicios.hinchada import EventoHinchada, comentar_eventos
 
-    try:
-        redactada = generar_json(
-            f"""
-Sos un periodista deportivo y de la prensa del corazon. Escribi una noticia
-corta (titular + 2 a 4 frases, en espanol) sobre esto que le paso a un
-jugador en un modo carrera roleplay de EAFC 26:
-
-{descripcion}.
-{ficha_jugador(perfil)}
-{contexto_real}
-El tono es {tono} (respetalo). No nombres marcas ni personas reales (salvo
-la marca del auto o el club si aparecen arriba). No inventes resultados ni
-datos que no esten arriba.
-""".strip(),
-            NoticiaEvento,
-            "No se pudo escribir la noticia esta vez.",
-        )
-        titular, cuerpo = redactada.titular.strip(), redactada.cuerpo.strip()
-    except RuntimeError:
-        titular, cuerpo = f"{perfil.nombre_jugador}: {titulo[0].lower()}{titulo[1:]}", ""
+    partes = perfil.nombre_jugador.split()
+    datos = {"titulo": titulo, "titulo_min": titulo[:1].lower() + titulo[1:], "apellido": partes[-1] if partes else ""}
+    tono = tono if tono in ("positiva", "negativa", "mixta", "neutral") else "neutral"
+    with narrador(perfil.id, "prensa") as escritor:
+        titular = escritor.decir(f"t_vida_{tono}", **datos) or titulo
+        cuerpo = unir(descripcion.rstrip(".") + ".", escritor.elegir(f"c_vida_{tono}", **datos))
     noticia = NoticiaPrensa(player_id=perfil.id, categoria="jugador", tono=tono, titular=titular, cuerpo=cuerpo,
                             hitos=[hito])
     evento = EventoHinchada(tipo_actividad, fecha, titulo, descripcion, seguidores)
-    try:
-        comentarios = comentar_eventos(perfil, [evento], contexto_real).get(0, [])
-    except RuntimeError:
-        comentarios = []
     actividad = ActividadInstagram(
         player_id=perfil.id, fecha_juego=fecha, tipo=tipo_actividad, titulo=titulo,
-        crecimiento_seguidores=seguidores, comentarios=comentarios,
+        crecimiento_seguidores=seguidores, comentarios=comentar_eventos(perfil, [evento]).get(0, []),
     )
     return noticia, actividad
 
 
-def repercusion(perfil: PlayerProfile, ocurrido: Ocurrido, moneda: str, contexto_real: str = ""
-                ) -> tuple[NoticiaPrensa, ActividadInstagram]:
+def repercusion(perfil: PlayerProfile, ocurrido: Ocurrido, moneda: str) -> tuple[NoticiaPrensa, ActividadInstagram]:
     """Corre en un hilo: la noticia y los comentarios de un evento."""
     descripcion = f"{perfil.nombre_jugador} {ocurrido.detalle}"
     if ocurrido.dinero:
         descripcion += f" ({'cobra' if ocurrido.dinero > 0 else 'le cuesta'} {economia.dinero(abs(ocurrido.dinero), moneda)})"
     return contar(perfil, ocurrido.titulo, descripcion, ocurrido.tipo.tono, ocurrido.seguidores,
-                  ocurrido.fecha.isoformat(), f"evento:{ocurrido.tipo.id}", contexto_real=contexto_real)
+                  ocurrido.fecha.isoformat(), f"evento:{ocurrido.tipo.id}")

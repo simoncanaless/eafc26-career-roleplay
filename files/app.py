@@ -112,7 +112,7 @@ def main(argv=None) -> int:
     from PySide6.QtWidgets import QApplication
 
     from roleplay.database import init_db
-    from roleplay.ui.ajustes import abrir_juego_o_preguntar, pedir_clave_si_falta
+    from roleplay.ui.ajustes import abrir_juego_o_preguntar
     from roleplay.ui.estilos import aplicar_estilo
 
     init_db()
@@ -127,7 +127,6 @@ def main(argv=None) -> int:
 
     if args.jugar:
         abrir_juego_o_preguntar(None)  # primero el juego: Steam tarda en levantarlo
-    pedir_clave_si_falta()
 
     ventana = _crear_ventana(args.modulo, jugar=args.jugar)
     ventana.show()

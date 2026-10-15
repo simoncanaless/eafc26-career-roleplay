@@ -48,7 +48,6 @@ from roleplay.database import (
 from roleplay.servicios import amor, autos, clubes, economia, eventos
 from roleplay.servicios.hinchada import _escala
 from roleplay.servicios.economia import CATALOGO, CATEGORIAS, POR_ID, dinero
-from roleplay.servicios.partida_real import contexto_temporada
 from roleplay.ui import estilos
 from roleplay.ui.comun import ejecutar_en_hilo, esc
 from roleplay.ui.configurador import Configurador, guardar_foto, miniatura
@@ -56,7 +55,6 @@ from roleplay.ui.componentes import (
     Mosaico,
     Tarjeta,
     boton,
-    chip,
     chip_alternable,
     etiqueta_campo,
     fila,
@@ -424,7 +422,7 @@ class PaginaVida(QWidget):
             self.compra_hecha.emit()  # la reputacion cambio
             self.evento_inesperado.emit(ocurrido.titulo, ocurrido.reto)
             ejecutar_en_hilo(
-                eventos.repercusion, perfil, ocurrido, self._moneda(), contexto_temporada(carrera),
+                eventos.repercusion, perfil, ocurrido, self._moneda(),
                 al_completar=lambda resultado, i=ocurrido.id: self._on_repercusion_evento(i, resultado),
                 al_fallar=self._on_repercusion_error,
             )
@@ -479,23 +477,20 @@ class PaginaVida(QWidget):
         set_estado_amor(perfil.id, estado)
         set_economia(perfil.id, e)
         for suceso in sucesos:
-            self._contar_amor(perfil, suceso, estado, contexto_temporada(carrera))
+            self._contar_amor(perfil, suceso, estado)
         nueva = estado.get("decision")
         if nueva and nueva != antes.get("decision"):
             decision, pareja = amor.decision_pendiente(estado)
             self.decision_pendiente.emit(decision.titulo.format(pareja=pareja))
 
-    def _contar_amor(self, perfil, suceso, estado: dict, contexto_real: str = "") -> int:
+    def _contar_amor(self, perfil, suceso, estado: dict) -> int:
         seguidores = round(_escala(get_seguidores(perfil.id), get_reputacion_actual(perfil.id)) * suceso.seguidores)
         sumar_reputacion_y_seguidores(perfil.id, suceso.reputacion, seguidores, motivo=suceso.titulo)
         self.compra_hecha.emit()
-        descripcion = f"{perfil.nombre_jugador} {suceso.detalle}"
-        if (estado.get("pareja") or {}).get("real"):
-            descripcion += (" (su pareja es una persona real: la noticia la trata con carino y respeto, "
-                            "sin chismes ni detalles intimos)")
+        descripcion = f"{perfil.nombre_jugador} {suceso.detalle}"  # (con pareja real, amor.py ya no arma crisis)
         ejecutar_en_hilo(
             eventos.contar, perfil, suceso.titulo, descripcion, suceso.tono, seguidores,
-            suceso.fecha.isoformat(), suceso.clave, "amor", contexto_real,
+            suceso.fecha.isoformat(), suceso.clave, "amor",
             al_completar=self._on_repercusion_amor, al_fallar=self._on_repercusion_error,
         )
         return seguidores
@@ -577,8 +572,7 @@ class PaginaVida(QWidget):
         estado, e, suceso = amor.elegir(estado, get_economia(perfil.id), opcion_id, hoy)
         set_estado_amor(perfil.id, estado)
         set_economia(perfil.id, e)
-        seguidores = self._contar_amor(perfil, suceso, estado,
-                                       contexto_temporada(self._carrera) if self._carrera is not None else "")
+        seguidores = self._contar_amor(perfil, suceso, estado)
         partes = [f"<b>Elegiste: {esc(suceso.titulo)}</b>"]
         if seguidores:
             partes.append(f"{_con_signo(seguidores)} seguidores")
@@ -631,7 +625,7 @@ class PaginaVida(QWidget):
         self._ultima_compra = articulo.nombre
         self.compra_hecha.emit()
         ejecutar_en_hilo(
-            economia.repercusion, perfil, articulo, efecto, self._moneda(), hoy.isoformat(), contexto_temporada(carrera),
+            economia.repercusion, perfil, articulo, efecto, self._moneda(), hoy.isoformat(),
             al_completar=self._on_repercusion, al_fallar=self._on_repercusion_error,
         )
 

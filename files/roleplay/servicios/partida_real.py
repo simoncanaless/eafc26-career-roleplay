@@ -4,11 +4,10 @@ Lo que la app hace con la partida de FC 26:
 - el ultimo partido del usuario, listo para la sala de prensa (marcador,
   rival, sus goles, nota y minutos; asistencias, tarjetas y figura salen
   comparando con la lectura anterior, porque el juego solo guarda totales);
-- el contexto real de la temporada para los prompts;
 - los hechos destacados del mundo (hat-tricks, goleadas, choques de punta)
   para la prensa: "City gano 3-1 con 3 goles de Haaland".
 
-Que es noticia lo decide el codigo (puntajes); la IA solo redacta y pone
+Que es noticia lo decide el codigo (puntajes); el motor narrativo redacta y la base local pone
 nombres a los jugadores (identificar.py, con cache en la base).
 """
 
@@ -125,50 +124,29 @@ def ya_entrevistado(partido: UltimoPartido, historial: list[MatchInterviewRecord
     )
 
 
-# ---- nombres (cache + IA) ----
+# ---- nombres (base local + lo ya conocido) ----
 
 
-def nombres_de_jugadores(carrera: Carrera, ids, preguntar: bool = True) -> dict[int, str]:
-    """{id: nombre} de los que se conocen. Con `preguntar`, los que nunca se
-    preguntaron van a la IA (una consulta) y quedan guardados."""
+def nombres_de_jugadores(carrera: Carrera, ids) -> dict[int, str]:
+    """{id: nombre} de los que se conocen: los editados en la partida y la base
+    local de nombres (servicios/identificar.py). Los demas se describen, nunca
+    se inventan. (La tabla nombre_conocido, de cuando los adivinaba la IA, ya
+    no se usa: medido contra la partida, 8 de 20 estaban mal.)"""
     ids = {i for i in ids if i is not None}
     nombres = {i: carrera.nombre_editado(i) for i in ids if carrera.nombre_editado(i)}
     resto = ids - set(nombres)
-    guardados = database.get_nombres_conocidos("jugador", resto)
-    nombres.update({i: nombre for i, (nombre, _) in guardados.items() if nombre})
-    faltan = sorted(resto - set(guardados))
-    if preguntar and faltan:
-        try:
-            nuevos = identificar_jugadores([carrera.ficha(i) for i in faltan])
-        except RuntimeError:
-            return nombres  # sin IA: se describe al jugador; se pregunta la proxima vez
-        database.guardar_nombres_conocidos("jugador", {i: nuevos.get(i, ("", False)) for i in faltan})
-        nombres.update({i: nombre for i, (nombre, _) in nuevos.items() if nombre and i in faltan})
+    if resto:
+        locales = identificar_jugadores([carrera.ficha(i) for i in sorted(resto)])
+        nombres.update({i: nombre for i, (nombre, _) in locales.items() if nombre})
     return nombres
 
 
-def nombrar_competiciones(carrera: Carrera, ids, preguntar: bool = True) -> None:
+def nombrar_competiciones(carrera: Carrera, ids) -> None:
     """Pone nombre a las copas que la partida no nombra (en la propia carrera)."""
-    sin_nombre = {i for i in ids if i in carrera.competiciones and not carrera.competiciones[i].nombre}
-    guardados = database.get_nombres_conocidos("competicion", sin_nombre)
-    faltan = sorted(sin_nombre - set(guardados))
-    if preguntar and faltan:
-        fichas = []
-        for i in faltan:
-            equipos = sorted({carrera.equipo(e) for p in carrera.partidos if p.competicion == i for e in (p.local, p.visita)})
-            comp = carrera.competiciones[i]
-            fichas.append({"id": i, "codigo": comp.codigo, "continental": comp.continental, "equipos": equipos[:16]})
-        try:
-            nuevos = identificar_competiciones(fichas)
-        except RuntimeError:
-            nuevos = None
-        if nuevos is not None:
-            nuevos = {i: nuevos.get(i, ("", False)) for i in faltan}
-            database.guardar_nombres_conocidos("competicion", nuevos)
-            guardados.update(nuevos)
-    for i, (nombre, _) in guardados.items():
-        if nombre:
-            carrera.competiciones[i] = replace(carrera.competiciones[i], nombre=nombre)
+    sin_nombre = sorted(i for i in ids if i in carrera.competiciones and not carrera.competiciones[i].nombre)
+    conocidas = {i: n for i, (n, _) in identificar_competiciones([{"id": i} for i in sin_nombre]).items() if n}
+    for i, nombre in conocidas.items():
+        carrera.competiciones[i] = replace(carrera.competiciones[i], nombre=nombre)
 
 
 def competiciones_del_usuario(carrera: Carrera) -> list[int]:
@@ -184,78 +162,6 @@ def describir_jugador(carrera: Carrera, jugador: int, nombres: dict[int, str]) -
     ficha = carrera.ficha(jugador)
     posicion = ficha.get("posicion", "jugador")
     return f"el {posicion} del {ficha['club']}" if "club" in ficha else f"un {posicion}"
-
-
-# ---- contexto de la temporada ----
-
-
-def contexto_temporada(carrera: Carrera, nombres: Optional[dict] = None) -> str:
-    """Datos reales para los prompts. Sin IA: usa los nombres ya conocidos."""
-    if nombres is None:
-        goleadores = [
-            e.jugador for c in competiciones_del_usuario(carrera) if carrera.competiciones[c].es_liga
-            for e in carrera.goleadores(c, 5)
-        ]
-        nombres = nombres_de_jugadores(carrera, goleadores, preguntar=False)
-    equipo = carrera.equipo_usuario()
-    hoy = carrera.fecha_actual()
-    lineas = [f"Datos reales de la partida de FC 26 (fecha en el juego: {fecha_corta(hoy) if hoy else '?'}):"]
-    if equipo is None:
-        return lineas[0] + "\n- No se encontro el club del jugador."
-    nombre_usuario = carrera.nombre_editado(carrera.usuario_id) or "El jugador"
-    lineas.append(f"- {nombre_usuario} juega en {carrera.equipo(equipo)}.")
-
-    for competicion, totales in sorted(totales_usuario(carrera).items(), key=lambda kv: -kv[1]["partidos"]):
-        estadisticas = [e for e in carrera.estadisticas_de(carrera.usuario_id) if str(e.competicion) == competicion]
-        nota_total = sum(e.nota_total for e in estadisticas)
-        nota = f", nota media {nota_total / totales['partidos'] / 10:.1f}" if totales["partidos"] else ""
-        lineas.append(
-            f"- {carrera.competicion(int(competicion))}: {cantidad(totales['partidos'], 'partido', 'partidos')}, "
-            f"{cantidad(totales['goles'], 'gol', 'goles')}, {cantidad(totales['asistencias'], 'asistencia', 'asistencias')}, "
-            f"{cantidad(totales['figura'], 'vez', 'veces')} figura{nota}."
-        )
-
-    for competicion in competiciones_del_usuario(carrera):
-        if not carrera.competiciones[competicion].es_liga:
-            continue
-        tabla = carrera.tabla(competicion)
-        posicion = carrera.posicion_en(competicion, equipo)
-        if posicion:
-            fila, lider = tabla[posicion - 1], tabla[0]
-            texto = f"- {carrera.equipo(equipo)} va {posicion}° en la {carrera.competicion(competicion)} con {fila.pts} pts ({fila.pj} PJ)"
-            if posicion > 1:
-                texto += f"; lider: {carrera.equipo(lider.equipo)} con {lider.pts}"
-            lineas.append(texto + ".")
-        goleadores = carrera.goleadores(competicion, 5)
-        if goleadores:
-            lineas.append(
-                f"- Goleadores de la {carrera.competicion(competicion)}: "
-                + ", ".join(
-                    f"{n}. {describir_jugador(carrera, e.jugador, nombres)} ({carrera.equipo(e.equipo)}) {e.goles}"
-                    for n, e in enumerate(goleadores, start=1)
-                )
-                + "."
-            )
-
-    ultimos = carrera.partidos_de(equipo, jugados=True)[-5:]
-    if ultimos:
-        letras = {"victoria": "G", "empate": "E", "derrota": "P"}
-        lineas.append(
-            "- Ultimos resultados del club: "
-            + "; ".join(
-                f"{letras[p.resultado_para(equipo)]} {marcador(carrera, p)} ({carrera.competicion(p.competicion)})"
-                for p in ultimos
-            )
-            + "."
-        )
-    proximo = carrera.proximo_partido_de(equipo)
-    if proximo:
-        condicion = "de local" if proximo.local == equipo else "de visita"
-        lineas.append(
-            f"- Proximo partido: ante {carrera.equipo(proximo.rival(equipo))} {condicion} "
-            f"({carrera.competicion(proximo.competicion)}, {fecha_corta(proximo.fecha)})."
-        )
-    return "\n".join(lineas)
 
 
 # ---- hechos destacados del mundo ----
@@ -310,16 +216,56 @@ def describir_hecho(carrera: Carrera, hecho: Hecho, nombres: dict[int, str]) -> 
     if hecho.figura is not None:
         nota = f", nota {hecho.nota_figura:.1f}" if hecho.nota_figura else ""
         equipo = next((a.equipo for a in carrera.actuaciones_en(p) if a.jugador == hecho.figura), p.local)
-        texto += (
-            f" {describir_jugador(carrera, hecho.figura, nombres)} ({carrera.equipo(equipo)})"
-            f" marco {cantidad(hecho.goles_figura, 'gol', 'goles')}{nota}."
-        )
+        quien = describir_jugador(carrera, hecho.figura, nombres)
+        if carrera.equipo(equipo) not in quien:  # "el delantero del City" ya dice el club; un nombre no
+            quien += f" ({carrera.equipo(equipo)})"
+        texto += f" {quien} marco {cantidad(hecho.goles_figura, 'gol', 'goles')}{nota}."
     if carrera.competiciones[p.competicion].es_liga:
         for equipo in (p.local, p.visita):
             posicion = carrera.posicion_en(p.competicion, equipo)
             if posicion and posicion <= 6:
                 texto += f" {carrera.equipo(equipo)} queda {posicion}° en la tabla."
     return texto
+
+
+def hecho_para_prensa(carrera: Carrera, hecho: Hecho, nombres: dict[int, str]) -> dict:
+    """El hecho con sus datos sueltos, para que la prensa arme el titular."""
+    p = hecho.partido
+    if hecho.figura is not None and hecho.goles_figura >= 3:
+        tipo = "hat_trick"
+    elif abs(p.goles_local - p.goles_visita) >= 4:
+        tipo = "goleada"
+    else:
+        tipo = "choque"
+    gana_local = p.goles_local >= p.goles_visita
+    equipo_figura = next((a.equipo for a in carrera.actuaciones_en(p) if a.jugador == hecho.figura), None)
+    perdedor = p.visita if gana_local else p.local
+    if equipo_figura is not None:
+        perdedor = p.rival(equipo_figura)
+    return {
+        "tipo": tipo, "texto": describir_hecho(carrera, hecho, nombres), "marcador": marcador(carrera, p),
+        "local": carrera.equipo(p.local), "visita": carrera.equipo(p.visita),
+        "ganador": carrera.equipo(p.local if gana_local else p.visita), "perdedor": carrera.equipo(perdedor),
+        "competicion": carrera.competicion(p.competicion),
+        "figura": nombres.get(hecho.figura, "") if hecho.figura is not None else "",
+        "goles_figura": hecho.goles_figura or "", "equipo_figura": carrera.equipo(equipo_figura) if equipo_figura else "",
+    }
+
+
+def premio_para_prensa(carrera: Carrera, premio: "PremioMes", nombres: dict[int, str]) -> dict:
+    return {
+        "tipo": "premio", "texto": describir_premio(carrera, premio, nombres),
+        "jugador": describir_jugador(carrera, premio.jugador, nombres), "equipo": carrera.equipo(premio.equipo),
+        "mes": premio.mes.split(" de ")[0], "liga": premio.liga, "goles": cantidad(premio.goles, "gol", "goles"),
+    }
+
+
+def mercado_para_prensa(carrera: Carrera, traspasos: list, nombres: dict[int, str]) -> dict:
+    movimientos = [mercado.describir_traspaso(carrera, t, nombres) for t in traspasos]
+    return {
+        "tipo": "mercado", "primero": movimientos[0],
+        "texto": " ".join(f"{m[0].upper()}{m[1:]}." for m in movimientos),
+    }
 
 
 # ---- prensa con la partida ----
@@ -330,12 +276,11 @@ def revisar_prensa_con_partida(
     historial: list[MatchInterviewRecord],
     estado_prensa: dict,
     carrera: Carrera,
-    api_key: Optional[str] = None,
     incluir_general: bool = True,
 ) -> dict:
     """revisar_prensa con datos reales: el contexto de la temporada para la
     noticia sobre el jugador, y una noticia del mundo sobre un hecho real
-    (en vez de una inventada). Corre en un hilo: puede consultar a la IA.
+    (en vez de una inventada). Corre en un hilo (lee la partida y la base).
     `incluir_general=False` (las revisiones automaticas de cada dia): si no
     hay nada real que contar, no sale una noticia de ambiente inventada."""
     nombrar_competiciones(carrera, competiciones_del_usuario(carrera))
@@ -370,28 +315,25 @@ def revisar_prensa_con_partida(
         })
     # las noticias del mundo, por importancia: el premio que gano otro, el
     # mercado y el partido destacado (solo las primeras salen)
-    hechos_texto = []
+    hechos_mundo = []
     if premio is not None and premio.es_usuario:
         hitos_reales.append({"tipo": "jugador_del_mes", "valor": premio.detalle})
     elif premio is not None:
-        hechos_texto.append(describir_premio(carrera, premio, nombres))
+        hechos_mundo.append(premio_para_prensa(carrera, premio, nombres))
     if traspasos:
-        hechos_texto.append(mercado.texto_mercado(carrera, traspasos, nombres))
-    usados_partidos = MAXIMO_NOTICIAS_MUNDO - len(hechos_texto)
+        hechos_mundo.append(mercado_para_prensa(carrera, traspasos, nombres))
+    usados_partidos = MAXIMO_NOTICIAS_MUNDO - len(hechos_mundo)
     hechos = hechos[: max(usados_partidos, 0)]
-    hechos_texto += [describir_hecho(carrera, h, nombres) for h in hechos]
+    hechos_mundo += [hecho_para_prensa(carrera, h, nombres) for h in hechos]
 
     resultado = revisar_prensa(
         perfil,
         historial,
         estado_prensa,
-        api_key=api_key,
         incluir_general=incluir_general,
-        contexto_real="\n".join(
-            t for t in (contexto_temporada(carrera, nombres), servicio_metas.texto_para_prompt(carrera, metas)) if t
-        ),
-        hechos_reales=hechos_texto,
+        hechos_reales=hechos_mundo,
         hitos_reales=hitos_reales,
+        carrera=carrera,
     )
     resultado["estado_prensa"]["reales"] = estado_reales
     resultado["estado_prensa"]["mes"] = estado_mes
@@ -410,13 +352,12 @@ def revisar_prensa_con_partida(
     if traspasos:
         hoy = carrera.fecha_actual()
         nuevos = [
-            {"fecha": hoy.isoformat() if hoy else "", "texto": mercado.describir_traspaso(carrera, t, nombres, para_la_ia=False),
+            {"fecha": hoy.isoformat() if hoy else "", "texto": mercado.describir_traspaso(carrera, t, nombres),
              "club": t.toca_al_club}
             for t in traspasos
         ]
         resultado["estado_prensa"]["mercado"] = (nuevos + list(estado_prensa.get("mercado", [])))[: mercado.MERCADO_GUARDADO]
-    # la foto de los planteles para la proxima vez (recien ahora: si la IA
-    # fallo, estos traspasos se vuelven a detectar en la proxima revision)
+    # la foto de los planteles para la proxima vez
     database.guardar_clubes_vistos(carrera.partida, mercado.clubes_de_jugadores(carrera))
     hoy = carrera.fecha_actual()
     if hoy:
@@ -432,14 +373,13 @@ def revisar_prensa_con_partida(
 class LecturaPartida:
     carrera: Carrera
     ultimo: Optional[UltimoPartido]
-    contexto: str
     ya_entrevistado: bool
     previa: object = None  # PreviaPartido del proximo partido (servicios/previa.py), si hay
 
 
 def leer_para_entrevista(player_id: int) -> Optional[LecturaPartida]:
-    """La partida mas reciente, el ultimo partido del usuario y el contexto
-    de la temporada. None si no hay partidas de carrera jugador en el PC."""
+    """La partida mas reciente, el ultimo partido del usuario y la previa
+    del proximo. None si no hay partidas de carrera jugador en el PC."""
     from roleplay.partida.lector import carrera_actual
 
     carrera = carrera_actual()
@@ -447,17 +387,13 @@ def leer_para_entrevista(player_id: int) -> Optional[LecturaPartida]:
         return None
     from roleplay.servicios.previa import previa_del_proximo  # (previa importa este modulo)
 
-    from roleplay.servicios import metas  # (metas importa este modulo)
-
     estado = database.get_estado_partida(player_id)
     ultimo = ultimo_partido(carrera, estado)
     nombrar_competiciones(carrera, competiciones_del_usuario(carrera))  # una vez; despues, cache
     historial = database.load_match_interviews(player_id)
-    texto_metas = metas.texto_para_prompt(carrera, database.get_metas(player_id))
     return LecturaPartida(
         carrera=carrera,
         ultimo=ultimo,
-        contexto=contexto_temporada(carrera) + (f"\n{texto_metas}" if texto_metas else ""),
         ya_entrevistado=bool(ultimo and ya_entrevistado(ultimo, historial)),
         previa=previa_del_proximo(carrera, estado_partida=estado),
     )

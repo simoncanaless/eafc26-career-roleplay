@@ -1,12 +1,11 @@
 import json
-import os
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
 import ayuda
-from roleplay import ajustes, config, gemini
+from roleplay import ajustes, config
 from roleplay.servicios import accesos, juego
 
 
@@ -156,31 +155,13 @@ class TestDatosDeCadaUno(ConCarpeta):
             config.carpeta_datos({"EAFC_ROLEPLAY_DATOS": str(self.dir), "APPDATA": "x"}, empaquetada=True), self.dir
         )
 
-    def test_guardar_clave_no_toca_el_resto_del_env(self):
-        env = self.dir / ".env"
-        env.write_text("# mis cosas\nOTRA=1\nGEMINI_API_KEY=vieja\n", encoding="utf-8")
-        with mock.patch.object(config, "ARCHIVO_ENV", env), mock.patch.dict(os.environ, {"GEMINI_API_KEY": "vieja"}):
-            gemini.guardar_clave("  clave-nueva-de-prueba  ")
-            self.assertEqual(os.environ["GEMINI_API_KEY"], "clave-nueva-de-prueba")
-        self.assertEqual(env.read_text(encoding="utf-8"), "# mis cosas\nOTRA=1\nGEMINI_API_KEY=clave-nueva-de-prueba\n")
-
-    def test_una_clave_rechazada_se_explica(self):
-        from google.genai import errors
-
-        cliente = mock.Mock()
-        cliente.models.list.side_effect = errors.ClientError(400, {"error": {"message": "API key not valid"}})
-        with mock.patch.object(gemini, "_cliente", return_value=cliente):
-            with self.assertRaises(RuntimeError) as ctx:
-                gemini.probar_clave("clave-falsa")
-        self.assertIn("rechazo", str(ctx.exception))
-
     def test_ajustes_rotos_no_rompen_nada(self):
         archivo = self.dir / "ajustes.json"
         archivo.write_text("{esto no es json", encoding="utf-8")
         with mock.patch.object(config, "ARCHIVO_AJUSTES", archivo):
             self.assertEqual(ajustes.leer(), {})
-            ajustes.guardar(sin_ia=True)
-            self.assertEqual(ajustes.leer(), {"sin_ia": True})
+            ajustes.guardar(en_vivo=True)
+            self.assertEqual(ajustes.leer(), {"en_vivo": True})
 
 
 class TestApp(ayuda.PruebaDeInterfaz):
@@ -206,16 +187,13 @@ class TestApp(ayuda.PruebaDeInterfaz):
             self.assertFalse(ui_ajustes.abrir_juego_o_preguntar(None))
         abrir.assert_not_called()
 
-    def test_la_bienvenida_solo_sale_sin_clave_y_una_vez(self):
+    def test_no_se_pide_ninguna_clave(self):
         from roleplay.ui import ajustes as ui_ajustes
 
-        archivo = Path(config.DB_PATH).parent / "ajustes.json"
-        with mock.patch.object(config, "ARCHIVO_AJUSTES", archivo), \
-                mock.patch.object(ui_ajustes, "get_gemini_api_keys", return_value=[]), \
-                mock.patch.object(ui_ajustes.DialogoClave, "exec", return_value=0) as dialogo:
-            ui_ajustes.pedir_clave_si_falta()  # "seguir sin IA"
-            ui_ajustes.pedir_clave_si_falta()
-        self.assertEqual(dialogo.call_count, 1)
+        self.assertFalse(hasattr(ui_ajustes, "DialogoClave"))
+        self.assertFalse(hasattr(ui_ajustes, "pedir_clave_si_falta"))
+        with self.assertRaises(ImportError):
+            from roleplay import gemini  # noqa: F401
 
     def test_diagnostico(self):
         proceso = ayuda.correr_aislado(

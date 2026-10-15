@@ -1,0 +1,422 @@
+{
+  "_que_es": "Noticias de la prensa (servicios/prensa.py, eventos.contar). Titular t_*, nucleo n_*, apertura y cierre por tono. Sin tildes.",
+  "t_hito_goles_totales": [
+    "{apellido} llega a {valor} goles en su carrera",
+    "{valor} goles: la cifra redonda de {apellido}",
+    "{apellido} ya suma {valor} gritos y no piensa parar",
+    "Otra marca para {apellido}: {valor} goles"
+  ],
+  "t_racha_goleadora": [
+    "{apellido} no para: {valor} partidos seguidos con gol",
+    "Racha encendida: {apellido} marca hace {valor} fechas",
+    "{apellido}, imparable: {valor} partidos al hilo convirtiendo",
+    "{valor} de {valor}: la racha goleadora de {apellido}"
+  ],
+  "t_racha_sin_gol": [
+    "{apellido}, {valor} partidos sin convertir",
+    "Se le cerro el arco a {apellido}: {valor} fechas sin gol",
+    "La sequia de {apellido} ya va por {valor} partidos",
+    "{apellido} busca el gol perdido: {valor} partidos en blanco"
+  ],
+  "t_buen_momento": [
+    "{apellido}, en estado de gracia",
+    "{apellido} vive su mejor momento",
+    "Notas de crack: la racha de {apellido}",
+    "{apellido} esta para cosas grandes"
+  ],
+  "t_mal_momento": [
+    "{apellido} atraviesa su peor momento",
+    "Bajon: las notas de {apellido} preocupan",
+    "{apellido}, en la mira por su rendimiento",
+    "Que le pasa a {apellido}?"
+  ],
+  "t_goles_temporada": [
+    "{apellido} ya suma {valor} goles en la temporada",
+    "{valor} goles y contando: la temporada de {apellido}",
+    "{apellido} alcanzo los {valor} goles en la temporada"
+  ],
+  "t_lider_goleadores": [
+    "{apellido}, maximo goleador de la {valor}",
+    "{apellido} encabeza la tabla de goleadores de la {valor}",
+    "Nadie hace mas goles que {apellido} en la {valor}"
+  ],
+  "t_partidazo": [
+    "Noche magica de {apellido}: {valor}",
+    "{apellido} la rompio: {valor}",
+    "Show de {apellido}: {valor}"
+  ],
+  "t_lider_liga": [
+    "{club} es el nuevo lider de la {valor}",
+    "{club} toma la punta de la {valor}",
+    "{club}, arriba de todos en la {valor}"
+  ],
+  "t_perdio_liderato": [
+    "{club} pierde la punta de la {valor}",
+    "Se le escapo el primer lugar a {club}",
+    "{club} deja de ser lider de la {valor}"
+  ],
+  "t_campeon": [
+    "{club}, campeon de la {valor}",
+    "Festejo en {club}: campeones de la {valor}",
+    "{apellido} y {club} levantan la {valor}"
+  ],
+  "t_maximo_goleador": [
+    "{apellido}, rey del gol de la {valor}",
+    "{apellido} termina como goleador de la {valor}",
+    "Pichichi: {apellido} es el maximo goleador de la {valor}"
+  ],
+  "t_jugador_del_mes": [
+    "{apellido}, jugador del mes",
+    "El mes de {apellido}: premio al mejor",
+    "{apellido} se queda con el premio al jugador del mes"
+  ],
+  "t_nuevo_club": [
+    "{apellido} tiene nuevo club",
+    "Bomba en el mercado: {apellido} cambia de camiseta",
+    "{apellido} se muda: ya es de {club}"
+  ],
+  "t_fin_de_temporada": [
+    "El balance de la temporada de {apellido}",
+    "{apellido} cierra la temporada: los numeros",
+    "Fin de temporada: asi le fue a {apellido}"
+  ],
+  "t_meta_cumplida": [
+    "{apellido} cumplio su palabra",
+    "Promesa cumplida: {apellido} alcanzo su meta",
+    "{apellido} lo dijo y lo hizo"
+  ],
+  "t_meta_fallida": [
+    "{apellido} no pudo con su meta",
+    "Se le escapo la meta a {apellido}",
+    "La promesa que {apellido} no pudo cumplir"
+  ],
+  "n_hito_goles_totales": [
+    "{apellido} llego a {valor} goles en su carrera.",
+    "La cuenta personal de {apellido} ya marca {valor} goles.",
+    "Ya son {valor} los goles de {apellido} en su carrera."
+  ],
+  "n_racha_goleadora": [
+    "{apellido} anoto en {valor} partidos consecutivos.",
+    "{apellido} lleva {valor} partidos seguidos con gol.",
+    "Hace {valor} fechas que {apellido} no deja de marcar."
+  ],
+  "n_racha_sin_gol": [
+    "{apellido} lleva {valor} partidos consecutivos sin convertir.",
+    "{apellido} suma {valor} partidos sin gol.",
+    "Hace {valor} fechas que {apellido} no grita un gol."
+  ],
+  "n_buen_momento": [
+    "{apellido} promedia una nota de {valor} o mas en sus ultimos cinco partidos.",
+    "Los ultimos cinco partidos de {apellido} promedian {valor} o mas de nota."
+  ],
+  "n_mal_momento": [
+    "El promedio de {apellido} en los ultimos cinco partidos cayo a {valor} o menos.",
+    "En los ultimos cinco partidos, {apellido} no supera el {valor} de promedio."
+  ],
+  "n_goles_temporada": [
+    "{apellido} ya lleva {valor} goles en la temporada.",
+    "{apellido} suma {valor} goles en lo que va de la temporada."
+  ],
+  "n_lider_goleadores": [
+    "{apellido} es el maximo goleador de la {valor}.",
+    "{apellido} lidera la tabla de goleadores de la {valor}."
+  ],
+  "n_partidazo": [
+    "{apellido} hizo un partidazo: {valor}.",
+    "{apellido} firmo una actuacion para el recuerdo: {valor}."
+  ],
+  "n_lider_liga": [
+    "{club} paso a liderar la {valor}.",
+    "{club} quedo primero en la {valor}."
+  ],
+  "n_perdio_liderato": [
+    "{club} perdio el primer lugar de la {valor}.",
+    "{club} ya no es lider de la {valor}."
+  ],
+  "n_campeon": [
+    "{club} salio campeon de la {valor}.",
+    "{club} se consagro en la {valor} con {apellido} como protagonista."
+  ],
+  "n_maximo_goleador": [
+    "{apellido} termino la temporada como maximo goleador de la {valor}.",
+    "{apellido} se quedo con el titulo de goleador de la {valor}."
+  ],
+  "n_jugador_del_mes": [
+    "{apellido} fue elegido jugador del mes: {valor}.",
+    "{apellido} gano el premio al jugador del mes ({valor})."
+  ],
+  "n_nuevo_club": [
+    "{apellido} paso {valor}.",
+    "El traspaso de {apellido} es oficial: {valor}."
+  ],
+  "n_fin_de_temporada": [
+    "{apellido} cerro la {valor}.",
+    "Los numeros de {apellido} en la {valor}."
+  ],
+  "n_meta_cumplida": [
+    "{apellido} cumplio la meta que se habia propuesto en publico: {valor_min}.",
+    "{apellido} se habia propuesto {valor_min}, y lo logro."
+  ],
+  "n_meta_fallida": [
+    "{apellido} no pudo cumplir la meta que se habia propuesto en publico: {valor_min}.",
+    "{apellido} se habia propuesto {valor_min}, y no le alcanzo."
+  ],
+  "c_apertura_positiva": [
+    "Gran momento para {nombre}.",
+    "{nombre} sigue dando que hablar.",
+    "Buenas noticias en {club}.",
+    "La gente de {club} esta feliz.",
+    ""
+  ],
+  "c_apertura_negativa": [
+    "Malas noticias para {nombre}.",
+    "Tiempos dificiles para {nombre}.",
+    "En {club} hay preocupacion.",
+    ""
+  ],
+  "c_apertura_mixta": [
+    "Semana de contrastes para {nombre}.",
+    "{nombre}, entre luces y sombras.",
+    ""
+  ],
+  "c_apertura_neutral": [
+    "{nombre} vuelve a ser noticia.",
+    "Novedades sobre {nombre}.",
+    ""
+  ],
+  "c_cierre_positiva": [
+    "La hinchada ya se ilusiona.",
+    "En el club hablan de un jugador distinto.",
+    "Las comparaciones con las leyendas no tardaron en aparecer.",
+    "Hay quienes ya lo ven peleando premios individuales.",
+    "La pregunta ya no es si seguira, sino hasta donde llega."
+  ],
+  "c_cierre_negativa": [
+    "Las criticas no se hicieron esperar.",
+    "Va a tener que responder en la cancha.",
+    "Los hinchas piden una reaccion.",
+    "Hay dudas sobre su nivel.",
+    "El proximo partido sera clave."
+  ],
+  "c_cierre_mixta": [
+    "La pelota, como siempre, tendra la ultima palabra.",
+    "Los hinchas esperan mas.",
+    "El tiempo dira."
+  ],
+  "c_cierre_neutral": [
+    "Se abre una nueva etapa.",
+    "Lo que viene promete.",
+    ""
+  ],
+  "x_compra_mal": [
+    "Y en las redes no le perdonan el {articulo} de {precio} que se compro hace poco.",
+    "Algunos hinchas le recuerdan el {articulo} recien comprado."
+  ],
+  "x_compra_bien": [
+    "De paso, el {articulo} nuevo ya es parte del folclore de su gran momento.",
+    "Mientras tanto, estrena su {articulo}."
+  ],
+  "x_pareja_real": [
+    "Fuera de la cancha, {pareja} sigue siendo su gran apoyo.",
+    "{pareja}, como siempre, lo acompana."
+  ],
+  "x_pareja_famosa": [
+    "Su romance con {pareja}, {oficio}, sigue en todas las revistas.",
+    "{pareja} celebro en sus redes."
+  ],
+  "x_rumor": [
+    "Mientras tanto, los rumores con {pareja} no paran.",
+    "Y las revistas siguen preguntando por {pareja}."
+  ],
+  "x_crisis": [
+    "Y las revistas siguen hablando de crisis con {pareja}."
+  ],
+  "x_meta_cerca": [
+    "Le faltan {faltan} {unidad} para cumplir su meta de la temporada.",
+    "La meta que se propuso esta a {faltan} {unidad}."
+  ],
+  "x_meta_tabla": [
+    "Con el equipo {puesto}, su meta de {meta} se complica."
+  ],
+  "x_evento_malo": [
+    "Lo de que {evento} todavia da que hablar.",
+    "Y lo de que {evento} sigue en boca de todos."
+  ],
+  "x_evento_bueno": [
+    "Esta semana, ademas, {evento}.",
+    "Un gesto suma: {evento}."
+  ],
+  "x_hinchada_contra": [
+    "La relacion con la hinchada de {club} sigue tensa."
+  ],
+  "x_idolo": [
+    "En {club} ya es palabra mayor."
+  ],
+  "t_cita_positiva": [
+    "«{cita}»: {apellido} tras el {marcador} ante {rival}",
+    "{apellido} hablo despues del {marcador}: «{cita}»",
+    "«{cita}». Las palabras de {apellido} tras vencer a {rival}"
+  ],
+  "t_cita_negativa": [
+    "«{cita}»: la frase de {apellido} que encendio la polemica",
+    "{apellido} tras el {marcador} ante {rival}: «{cita}»",
+    "Polemica por {apellido}: «{cita}»"
+  ],
+  "t_cita_mixta": [
+    "«{cita}»: {apellido} despues del {marcador} ante {rival}",
+    "{apellido} hablo tras el {marcador}: «{cita}»"
+  ],
+  "t_cita_neutral": [
+    "{apellido}, tras el {marcador} ante {rival}: «{cita}»",
+    "«{cita}»: lo que dijo {apellido} despues del partido"
+  ],
+  "n_cita": [
+    "Asi hablo {apellido} despues del {marcador} ante {rival}.",
+    "Eso dijo {apellido} en zona mixta tras el {marcador} ante {rival}.",
+    "Fueron las palabras de {apellido} despues de enfrentar a {rival}."
+  ],
+  "t_hat_trick": [
+    "{figura} firma un hat-trick en el {marcador}",
+    "Noche de {figura}: {goles_figura} goles en el {marcador}",
+    "{figura} se lleva la pelota: {goles_figura} goles ante {perdedor}",
+    "Show de {figura} en la {competicion}"
+  ],
+  "t_hat_trick_sin_nombre": [
+    "Hat-trick en el {marcador}",
+    "{equipo_figura} tiene un goleador encendido: {goles_figura} goles en el {marcador}"
+  ],
+  "t_goleada": [
+    "{ganador} aplasto a {perdedor}: {marcador}",
+    "Goleada en la {competicion}: {marcador}",
+    "{perdedor} vivio una pesadilla ante {ganador}",
+    "{marcador}: {ganador} no tuvo piedad"
+  ],
+  "t_choque": [
+    "Duelo de punta: {marcador}",
+    "{local} y {visita} se midieron arriba: {marcador}",
+    "Partido de seis puntos en la {competicion}: {marcador}"
+  ],
+  "n_mundo": [
+    "{texto}"
+  ],
+  "c_mundo_hat_trick": [
+    "Los hinchas lo despidieron de pie.",
+    "En las redes ya lo comparan con los grandes goleadores.",
+    "Una actuacion para enmarcar."
+  ],
+  "c_mundo_goleada": [
+    "En {perdedor} ya piden explicaciones.",
+    "Un resultado que sacude la tabla.",
+    "La goleada dejo heridas."
+  ],
+  "c_mundo_choque": [
+    "La pelea por arriba esta mas abierta que nunca.",
+    "La tabla, al rojo vivo.",
+    "Nadie quiere aflojar en la punta."
+  ],
+  "t_premio": [
+    "{jugador} es el jugador del mes en la {liga}",
+    "Premio para {jugador}: el mejor de {mes}",
+    "{jugador} ({equipo}) se lleva el jugador del mes"
+  ],
+  "c_premio": [
+    "Sus {goles} fueron clave en el mes.",
+    "Un mes redondo para {equipo}.",
+    "La competencia por los premios se pone interesante."
+  ],
+  "t_mercado": [
+    "Mercado al rojo vivo: {primero}",
+    "Movimientos en el mercado de fichajes",
+    "Se mueve el mercado: {primero}",
+    "Fichajes: {primero}"
+  ],
+  "c_mercado": [
+    "El mercado no da tregua.",
+    "Habra que ver como impactan estos movimientos.",
+    "Los clubes ya mueven sus fichas."
+  ],
+  "t_general": [
+    "#club_ficticio# despide a su entrenador tras una racha negativa",
+    "Polemica arbitral en el clasico de #ciudad_ficticia#",
+    "#club_ficticio# sorprende y se mete en zona de copas",
+    "Rumor de mercado: #jugador_ficticio# en la mira de #club_ficticio#",
+    "#club_ficticio# presenta un nuevo estadio",
+    "Escandalo en #club_ficticio#: pelea en el vestuario",
+    "#jugador_ficticio# anuncia su retiro a los 35",
+    "La revelacion de la temporada se llama #jugador_ficticio#"
+  ],
+  "c_general": [
+    "La noticia sacudio el ambiente del futbol local y los hinchas no hablan de otra cosa.",
+    "En las redes, las opiniones estan divididas.",
+    "Los proximos dias seran decisivos para entender el impacto de la noticia.",
+    "Mientras tanto, la temporada sigue su curso.",
+    "Desde el club prefirieron no hacer declaraciones por ahora."
+  ],
+  "club_ficticio": [
+    "Atletico Estelar",
+    "Deportivo Aurora",
+    "Real Costanera",
+    "Union Portena",
+    "Sporting del Valle",
+    "Racing Austral",
+    "Club Atletico Cordillera",
+    "Olimpia del Sur",
+    "Deportes Bahia"
+  ],
+  "ciudad_ficticia": [
+    "Puerto Esperanza",
+    "Valle Alto",
+    "San Eleuterio",
+    "Costa Brava del Sur",
+    "Nueva Albion"
+  ],
+  "jugador_ficticio": [
+    "Mateo Arrieta",
+    "Joaquin Valverde",
+    "Thiago Cardenal",
+    "Bruno Lezama",
+    "Kevin Ostrowski",
+    "Dario Montenegro",
+    "Emil Hartmann",
+    "Facundo Rivadeneira"
+  ],
+  "t_vida_positiva": [
+    "{titulo}",
+    "{apellido}: {titulo_min}",
+    "El lado B de {apellido}: {titulo_min}"
+  ],
+  "t_vida_negativa": [
+    "{titulo}",
+    "Polemica: {titulo_min}",
+    "{apellido}, en el ojo de la tormenta: {titulo_min}"
+  ],
+  "t_vida_mixta": [
+    "{titulo}",
+    "{apellido}: {titulo_min}"
+  ],
+  "t_vida_neutral": [
+    "{titulo}",
+    "{apellido}: {titulo_min}"
+  ],
+  "c_vida_positiva": [
+    "En las redes, todo fueron elogios.",
+    "Un gesto que la gente valora.",
+    "Los hinchas lo celebraron.",
+    ""
+  ],
+  "c_vida_negativa": [
+    "Las criticas no tardaron en llegar.",
+    "En el club no cayo nada bien.",
+    "La gente espera una respuesta.",
+    ""
+  ],
+  "c_vida_mixta": [
+    "Las opiniones estan divididas.",
+    "Hay de todo en las redes.",
+    ""
+  ],
+  "c_vida_neutral": [
+    "",
+    "La noticia corrio rapido."
+  ]
+}

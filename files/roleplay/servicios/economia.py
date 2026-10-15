@@ -6,7 +6,7 @@ con eso se compran casas, autos, relojes, un yate o un jet, o se dona.
 Lo que cuesta y lo que provoca lo decide el codigo: cuantos seguidores
 gana, si la reputacion sube o baja (una donacion suma; presumir un jet en
 plena mala racha resta, y mas si el personaje es humilde), y si es noticia.
-La IA solo redacta la noticia y los comentarios de los hinchas.
+La noticia y los comentarios los escribe el motor narrativo (eventos.contar).
 
 Los autos se piden en el concesionario (servicios/autos.py, marcas reales):
 se pagan al pedir y llegan dias despues en el juego; lo que provocan
@@ -26,13 +26,9 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Optional
 
-from pydantic import BaseModel
-
-from roleplay.gemini import generar_json
 from roleplay.models import ActividadInstagram, NoticiaPrensa, PlayerProfile
 from roleplay.partida.carrera import Carrera
 from roleplay.servicios import autos
-from roleplay.servicios.contexto import ficha_jugador
 
 NETO = 0.55  # lo que queda del sueldo despues de impuestos y la comision del agente
 VENTA = 0.70  # lo que se recupera al vender algo
@@ -264,7 +260,7 @@ class Efecto:
     reputacion: int
     es_noticia: bool
     tono: str  # positiva | negativa | mixta | neutral
-    motivo: str  # por que cayo asi (para la pantalla y para la IA)
+    motivo: str  # por que cayo asi (para la pantalla y la noticia)
 
 
 def mala_racha(carrera: Optional[Carrera]) -> bool:
@@ -314,12 +310,7 @@ def efecto(
     )
 
 
-# ---- la repercusion: noticia (si es noticia) y comentarios (la IA) ----
-
-
-class NoticiaCompra(BaseModel):
-    titular: str
-    cuerpo: str
+# ---- la repercusion: noticia (si es noticia) y comentarios ----
 
 
 def _descripcion(perfil: PlayerProfile, articulo: Articulo, efecto_: Efecto, moneda: str) -> str:
@@ -330,57 +321,41 @@ def _descripcion(perfil: PlayerProfile, articulo: Articulo, efecto_: Efecto, mon
         texto = f"{perfil.nombre_jugador} recibio su nuevo {articulo.nombre} ({articulo.detalle}; {precio})"
     else:
         texto = f"{perfil.nombre_jugador} se compro: {articulo.nombre} ({precio})"
-    return texto + (f"; {efecto_.motivo}" if efecto_.motivo else "")
+    return texto + (f", {efecto_.motivo}" if efecto_.motivo else "")
+
+
+def _titulo(perfil: PlayerProfile, articulo: Articulo) -> str:
+    partes = perfil.nombre_jugador.split()
+    apellido = partes[-1] if partes else "El jugador"
+    if articulo.es_donacion:
+        return f"El gesto de {apellido}: {articulo.nombre[0].lower()}{articulo.nombre[1:]}"
+    if articulo.id.startswith("auto:"):
+        return f"{apellido} estrena su {articulo.nombre}"
+    return f"{apellido} se da un gusto: {articulo.nombre[0].lower()}{articulo.nombre[1:]}"
 
 
 def repercusion(
-    perfil: PlayerProfile, articulo: Articulo, efecto_: Efecto, moneda: str, fecha_juego: str, contexto_real: str = ""
+    perfil: PlayerProfile, articulo: Articulo, efecto_: Efecto, moneda: str, fecha_juego: str
 ) -> tuple[Optional[NoticiaPrensa], ActividadInstagram]:
-    """Corre en un hilo. La noticia (si corresponde) y lo que dicen los
-    hinchas. Sin IA: la noticia sale con un titular armado por el codigo y
-    los hinchas sin comentarios; los numeros ya se aplicaron igual."""
+    """La noticia (si es noticia) y lo que dicen los hinchas
+    (servicios/eventos.contar). Los numeros ya se aplicaron antes."""
+    from roleplay.servicios.eventos import contar
     from roleplay.servicios.hinchada import EventoHinchada, comentar_eventos
 
     descripcion = _descripcion(perfil, articulo, efecto_, moneda)
-    noticia = None
-    if efecto_.es_noticia:
-        try:
-            redactada = generar_json(
-                f"""
-Sos un periodista de la prensa del corazon y deportiva. Escribi una noticia
-corta (titular + 2 a 4 frases, en espanol) sobre esto, en un modo carrera
-roleplay de EAFC 26:
-
-{descripcion}.
-{ficha_jugador(perfil)}
-{contexto_real}
-El tono de la noticia es {efecto_.tono} (respetalo). Podes nombrar la marca
-del auto si la hay, pero no nombres de personas reales. No inventes
-resultados ni datos que no esten arriba.
-""".strip(),
-                NoticiaCompra,
-                "No se pudo escribir la noticia esta vez.",
-            )
-            titular, cuerpo = redactada.titular.strip(), redactada.cuerpo.strip()
-        except RuntimeError:
-            titular = descripcion[0].upper() + descripcion[1:]
-            cuerpo = ""
-        noticia = NoticiaPrensa(
-            player_id=perfil.id, categoria="jugador", tono=efecto_.tono, titular=titular, cuerpo=cuerpo,
-            hitos=[f"{'donacion' if articulo.es_donacion else 'compra'}:{articulo.id}"],
-        )
-
     tipo = "donacion" if articulo.es_donacion else "entrega" if articulo.id.startswith("auto:") else "compra"
+    if efecto_.es_noticia:
+        noticia, actividad = contar(perfil, _titulo(perfil, articulo), descripcion, efecto_.tono, efecto_.seguidores,
+                                    fecha_juego, f"{'donacion' if articulo.es_donacion else 'compra'}:{articulo.id}",
+                                    tipo)
+        actividad.titulo = articulo.nombre
+        return noticia, actividad
     evento = EventoHinchada(tipo, fecha_juego, articulo.nombre, descripcion, efecto_.seguidores)
-    try:
-        comentarios = comentar_eventos(perfil, [evento], contexto_real).get(0, [])
-    except RuntimeError:
-        comentarios = []
     actividad = ActividadInstagram(
-        player_id=perfil.id, fecha_juego=fecha_juego, tipo=evento.tipo, titulo=articulo.nombre,
-        crecimiento_seguidores=efecto_.seguidores, comentarios=comentarios,
+        player_id=perfil.id, fecha_juego=fecha_juego, tipo=tipo, titulo=articulo.nombre,
+        crecimiento_seguidores=efecto_.seguidores, comentarios=comentar_eventos(perfil, [evento]).get(0, []),
     )
-    return noticia, actividad
+    return None, actividad
 
 
 def leer_partida_para_economia() -> Optional[Carrera]:

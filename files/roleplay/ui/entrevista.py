@@ -1,14 +1,16 @@
 """
 Sala de prensa (entrevista post-partido). Flujo:
 
-1. Capturar la pantalla de fin de partido y leer las stats con Gemini
-   Vision, o escribirlas a mano. Quedan editables en los dos casos.
-2. Generar las preguntas con Gemini (perfil + partido).
-3. El usuario responde escribiendo o por voz (se graba y Gemini lo
-   transcribe; el texto queda editable).
-4. Gemini evalua las respuestas: reaccion de prensa, cambio de
-   reputacion y, a veces, un gancho narrativo nuevo. Se guarda todo y se
-   revisa si el partido disparo algun hito de prensa.
+1. Cargar el partido del guardado de la carrera, o escribir los numeros a
+   mano. Quedan editables en los dos casos.
+2. Generar las preguntas (servicios/entrevista.py: tres periodistas, el
+   motor narrativo local, sin IA y al instante).
+3. El usuario responde escribiendo o por voz (se graba y el reconocedor de
+   voz de Windows lo transcribe, sin internet; el texto queda editable).
+4. El evaluador lexico lee las respuestas: reaccion de prensa (con su frase
+   entre «»), cambio de reputacion, carino de la hinchada y, a veces, un
+   gancho narrativo nuevo. Se guarda todo y se revisa si el partido disparo
+   algun hito de prensa.
 
 Con la partida de FC 26 hay ademas un segundo modo: la conferencia PREVIA
 al proximo partido (servicios/previa.py). Mismas preguntas, voz y envio;
@@ -38,23 +40,25 @@ from roleplay.database import (
     actualizar_metas,
     agregar_gancho_narrativo,
     aplicar_delta_reputacion,
+    get_estado_clubes,
     get_estado_prensa,
     get_reputacion_actual,
     load_latest_profile,
     load_match_interviews,
     save_match_interview,
     save_noticia_prensa,
+    set_estado_clubes,
     set_estado_partida,
     set_estado_prensa,
 )
 from roleplay.models import MatchInterviewRecord, PlayerProfile
+from roleplay.servicios import clubes
 from roleplay.servicios.audio import MINIMO_SEGUNDOS, GrabadorMicrofono, listar_microfonos, transcribir
-from roleplay.servicios.captura import capturar_pantalla
 from roleplay.servicios.entrevista import evaluar_respuestas, generar_entrevista
 from roleplay.servicios.partida_real import leer_para_entrevista, revisar_prensa_con_partida
 from roleplay.servicios.previa import evaluar_previa, generar_previa, noticia_de_previa
 from roleplay.servicios.prensa import BONOS_REPUTACION, revisar_prensa
-from roleplay.servicios.vision import MatchStats, extraer_stats_partido
+from roleplay.servicios.vision import MatchStats
 from roleplay.ui import estilos
 from roleplay.ui.comun import ejecutar_en_hilo, esc
 from roleplay.ui.componentes import (
@@ -75,8 +79,7 @@ from roleplay.ui.componentes import (
 )
 from roleplay.ui.estilos import fuente_titulo
 
-TEXTO_CAPTURAR = "Capturar pantalla"
-TEXTO_GENERAR = "Generar entrevista con IA"
+TEXTO_GENERAR = "Generar entrevista"
 TEXTO_REGENERAR = "Regenerar entrevista"
 TEXTO_GENERAR_PREVIA = "Generar conferencia previa"
 TEXTO_REGENERAR_PREVIA = "Regenerar conferencia"
@@ -85,8 +88,10 @@ TEXTO_PRENSA = "Revisar prensa ahora"
 TEXTO_VOZ = "Responder por voz"
 
 
-def _capturar_y_leer() -> MatchStats:
-    return extraer_stats_partido(capturar_pantalla())
+def _mover_carino(player_id: int, delta: int) -> None:
+    """Lo que dijo le llega a la hinchada de su club (servicios/clubes.py)."""
+    if delta:
+        set_estado_clubes(player_id, clubes.sumar_carino(get_estado_clubes(player_id), delta))
 
 
 def _repintar(widget: QWidget) -> None:
@@ -114,8 +119,7 @@ class InterviewWindow(QWidget):
         # Lo que hay en curso. _evaluando guarda lo que se mando a evaluar
         # (jugador, stats, preguntas y respuestas), para guardar exactamente
         # eso aunque se toque el formulario, o se cree otro personaje,
-        # mientras Gemini responde.
-        self._capturando = False
+        # mientras se evaluan.
         self._generando = False
         self._evaluando: tuple[PlayerProfile, MatchStats, list[tuple[str, str]], str, str] | None = None
         self._prensa_en_curso = False
@@ -128,7 +132,7 @@ class InterviewWindow(QWidget):
         self._microfonos_cargados = False
         self._sin_microfono: str | None = None  # el motivo, si no se puede grabar
         # partida de FC 26: lo leido (LecturaPartida) y de donde salieron las
-        # stats del formulario ("partida", "captura" o "manual")
+        # stats del formulario ("partida" o "manual"; "captura" quedo de antes)
         self._lectura = None
         self._leyendo_partida = False
         self._origen = "manual"
@@ -184,14 +188,10 @@ class InterviewWindow(QWidget):
             "Lee tu ultimo partido del guardado de la carrera (sin tocar el juego)"
         )
         self.cargar_partida_btn.clicked.connect(self._on_cargar_partida_clicked)
-        self.capturar_btn = boton(TEXTO_CAPTURAR, icono_nombre="captura")
-        self.capturar_btn.setToolTip("O captura la pantalla de estadisticas al terminar el partido")
-        self.capturar_btn.clicked.connect(self._on_capturar_clicked)
         fila_partida = QHBoxLayout()
         fila_partida.setSpacing(10)
         fila_partida.addWidget(self.partida_label, 1)
         fila_partida.addWidget(self.cargar_partida_btn)
-        fila_partida.addWidget(self.capturar_btn)
         tarjeta.cuerpo.addLayout(fila_partida)
         self.partida_nota = texto_suave()
         self.partida_nota.hide()
@@ -370,7 +370,6 @@ class InterviewWindow(QWidget):
         con_voz = self._grabacion is not None or self._transcribiendo is not None
         ocupado_con_preguntas = self._generando or self._evaluando is not None or con_voz
         self.guardar_club_btn.setEnabled(hay_perfil)
-        self.capturar_btn.setEnabled(hay_perfil and not self._capturando)
         self.generar_entrevista_btn.setEnabled(hay_perfil and not ocupado_con_preguntas)
         self.enviar_respuestas_btn.setEnabled(
             hay_perfil and bool(self._preguntas) and not ocupado_con_preguntas
@@ -460,48 +459,13 @@ class InterviewWindow(QWidget):
             self._respuesta_edits.append(respuesta_edit)
             self._botones_voz.append(boton_voz)
 
-    # ---- 1. capturar pantalla ----
-
-    def _on_capturar_clicked(self):
-        self._capturando = True
-        self._refrescar_botones()
-        self.capturar_btn.setText("LEYENDO PANTALLA...")
-        ejecutar_en_hilo(
-            _capturar_y_leer,
-            al_completar=self._on_extraccion_completada,
-            al_fallar=self._on_extraccion_error,
-        )
-
-    def _on_extraccion_completada(self, stats: MatchStats):
-        self._capturando = False
-        self._refrescar_botones()
-        self.capturar_btn.setText("VOLVER A CAPTURAR")
-        self._cargar_stats_en_formulario(stats)
-        self._origen, self._fecha_juego = "captura", ""
-        self.partida_nota.hide()
-        if stats.confianza_baja:
-            QMessageBox.information(
-                self,
-                "Revisa los datos",
-                "La IA no estaba muy segura de algunos numeros de la captura. "
-                "Revisa los campos antes de generar la entrevista.",
-            )
-
-    def _on_extraccion_error(self, mensaje: str):
-        self._capturando = False
-        self._refrescar_botones()
-        self.capturar_btn.setText(TEXTO_CAPTURAR.upper())
-        QMessageBox.warning(self, "Error al capturar/leer la pantalla", mensaje)
-
     # ---- 2. generar preguntas ----
 
     def _on_generar_entrevista_clicked(self):
         if self._modo == "previa":
-            funcion, argumentos = generar_previa, (self.perfil, self._previa(), self._contexto_real())
+            funcion, argumentos = generar_previa, (self.perfil, self._previa())
         else:
-            funcion, argumentos = generar_entrevista, (
-                self.perfil, self._leer_stats_desde_formulario(), self._contexto_real()
-            )
+            funcion, argumentos = generar_entrevista, (self.perfil, self._leer_stats_desde_formulario())
         self._generando = True
         self._refrescar_botones()
         self.generar_entrevista_btn.setText("GENERANDO...")
@@ -661,7 +625,6 @@ class InterviewWindow(QWidget):
             self.perfil,
             self._evaluando[1],
             pares,
-            self._contexto_real(),
             al_completar=self._on_evaluacion_completada,
             al_fallar=self._on_evaluacion_error,
         )
@@ -680,6 +643,7 @@ class InterviewWindow(QWidget):
             resultado.delta_reputacion,
             motivo=f"Entrevista post-partido vs {stats.equipo_rival or 'rival'}",
         )
+        _mover_carino(perfil.id, resultado.delta_carino)
         if resultado.nuevo_gancho_narrativo:
             agregar_gancho_narrativo(perfil.id, resultado.nuevo_gancho_narrativo)
             perfil.ganchos_narrativos.append(resultado.nuevo_gancho_narrativo)
@@ -726,6 +690,7 @@ class InterviewWindow(QWidget):
         nueva_reputacion = aplicar_delta_reputacion(
             perfil.id, resultado.delta_reputacion, motivo=f"Conferencia previa vs {previa.rival}"
         )
+        _mover_carino(perfil.id, resultado.delta_carino)
         if resultado.nuevo_gancho_narrativo:
             agregar_gancho_narrativo(perfil.id, resultado.nuevo_gancho_narrativo)
             perfil.ganchos_narrativos.append(resultado.nuevo_gancho_narrativo)
@@ -751,9 +716,6 @@ class InterviewWindow(QWidget):
         QMessageBox.warning(self, "Error al evaluar las respuestas", mensaje)
 
     # ---- partida de FC 26 ----
-
-    def _contexto_real(self) -> str:
-        return self._lectura.contexto if self._lectura is not None else ""
 
     def _leer_partida(self):
         """Lee el guardado mas reciente en otro hilo (la primera vez tarda

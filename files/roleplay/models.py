@@ -70,7 +70,7 @@ class PlayerProfile:
 
     def calcular_reputacion_inicial(self) -> int:
         """Reputacion de partida (0-100) segun contexto y personalidad.
-        Es deterministica a proposito: no depende de la IA."""
+        Es deterministica a proposito."""
         base = 50
 
         ajustes_contexto = {"humilde": 10, "clase_media": 0, "acomodada": -5}
@@ -150,8 +150,8 @@ class InstagramPost:
 class ActividadInstagram:
     """Lo que pasa en el Instagram del jugador sin que publique nada: los
     hinchas reaccionan a sus partidos y a las noticias sobre el
-    (servicios/hinchada.py). Los seguidores los calcula el codigo; la IA
-    solo escribe los comentarios."""
+    (servicios/hinchada.py). Los seguidores los calcula el codigo y los
+    comentarios salen del motor narrativo (roleplay/datos/corpus_redes.json)."""
 
     id: Optional[int] = None
     player_id: int = 0

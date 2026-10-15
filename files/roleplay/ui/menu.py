@@ -45,7 +45,7 @@ from roleplay import config
 from roleplay.servicios import clubes, eventos
 from roleplay.servicios.hinchada import _escala
 from roleplay.servicios.metas import CONTABLES, TIPOS, nueva_meta, texto_meta
-from roleplay.servicios.partida_real import contexto_temporada, resumen_temporada
+from roleplay.servicios.partida_real import resumen_temporada
 from roleplay.servicios.prensa import calcular_estadisticas_acumuladas
 from roleplay.ui import estilos
 from roleplay.ui.comun import con_scroll, ejecutar_en_hilo, esc, miles
@@ -91,7 +91,6 @@ class PaginaResumen(QWidget):
 
     def __init__(self, on_crear_personaje, on_club_cambiado=None):
         super().__init__()
-        self._contexto_real = ""  # de la ultima partida leida, para la prensa de la hinchada
         self._on_crear_personaje = on_crear_personaje
         self._on_club_cambiado = on_club_cambiado  # para que la barra lateral se entere
         self._perfil = None
@@ -332,7 +331,6 @@ class PaginaResumen(QWidget):
         perfil = load_latest_profile()
         if perfil is None or carrera is None:
             return
-        self._contexto_real = contexto_temporada(carrera)
         antes = get_estado_clubes(perfil.id)
         estado, hitos = clubes.actualizar(antes, carrera, get_reputacion_actual(perfil.id))
         set_estado_clubes(perfil.id, estado)
@@ -352,7 +350,7 @@ class PaginaResumen(QWidget):
             self.reputacion_cambiada.emit()
         ejecutar_en_hilo(
             eventos.contar, perfil, hito.titulo, f"{perfil.nombre_jugador} {hito.descripcion}", hito.tono, seguidores,
-            fecha, f"hinchada:{hito.tipo}", "hinchada", self._contexto_real,
+            fecha, f"hinchada:{hito.tipo}", "hinchada",
             al_completar=self._on_contado, al_fallar=lambda _mensaje: None,
         )
         return seguidores
