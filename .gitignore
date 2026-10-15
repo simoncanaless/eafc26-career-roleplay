@@ -1,3 +1,23 @@
 # respaldos locales (no son codigo)
 respaldo-*.zip
 respaldo-*.db
+
+# nunca a GitHub: claves, bases con datos personales, paquetes y binarios
+.env
+.env.*
+ajustes.json
+*.db
+*.db-journal
+*.zip
+*.exe
+*.pyc
+*.pyo
+__pycache__/
+.venv/
+build/
+dist/
+errores.log
+diagnostico.txt
+files/navegador/
+files/garage/
+files/compras/

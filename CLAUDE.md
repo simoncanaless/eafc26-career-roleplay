@@ -349,6 +349,7 @@ Pendiente (ideas del usuario):
 
 ## Como trabajar con Simon
 
+- **Sincronizacion continua con GitHub**: Despues de completar y probar cualquier cambio o feature (cuando `unittest` pase en verde), hacer siempre `git add`, `git commit` descriptivo y `git push origin main` automaticamente para que el repositorio remoto en GitHub refleje siempre el estado exacto del codigo en tiempo real. Atajo que ademas revisa que no se cuele nada privado: `.venv\Scripts\python.exe scripts\sincronizar_git.py "mensaje"` (desde `files/`). Mientras no exista el remoto `origin`, el push queda pendiente (avisarle a Simon).
 - Respuestas directas y practicas, en espanol.
 - A veces implementa partes el mismo: antes de reescribir algo, revisar lo que ya hizo y
   preguntar si hace falta. Si pide revision, revisar y corregir bugs reales (con prueba que los demuestre).
