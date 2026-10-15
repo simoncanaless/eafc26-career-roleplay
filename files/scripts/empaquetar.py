@@ -27,6 +27,11 @@ TRABAJO = RAIZ / "build"
 ZIP = DIST / f"{NOMBRE} (amigos).zip"
 ICONOS = RAIZ / "roleplay" / "ui" / "iconos"
 NO_VA = (".env", "career_roleplay.db", "ajustes.json", "errores.log")
+# El navegador del configurador (QtWebEngine) trae ~125 MB que no se usan:
+# los recursos de depuracion, las herramientas de desarrollador y los
+# idiomas de Chromium (quedan ingles y espanol). Probado: sin esto la web
+# oficial carga igual.
+IDIOMAS_CHROMIUM = {"en-US.pak", "es.pak", "es-419.pak"}
 
 
 def construir() -> Path:
@@ -51,10 +56,19 @@ def construir() -> Path:
     carpeta = DIST / NOMBRE
     shutil.copy(RAIZ / "scripts" / "LEEME_AMIGOS.txt", carpeta / "LEEME.txt")
 
+    podar_chromium(carpeta)
     colados = [ruta for ruta in carpeta.rglob("*") if ruta.name in NO_VA]
     if colados:
         raise SystemExit(f"Se colaron datos personales en el paquete: {colados}")
     return carpeta
+
+
+def podar_chromium(carpeta: Path) -> None:
+    pyside = carpeta / "_internal" / "PySide6"
+    sobran = [r for r in (pyside / "resources").glob("*") if ".debug." in r.name or r.name.startswith("qtwebengine_devtools")]
+    sobran += [r for r in (pyside / "translations" / "qtwebengine_locales").glob("*.pak") if r.name not in IDIOMAS_CHROMIUM]
+    for ruta in sobran:
+        ruta.unlink()
 
 
 def comprimir(carpeta: Path) -> None:

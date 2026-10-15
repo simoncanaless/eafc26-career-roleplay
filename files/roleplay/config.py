@@ -36,4 +36,5 @@ DB_PATH = CARPETA_DATOS / "career_roleplay.db"
 ARCHIVO_ENV = CARPETA_DATOS / ".env"
 ARCHIVO_AJUSTES = CARPETA_DATOS / "ajustes.json"
 REGISTRO_ERRORES = CARPETA_DATOS / "errores.log"
+CARPETA_GARAGE = CARPETA_DATOS / "garage"  # las fotos de los autos pedidos (ui/configurador.py)
 ICONO_APP = RAIZ_PROYECTO / "roleplay" / "ui" / "iconos" / "app.ico"

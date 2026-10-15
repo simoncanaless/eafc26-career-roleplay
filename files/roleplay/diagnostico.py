@@ -83,6 +83,20 @@ def revisar() -> list[tuple[bool, str]]:
     except Exception as exc:  # noqa: BLE001
         anotar(False, f"Captura de pantalla: {exc}")
 
+    try:  # el navegador del configurador de autos (sin el, queda el dibujo)
+        from pathlib import Path
+
+        import PySide6
+        import PySide6.QtWebEngineWidgets  # noqa: F401
+
+        proceso = Path(PySide6.__file__).parent / "QtWebEngineProcess.exe"
+        recursos = Path(PySide6.__file__).parent / "resources" / "qtwebengine_resources.pak"
+        anotar(proceso.exists() and recursos.exists(),
+               "Navegador del configurador: " + ("listo" if proceso.exists() and recursos.exists() else
+                                                  "INCOMPLETO (se ve el dibujo en lugar de la web de la marca)"))
+    except ImportError as exc:
+        anotar(False, f"Navegador del configurador: no esta ({exc}); se ve el dibujo en lugar de la web de la marca")
+
     return resultados
 
 

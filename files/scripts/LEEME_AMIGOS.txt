@@ -44,6 +44,8 @@ JUGAR
 - En VIDA cobras tu sueldo real y te compras lo que quieras (o donas):
   la prensa y tus hinchas reaccionan. En Autos configuras y pedis tu auto
   (Ferrari, Porsche, Lamborghini...) y llega unos dias despues en el juego.
+  Al configurar se abre la web oficial de la marca adentro de la app (hace
+  falta internet): arma el auto ahi y apreta "Sacar foto" para tu garage.
 - En el RESUMEN esta "Tu hinchada": el carino de los hinchas de tu club y,
   cuando la historia lo pide, una decision que tomas vos (te avisa la bandeja).
 - En VIDA tambien esta tu vida sentimental: tu pareja, los rumores con una

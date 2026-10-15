@@ -277,7 +277,8 @@ class TestArranque(unittest.TestCase):
     def test_abrir_la_app_no_carga_gemini_ni_la_captura(self):
         proceso = ayuda.correr_aislado(
             "import sys, roleplay.ui.menu\n"
-            "print(sorted(m for m in ('google.genai', 'cv2', 'dxcam', 'sounddevice') if m in sys.modules))"
+            "print(sorted(m for m in ('google.genai', 'cv2', 'dxcam', 'sounddevice', 'PySide6.QtWebEngineWidgets', "
+            "'PySide6.QtWebEngineCore') if m in sys.modules))"
         )
         self.assertEqual(proceso.returncode, 0, proceso.stderr)
         self.assertEqual(proceso.stdout.strip(), "[]")

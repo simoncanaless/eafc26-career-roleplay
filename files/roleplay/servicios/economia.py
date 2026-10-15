@@ -14,8 +14,8 @@ se pagan al pedir y llegan dias despues en el juego; lo que provocan
 
 El dinero vive en estado_json.economia:
 {"saldo", "hasta" (dia del juego hasta donde se cobro), "sueldo",
- "posesiones": [{"id", "articulo", "precio", "desde", ("config")}],
- "pedidos": [{"id", "modelo", "config", "precio", "pedido", "entrega"}],
+ "posesiones": [{"id", "articulo", "precio", "desde", ("config"), ("foto")}],
+ "pedidos": [{"id", "modelo", "config", "precio", "pedido", "entrega", ("foto")}],
  "movimientos": [{"fecha", "concepto", "monto"}]}  (el mas nuevo primero)
 Un auto en posesiones tiene articulo "auto:<modelo>".
 """
@@ -247,6 +247,8 @@ def entregar_pedidos(economia: dict, hoy: date) -> tuple[dict, list[dict]]:
         e["pedidos"] = [p for p in e["pedidos"] if p["id"] != pedido["id"]]
         posesion = {"id": pedido["id"], "articulo": f"auto:{pedido['modelo']}", "precio": pedido["precio"],
                     "desde": hoy.isoformat(), "config": pedido["config"]}
+        if pedido.get("foto"):
+            posesion["foto"] = pedido["foto"]  # la que se saco en el configurador
         e.setdefault("posesiones", []).append(posesion)
         entregados.append(posesion)
         _movimiento(e, hoy, f"Te llego: {autos.POR_ID[pedido['modelo']].nombre_completo}", 0)

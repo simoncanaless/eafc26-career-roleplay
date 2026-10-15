@@ -137,6 +137,95 @@ class TestConfigurador(ayuda.PruebaDeInterfaz):
         self.assertTrue(dialogo._botones["color_franja"]["negro"].isVisibleTo(dialogo))
 
 
+class TestConLaWebDeLaMarca(ayuda.PruebaDeInterfaz):
+    """El configurador con la web oficial adentro. Sin pantalla Chromium no
+    dibuja, asi que aca va un navegador de mentira que devuelve una foto."""
+
+    def setUp(self):
+        super().setUp()
+        from PySide6.QtGui import QColor, QImage
+        from PySide6.QtWidgets import QLabel
+
+        from roleplay.ui import configurador
+
+        self.imagen = QImage(1600, 900, QImage.Format.Format_RGB32)
+        self.imagen.fill(QColor("#C8102E"))
+        imagen = self.imagen
+
+        class NavegadorFalso(QLabel):
+            def foto(self):
+                return imagen
+
+        self.urls = []
+
+        def crear(url, parent=None):
+            self.urls.append(url)
+            return NavegadorFalso("la web", parent)
+
+        mock.patch.object(configurador, "crear_navegador", crear).start()
+        self.addCleanup(mock.patch.stopall)
+        self.dialogo = configurador.Configurador(autos.POR_ID["porsche_911"], saldo=500_000, moneda="£")
+
+    def test_cada_modelo_tiene_su_web_oficial(self):
+        from urllib.parse import urlparse
+
+        dominios = {
+            "Ferrari": "ferrari.com", "Porsche": "porsche.com", "Lamborghini": "lamborghini.com",
+            "McLaren": "mclaren.com", "Mercedes-AMG": "mercedes-benz.co.uk", "Rolls-Royce": "rolls-roycemotorcars.com",
+            "Bentley": "bentleymotors.com", "Aston Martin": "astonmartin.com", "Range Rover": "rangerover.com",
+            "Bugatti": "bugatti.com",
+        }
+        for modelo in autos.MODELOS:
+            url = urlparse(modelo.configurador)
+            self.assertEqual(url.scheme, "https", modelo.id)
+            self.assertTrue(url.hostname.endswith(dominios[modelo.marca]), modelo.id)
+
+    def test_sin_pantalla_queda_el_dibujo(self):
+        from roleplay.ui import navegador
+
+        self.assertFalse(navegador.disponible())  # (las pruebas corren sin pantalla)
+
+    def test_abre_la_web_y_la_foto_se_saca_sola_al_pedir(self):
+        self.assertEqual(self.urls, ["https://configurator.porsche.com/en-WW/mode/model/9921B2"])
+        self.assertIsNone(self.dialogo.vista)  # la web en lugar del dibujo
+        self.assertEqual(self.dialogo.precio_label.text(), "£95.000")  # el panel del juego sigue igual
+        self.dialogo._botones["acabado"]["mate"].click()
+        self.assertEqual(self.dialogo.configuracion().acabado, "mate")
+        self.dialogo.pedir_btn.click()
+        self.assertEqual(self.dialogo.result(), 1)
+        self.assertEqual(self.dialogo.foto.size(), self.imagen.size())
+
+    def test_pegar_una_imagen(self):
+        from PySide6.QtGui import QColor, QImage
+        from PySide6.QtWidgets import QApplication
+
+        QApplication.clipboard().clear()
+        self.dialogo._pegar_foto()
+        self.avisos.assert_called_once()  # "no hay ninguna imagen copiada"
+        self.assertIsNone(self.dialogo.foto)
+        copiada = QImage(300, 200, QImage.Format.Format_RGB32)
+        copiada.fill(QColor("blue"))
+        QApplication.clipboard().setImage(copiada)
+        self.dialogo._pegar_foto()
+        self.assertEqual(self.dialogo.foto.width(), 300)
+        self.assertFalse(self.dialogo.foto_label.pixmap().isNull())
+
+    def test_recortar_el_auto(self):
+        from PySide6.QtCore import QRect
+
+        from roleplay.ui.configurador import RecortarFoto
+
+        recorte = RecortarFoto(self.imagen)  # se muestra a 1100 de ancho
+        self.assertFalse(recorte.recorte_btn.isEnabled())
+        recorte.lienzo.seleccion = QRect(110, 62, 550, 310)
+        recorte.lienzo.seleccion_cambiada.emit()
+        recorte.recorte_btn.click()
+        self.assertEqual(recorte.resultado().size().width(), 800)  # en pixeles de la foto de verdad
+        entera = RecortarFoto(self.imagen)
+        entera.accept()
+        self.assertEqual(entera.resultado().size(), self.imagen.size())
+
+
 class TestPedidoYEntrega(ayuda.PruebaConBase):
     def setUp(self):
         super().setUp()
@@ -245,3 +334,28 @@ class TestConcesionarioEnLaPagina(ayuda.PruebaDeInterfaz):
         self.assertGreater(database.get_seguidores(self.pid), seguidores)
         self.assertEqual([a.tipo for a in database.load_actividad_instagram(self.pid)], ["entrega"])
         self.assertFalse(self.pagina.pedidos.isVisibleTo(self.pagina))
+
+    def test_la_foto_llega_al_garage(self):
+        from PySide6.QtGui import QColor, QImage
+        from PySide6.QtWidgets import QLabel
+
+        from roleplay import config
+
+        foto = QImage(1920, 1080, QImage.Format.Format_RGB32)
+        foto.fill(QColor("#1F4FA8"))
+        self.pagina.pedir(Configuracion("porsche_911", color="azul"), foto)
+        archivo = database.get_economia(self.pid)["pedidos"][0]["foto"]
+        self.assertEqual(QImage(str(config.CARPETA_GARAGE / archivo)).width(), 960)  # se guarda achicada
+        self.assertEqual(len(self.pagina.pedidos.findChildren(QLabel, "fotoAuto")), 1)
+        self.pagina.acreditar_con(construir(f.construir_bytes(otros_partidos=DOS_SEMANAS)))
+        ayuda.esperar_tareas()
+        self.assertEqual(database.get_economia(self.pid)["posesiones"][0]["foto"], archivo)
+        fotos = [f for f in self.pagina.posesiones.findChildren(QLabel, "fotoAuto") if not f.isHidden()]
+        self.assertEqual([f.size().width() for f in fotos], [132])
+
+    def test_sin_foto_queda_el_dibujo(self):
+        from roleplay.ui.configurador import VistaAuto
+
+        self.pagina.pedir(Configuracion("porsche_911"))
+        self.assertNotIn("foto", database.get_economia(self.pid)["pedidos"][0])
+        self.assertEqual(len(self.pagina.pedidos.findChildren(VistaAuto)), 1)

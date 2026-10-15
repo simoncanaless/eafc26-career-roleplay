@@ -75,7 +75,8 @@ toca) y todo se vuelve real:
 **Concesionario**: en VIDA > Autos estan los modelos de Ferrari, Porsche, Lamborghini, McLaren,
 Mercedes-AMG, Rolls-Royce, Bentley, Aston Martin, Range Rover y Bugatti. Los configuras (color y
 acabado, llantas, pinzas, franjas, interior, fibra de carbono, escape y patente personalizada)
-con una vista previa (la silueta de cada auto esta calcada de una foto real de perfil), lo pedis y
+al lado de la web oficial de la marca, que se abre adentro de la app para armar el auto real en
+3D. Le sacas una foto (o se saca sola al pedir) y esa foto queda en tu garage. Lo pedis y
 llega unos dias despues en el juego: ahi lo ven la prensa y
 tus hinchas.
 

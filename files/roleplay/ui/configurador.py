@@ -1,31 +1,43 @@
 """
-Configurador de autos: una ventana con la vista previa del auto (dibujada
-por la app: siluetas propias por carroceria, pintadas con lo que se elige)
-y las opciones. El precio sale de servicios/autos.py.
+Configurador de autos. A la izquierda, la web oficial de la marca adentro
+de la app (ui/navegador.py): el auto real se arma en 3D ahi. A la derecha,
+lo que cuesta en el juego (pintura, llantas, pinzas, franjas, interior,
+extras, patente) y el boton de pedir; el precio sale de servicios/autos.py.
+
+La foto del auto para el garage se saca del navegador (con recorte), se
+pega del portapapeles, o se saca sola al pedir. Sin navegador (sin
+QtWebEngine, o en las pruebas) queda el dibujo propio: siluetas calcadas de
+fotos reales por carroceria, pintadas con lo que se elige; tambien es la
+miniatura del garage de los autos sin foto.
 """
 
 from dataclasses import dataclass
+from typing import Optional
 
-from PySide6.QtCore import QByteArray, QRectF, QSize, Qt
-from PySide6.QtGui import QPainter
+from PySide6.QtCore import QByteArray, QPoint, QRect, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QGuiApplication, QImage, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
+    QApplication,
     QButtonGroup,
     QDialog,
     QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
+    QRubberBand,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
+from roleplay import config as config_app
 from roleplay.servicios import autos
 from roleplay.servicios.autos import Configuracion
 from roleplay.ui import estilos
-from roleplay.ui.comun import esc
+from roleplay.ui.comun import con_scroll, esc
 from roleplay.ui.componentes import boton, chip_alternable, etiqueta_campo, fila, texto_suave
 from roleplay.ui.estilos import fuente_titulo
 
@@ -533,6 +545,135 @@ class VistaAuto(QWidget):
         p.end()
 
 
+# ---- la foto del garage ----
+
+ANCHO_FOTO = 960  # se guarda achicada: alcanza para la miniatura y la tarjeta
+MINIATURA = QSize(132, 74)
+
+
+def guardar_foto(imagen: QImage, nombre: str) -> str:
+    """Guarda la foto en la carpeta del garage y devuelve el nombre del archivo."""
+    config_app.CARPETA_GARAGE.mkdir(parents=True, exist_ok=True)
+    if imagen.width() > ANCHO_FOTO:
+        imagen = imagen.scaledToWidth(ANCHO_FOTO, Qt.TransformationMode.SmoothTransformation)
+    archivo = f"{nombre}.jpg"
+    imagen.save(str(config_app.CARPETA_GARAGE / archivo), "JPG", 88)
+    return archivo
+
+
+def _nitida(imagen: QImage, tamano: QSize, cubrir: bool = False) -> QPixmap:
+    """La imagen achicada a `tamano` (en puntos de pantalla) con los pixeles
+    de la pantalla: al 300% se ve nitida, no estirada. `cubrir`: llena todo
+    el tamano y recorta lo que sobra al centro."""
+    escala = QGuiApplication.instance().devicePixelRatio()
+    destino = tamano * escala
+    pixmap = QPixmap.fromImage(imagen).scaled(
+        destino, Qt.AspectRatioMode.KeepAspectRatioByExpanding if cubrir else Qt.AspectRatioMode.KeepAspectRatio,
+        Qt.TransformationMode.SmoothTransformation)
+    if cubrir:
+        x, y = (pixmap.width() - destino.width()) // 2, (pixmap.height() - destino.height()) // 2
+        pixmap = pixmap.copy(x, y, destino.width(), destino.height())
+    pixmap.setDevicePixelRatio(escala)
+    return pixmap
+
+
+def miniatura(config: Configuracion, foto: str = "") -> QWidget:
+    """La foto del auto (recortada al centro) si la hay; si no, el dibujo."""
+    ruta = config_app.CARPETA_GARAGE / foto if foto else None
+    if ruta is not None and ruta.exists():
+        etiqueta = QLabel()
+        etiqueta.setObjectName("fotoAuto")
+        etiqueta.setPixmap(_nitida(QImage(str(ruta)), MINIATURA, cubrir=True))
+        etiqueta.setFixedSize(MINIATURA)
+        return etiqueta
+    vista = VistaAuto(config, alto=56)
+    vista.setFixedWidth(MINIATURA.width())
+    return vista
+
+
+class _Lienzo(QLabel):
+    """La foto achicada para que entre; se arrastra un rectangulo encima."""
+
+    seleccion_cambiada = Signal()
+
+    def __init__(self, pixmap: QPixmap):
+        super().__init__()
+        self.setPixmap(pixmap)
+        self.setFixedSize(pixmap.size())
+        self.setCursor(Qt.CursorShape.CrossCursor)
+        self._banda = QRubberBand(QRubberBand.Shape.Rectangle, self)
+        self._origen: Optional[QPoint] = None
+        self.seleccion = QRect()
+
+    def mousePressEvent(self, evento):
+        self._origen = evento.position().toPoint()
+        self._banda.setGeometry(QRect(self._origen, QSize()))
+        self._banda.show()
+
+    def mouseMoveEvent(self, evento):
+        if self._origen is not None:
+            self._banda.setGeometry(QRect(self._origen, evento.position().toPoint()).normalized() & self.rect())
+
+    def mouseReleaseEvent(self, _evento):
+        self._origen = None
+        self.seleccion = self._banda.geometry()
+        self.seleccion_cambiada.emit()
+
+
+class RecortarFoto(QDialog):
+    """La foto que se saco del navegador: se usa entera o se recorta el auto."""
+
+    MAXIMO = QSize(1100, 620)
+
+    def __init__(self, imagen: QImage, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("La foto de tu auto")
+        self.imagen = imagen
+        self._recortar = False
+        pixmap = QPixmap.fromImage(imagen)
+        if pixmap.width() > self.MAXIMO.width() or pixmap.height() > self.MAXIMO.height():
+            pixmap = pixmap.scaled(self.MAXIMO, Qt.AspectRatioMode.KeepAspectRatio,
+                                   Qt.TransformationMode.SmoothTransformation)
+        self._escala = imagen.width() / max(pixmap.width(), 1)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(22, 20, 22, 18)
+        layout.setSpacing(12)
+        layout.addWidget(texto_suave("Arrastra un rectangulo sobre el auto para recortarlo, o usa la foto entera."))
+        self.lienzo = _Lienzo(pixmap)
+        layout.addWidget(self.lienzo, 0, Qt.AlignmentFlag.AlignCenter)
+        cancelar = boton("Cancelar")
+        cancelar.clicked.connect(self.reject)
+        entera = boton("Usar la foto entera")
+        entera.clicked.connect(self.accept)
+        self.recorte_btn = boton("Usar el recorte", primario=True)
+        self.recorte_btn.setEnabled(False)
+        self.recorte_btn.clicked.connect(self._usar_recorte)
+        self.lienzo.seleccion_cambiada.connect(
+            lambda: self.recorte_btn.setEnabled(self.lienzo.seleccion.width() > 20 and self.lienzo.seleccion.height() > 20)
+        )
+        layout.addLayout(fila(None, cancelar, entera, self.recorte_btn))
+
+    def _usar_recorte(self):
+        self._recortar = True
+        self.accept()
+
+    def resultado(self) -> QImage:
+        if not self._recortar:
+            return self.imagen
+        r = self.lienzo.seleccion
+        e = self._escala
+        return self.imagen.copy(QRect(round(r.x() * e), round(r.y() * e), round(r.width() * e), round(r.height() * e)))
+
+
+def crear_navegador(url: str, parent=None) -> Optional[QWidget]:
+    """La web oficial de la marca, o None si no se puede (y queda el dibujo)."""
+    from roleplay.ui import navegador
+
+    if not url or not navegador.disponible():
+        return None
+    return navegador.Navegador(url, parent)
+
+
 # ---- la ventana ----
 
 
@@ -561,8 +702,10 @@ class Configurador(QDialog):
         self.saldo = saldo
         self.config = Configuracion(modelo.id)
         self._botones: dict[str, dict[str, QPushButton]] = {}
+        self.foto: Optional[QImage] = None  # la del garage
         self.setWindowTitle(f"Configurador · {modelo.nombre_completo}")
-        self.setMinimumWidth(980)
+        self.navegador = crear_navegador(modelo.configurador, self)
+        con_web = self.navegador is not None
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(26, 24, 26, 22)
@@ -574,24 +717,46 @@ class Configurador(QDialog):
         marca.setFont(fuente_titulo(15, 3))
         marca.setStyleSheet(f"color: {estilos.ACENTO};")
         nombre = QLabel(modelo.nombre.upper())
-        nombre.setFont(fuente_titulo(34, 1))
+        nombre.setFont(fuente_titulo(24 if con_web else 34, 1))
         izquierda.addWidget(marca)
         izquierda.addWidget(nombre)
-        self.vista = VistaAuto(self.config, alto=220)
-        izquierda.addWidget(self.vista)
         self.resumen_label = texto_suave()
-        izquierda.addWidget(self.resumen_label)
         self.precio_label = QLabel()
         self.precio_label.setFont(fuente_titulo(30, 0.4))
-        izquierda.addWidget(self.precio_label)
-        izquierda.addWidget(texto_suave(
+        base = texto_suave(
             f"Precio base {self._dinero(modelo.precio)} · llega {modelo.dias_entrega} dias despues de pedirlo (en el juego) · "
             f"tenes {self._dinero(saldo)}"
-        ))
-        izquierda.addStretch()
-        layout.addLayout(izquierda, 3)
+        )
+        if con_web:
+            self.setWindowFlag(Qt.WindowType.WindowMaximizeButtonHint)
+            pantalla = (parent.screen() if parent is not None else QGuiApplication.primaryScreen()).availableGeometry()
+            self.resize(round(pantalla.width() * 0.92), round(pantalla.height() * 0.9))
+            self.vista = None
+            izquierda.addWidget(texto_suave(
+                f"La web oficial de {modelo.marca}: armalo en 3D como lo quieras. Cuando te guste como se ve, sacale "
+                "la foto para tu garage (si no, se saca sola al pedir)."
+            ))
+            izquierda.addWidget(self.navegador, 1)
+            sacar = boton("Sacar foto", primario=True)
+            sacar.clicked.connect(self._sacar_foto)
+            pegar = boton("Pegar imagen")
+            pegar.setToolTip("Una imagen copiada (por ejemplo, con la captura de Windows: Win+Shift+S)")
+            pegar.clicked.connect(self._pegar_foto)
+            izquierda.addLayout(fila(sacar, pegar, None))
+            layout.addLayout(izquierda, 1)
+        else:
+            self.setMinimumWidth(980)
+            self.vista = VistaAuto(self.config, alto=220)
+            izquierda.addWidget(self.vista)
+            izquierda.addWidget(self.resumen_label)
+            izquierda.addWidget(self.precio_label)
+            izquierda.addWidget(base)
+            izquierda.addStretch()
+            layout.addLayout(izquierda, 3)
 
-        derecha = QVBoxLayout()
+        panel = QWidget()
+        derecha = QVBoxLayout(panel)
+        derecha.setContentsMargins(0, 0, 8, 0)
         derecha.setSpacing(8)
         derecha.addWidget(etiqueta_campo("Pintura"))
         derecha.addLayout(self._muestras("color", autos.COLORES))
@@ -623,13 +788,34 @@ class Configurador(QDialog):
         self.patente_edit.setMaxLength(autos.LARGO_PATENTE)
         self.patente_edit.textChanged.connect(self._cambio)
         derecha.addWidget(self.patente_edit)
+        if con_web:
+            derecha.addWidget(etiqueta_campo("La foto para tu garage"))
+            self.foto_label = QLabel("Sin foto todavia: sacala de la web (o se saca sola al pedir).")
+            self.foto_label.setObjectName("fotoGarage")
+            self.foto_label.setWordWrap(True)
+            self.foto_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.foto_label.setFixedSize(400, 225)
+            self.foto_label.setStyleSheet(
+                f"QLabel#fotoGarage {{ border: 1px dashed {estilos.BORDE_FUERTE}; border-radius: 8px; "
+                f"color: {estilos.TEXTO_SUAVE}; padding: 12px; }}"
+            )
+            derecha.addWidget(self.foto_label)
+            derecha.addSpacing(6)
+            derecha.addWidget(self.resumen_label)
+            derecha.addWidget(self.precio_label)
+            derecha.addWidget(base)
         derecha.addStretch()
         self.pedir_btn = boton("Pedir", primario=True, icono_nombre="enviar")
         self.pedir_btn.clicked.connect(self.accept)
         cancelar = boton("Cancelar")
         cancelar.clicked.connect(self.reject)
         derecha.addLayout(fila(None, cancelar, self.pedir_btn))
-        layout.addLayout(derecha, 2)
+        if con_web:
+            area = con_scroll(panel)
+            area.setFixedWidth(460)
+            layout.addWidget(area)
+        else:
+            layout.addWidget(panel, 2)
 
         self._marcar_actual()
         self._cambio()
@@ -684,7 +870,8 @@ class Configurador(QDialog):
         for muestra in self._botones["color_franja"].values():
             muestra.setVisible(self.config.franja != "ninguna")
         total = autos.precio(self.config)
-        self.vista.poner(self.config)
+        if self.vista is not None:
+            self.vista.poner(self.config)
         self.resumen_label.setText(esc(autos.primera_mayuscula(autos.describir(self.config))))
         self.precio_label.setText(self._dinero(total))
         alcanza = self.saldo >= total
@@ -694,3 +881,29 @@ class Configurador(QDialog):
 
     def configuracion(self) -> Configuracion:
         return Configuracion.desde_dict(self.config.a_dict())
+
+    # ---- la foto del garage ----
+
+    def _sacar_foto(self):
+        recorte = RecortarFoto(self.navegador.foto(), self)
+        if recorte.exec() == QDialog.DialogCode.Accepted:
+            self._poner_foto(recorte.resultado())
+        recorte.deleteLater()
+
+    def _pegar_foto(self):
+        imagen = QApplication.clipboard().image()
+        if imagen.isNull():
+            QMessageBox.information(self, "No hay ninguna imagen copiada",
+                                    "Copia una imagen (por ejemplo con Win+Shift+S) y volve a apretar.")
+            return
+        self._poner_foto(imagen)
+
+    def _poner_foto(self, imagen: QImage):
+        imagen.setDevicePixelRatio(1.0)
+        self.foto = imagen
+        self.foto_label.setPixmap(_nitida(imagen, self.foto_label.size()))
+
+    def accept(self):
+        if self.navegador is not None and self.foto is None:
+            self.foto = self.navegador.foto()  # al pedir, la foto se saca sola
+        super().accept()

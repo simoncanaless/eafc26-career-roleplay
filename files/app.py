@@ -107,6 +107,7 @@ def main(argv=None) -> int:
         return _diagnostico()
     _identificar_en_windows()
 
+    from PySide6.QtCore import Qt
     from PySide6.QtGui import QIcon
     from PySide6.QtWidgets import QApplication
 
@@ -115,6 +116,9 @@ def main(argv=None) -> int:
     from roleplay.ui.estilos import aplicar_estilo
 
     init_db()
+    # el navegador del configurador (QtWebEngine) lo necesita antes de crear la
+    # aplicacion; QtWebEngine en si se importa recien al abrir el configurador
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
     app = QApplication(sys.argv[:1])
     app.setApplicationName("EAFC 26 Roleplay")
     if config.ICONO_APP.exists():

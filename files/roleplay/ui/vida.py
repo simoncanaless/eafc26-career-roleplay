@@ -51,7 +51,7 @@ from roleplay.servicios.economia import CATALOGO, CATEGORIAS, POR_ID, dinero
 from roleplay.servicios.partida_real import contexto_temporada
 from roleplay.ui import estilos
 from roleplay.ui.comun import ejecutar_en_hilo, esc
-from roleplay.ui.configurador import Configurador, VistaAuto
+from roleplay.ui.configurador import Configurador, guardar_foto, miniatura
 from roleplay.ui.componentes import (
     Mosaico,
     Tarjeta,
@@ -350,8 +350,7 @@ class PaginaVida(QWidget):
         hoy = e.get("hasta", "")
         for pedido in e.get("pedidos", []):
             config = autos.Configuracion.desde_dict(pedido["config"])
-            vista = VistaAuto(config, alto=56)
-            vista.setFixedWidth(132)
+            vista = miniatura(config, pedido.get("foto", ""))
             entrega = pedido["entrega"]
             faltan = ""
             if hoy:
@@ -389,10 +388,8 @@ class PaginaVida(QWidget):
                            f"{desde[8:10]}/{desde[5:7]}/{desde[:4]}</span>")
             texto.setWordWrap(True)
             partes = [texto, None, vender_btn]
-            if posesion.get("config"):  # los autos del concesionario, con su dibujo
-                vista = VistaAuto(autos.Configuracion.desde_dict(posesion["config"]), alto=56)
-                vista.setFixedWidth(132)
-                partes.insert(0, vista)
+            if posesion.get("config"):  # los autos del concesionario, con su foto (o su dibujo)
+                partes.insert(0, miniatura(autos.Configuracion.desde_dict(posesion["config"]), posesion.get("foto", "")))
             self.posesiones_layout.addLayout(fila(*partes))
         if not posesiones:
             self.posesiones_layout.addWidget(texto_suave("Todavia no te compraste nada."))
@@ -645,10 +642,10 @@ class PaginaVida(QWidget):
             return
         dialogo = Configurador(autos.POR_ID[modelo_id], get_economia(self.perfil.id).get("saldo", 0), self._moneda(), self)
         if dialogo.exec() == QDialog.DialogCode.Accepted:
-            self.pedir(dialogo.configuracion())
+            self.pedir(dialogo.configuracion(), dialogo.foto)
         dialogo.deleteLater()
 
-    def pedir(self, config: autos.Configuracion):
+    def pedir(self, config: autos.Configuracion, foto=None):
         perfil, carrera = self.perfil, self._carrera
         if perfil is None or carrera is None or carrera.fecha_actual() is None:
             return
@@ -657,8 +654,10 @@ class PaginaVida(QWidget):
         except economia.SinPlata as exc:
             QMessageBox.information(self, "No te alcanza", str(exc))
             return
-        set_economia(perfil.id, nueva)
         pedido = nueva["pedidos"][-1]
+        if foto is not None and not foto.isNull():
+            pedido["foto"] = guardar_foto(foto, pedido["id"])
+        set_economia(perfil.id, nueva)
         modelo = autos.POR_ID[config.modelo]
         entrega = pedido["entrega"]
         self._ultima_compra = None

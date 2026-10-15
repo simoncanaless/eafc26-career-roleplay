@@ -19,3 +19,8 @@ errores.log
 build/
 dist/
 diagnostico.txt
+
+# datos de la app en modo codigo (en el paquete van a %APPDATA%)
+ajustes.json
+navegador/
+garage/

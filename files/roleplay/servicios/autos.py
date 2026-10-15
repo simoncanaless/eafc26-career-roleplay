@@ -26,35 +26,64 @@ class Modelo:
     precio: int
     dias_entrega: int = 14  # dias del juego entre el pedido y la entrega
     aleron: bool = False  # el dibujo lleva aleron trasero
+    configurador: str = ""  # la web oficial donde se configura (ui/configurador.py la abre adentro de la app)
 
     @property
     def nombre_completo(self) -> str:
         return f"{self.marca} {self.nombre}"
 
 
+# Las direcciones salen de los botones "Configure" de cada web oficial
+# (revisadas el 2026-10-15). Cada marca redirige al pais del usuario.
+# Donde la marca no tiene una por modelo va su configurador general: el SF90
+# y el Roma ya no se venden (los reemplazaron el 849 Testarossa y el Amalfi),
+# Lamborghini y Rolls-Royce eligen el modelo adentro, y Bugatti no tiene
+# configurador publico (va la pagina del Tourbillon).
 MODELOS = [
-    Modelo("ferrari_296", "Ferrari", "296 GTB", "ferrari_super", 245_000, 28),
-    Modelo("ferrari_sf90", "Ferrari", "SF90 Stradale", "ferrari_super", 390_000, 35),
-    Modelo("ferrari_roma", "Ferrari", "Roma", "gt_ferrari", 170_000, 28),
-    Modelo("ferrari_purosangue", "Ferrari", "Purosangue", "suv_deportivo", 315_000, 35),
-    Modelo("porsche_911", "Porsche", "911 Carrera", "911_real", 95_000, 14),
-    Modelo("porsche_911_turbo", "Porsche", "911 Turbo S", "911_real", 190_000, 21),
-    Modelo("porsche_gt3rs", "Porsche", "911 GT3 RS", "911_real", 180_000, 28, aleron=True),
-    Modelo("porsche_taycan", "Porsche", "Taycan Turbo S", "sedan_real", 150_000, 14),
-    Modelo("porsche_cayenne", "Porsche", "Cayenne", "suv_deportivo", 80_000, 14),
-    Modelo("lambo_huracan", "Lamborghini", "Huracan", "huracan", 200_000, 28),
-    Modelo("lambo_revuelto", "Lamborghini", "Revuelto", "cuna_real", 480_000, 42),
-    Modelo("lambo_urus", "Lamborghini", "Urus", "suv_deportivo", 190_000, 21),
-    Modelo("mclaren_750s", "McLaren", "750S", "super_real", 240_000, 28),
-    Modelo("mclaren_artura", "McLaren", "Artura", "super_real", 190_000, 21),
-    Modelo("amg_g63", "Mercedes-AMG", "G 63", "g_real", 165_000, 21),
-    Modelo("amg_gt", "Mercedes-AMG", "GT 63", "sedan_real", 150_000, 14),
-    Modelo("rolls_cullinan", "Rolls-Royce", "Cullinan", "suv_lujo_real", 300_000, 42),
-    Modelo("rolls_spectre", "Rolls-Royce", "Spectre", "gt_rolls", 330_000, 42),
-    Modelo("bentley_gt", "Bentley", "Continental GT", "gt_lujo", 200_000, 28),
-    Modelo("aston_db12", "Aston Martin", "DB12", "gt_aston", 190_000, 28),
-    Modelo("range_rover", "Range Rover", "Range Rover", "suv_lujo_real", 110_000, 14),
-    Modelo("bugatti_tourbillon", "Bugatti", "Tourbillon", "hiper_real", 3_200_000, 90),
+    Modelo("ferrari_296", "Ferrari", "296 GTB", "ferrari_super", 245_000, 28,
+           configurador="https://carconfigurator.ferrari.com/en_EN/ferrari_car_configurator/296gtb"),
+    Modelo("ferrari_sf90", "Ferrari", "SF90 Stradale", "ferrari_super", 390_000, 35,
+           configurador="https://carconfigurator.ferrari.com/en_EN"),
+    Modelo("ferrari_roma", "Ferrari", "Roma", "gt_ferrari", 170_000, 28,
+           configurador="https://carconfigurator.ferrari.com/en_EN"),
+    Modelo("ferrari_purosangue", "Ferrari", "Purosangue", "suv_deportivo", 315_000, 35,
+           configurador="https://carconfigurator.ferrari.com/en_EN/ferrari_car_configurator/purosangue"),
+    Modelo("porsche_911", "Porsche", "911 Carrera", "911_real", 95_000, 14,
+           configurador="https://configurator.porsche.com/en-WW/mode/model/9921B2"),
+    Modelo("porsche_911_turbo", "Porsche", "911 Turbo S", "911_real", 190_000, 21,
+           configurador="https://configurator.porsche.com/en-WW/mode/model/992452"),
+    Modelo("porsche_gt3rs", "Porsche", "911 GT3 RS", "911_real", 180_000, 28, aleron=True,
+           configurador="https://configurator.porsche.com/en-WW/mode/model/992850"),
+    Modelo("porsche_taycan", "Porsche", "Taycan Turbo S", "sedan_real", 150_000, 14,
+           configurador="https://configurator.porsche.com/en-WW/mode/model/Y1AFM1"),
+    Modelo("porsche_cayenne", "Porsche", "Cayenne", "suv_deportivo", 80_000, 14,
+           configurador="https://configurator.porsche.com/en-WW/mode/model/9YAAI1"),
+    Modelo("lambo_huracan", "Lamborghini", "Huracan", "huracan", 200_000, 28,
+           configurador="https://configurator.lamborghini.com/configurator/"),
+    Modelo("lambo_revuelto", "Lamborghini", "Revuelto", "cuna_real", 480_000, 42,
+           configurador="https://configurator.lamborghini.com/configurator/"),
+    Modelo("lambo_urus", "Lamborghini", "Urus", "suv_deportivo", 190_000, 21,
+           configurador="https://configurator.lamborghini.com/configurator/"),
+    Modelo("mclaren_750s", "McLaren", "750S", "super_real", 240_000, 28,
+           configurador="https://configurator.mclaren.com/mclaren-ui/?model/750s"),
+    Modelo("mclaren_artura", "McLaren", "Artura", "super_real", 190_000, 21,
+           configurador="https://configurator.mclaren.com/mclaren-ui/?model/artura"),
+    Modelo("amg_g63", "Mercedes-AMG", "G 63", "g_real", 165_000, 21,
+           configurador="https://www.mercedes-benz.co.uk/passengercars/mercedes-benz-cars/car-configurator.html/motorization/CCci/GB/en/bm/4632762"),
+    Modelo("amg_gt", "Mercedes-AMG", "GT 63", "sedan_real", 150_000, 14,
+           configurador="https://www.mercedes-benz.co.uk/passengercars/mercedes-benz-cars/car-configurator.html/start/CCci/GB/en/tc/C590?subBrand=Mercedes-AMG"),
+    Modelo("rolls_cullinan", "Rolls-Royce", "Cullinan", "suv_lujo_real", 300_000, 42,
+           configurador="https://www.rolls-roycemotorcars.com/en_GB/bespoke/configure-your-rolls-royce.html"),
+    Modelo("rolls_spectre", "Rolls-Royce", "Spectre", "gt_rolls", 330_000, 42,
+           configurador="https://www.rolls-roycemotorcars.com/en_GB/bespoke/configure-your-rolls-royce.html"),
+    Modelo("bentley_gt", "Bentley", "Continental GT", "gt_lujo", 200_000, 28,
+           configurador="https://www.bentleymotors.com/en/misc/car-configurator.html/select/continental_gt/continental_gt"),
+    Modelo("aston_db12", "Aston Martin", "DB12", "gt_aston", 190_000, 28,
+           configurador="https://configurator.astonmartin.com/INT/configuration/AM576"),
+    Modelo("range_rover", "Range Rover", "Range Rover", "suv_lujo_real", 110_000, 14,
+           configurador="https://www.rangerover.com/lr/en_xi/l460/ipr/personalise/"),
+    Modelo("bugatti_tourbillon", "Bugatti", "Tourbillon", "hiper_real", 3_200_000, 90,
+           configurador="https://www.bugatti.com/models/tourbillon"),
 ]
 POR_ID = {m.id: m for m in MODELOS}
 MARCAS = list(dict.fromkeys(m.marca for m in MODELOS))
