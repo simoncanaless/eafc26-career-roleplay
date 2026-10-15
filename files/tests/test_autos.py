@@ -176,7 +176,7 @@ class TestConLaWebDeLaMarca(ayuda.PruebaDeInterfaz):
             "Bugatti": "bugatti.com",
         }
         for modelo in autos.MODELOS:
-            url = urlparse(modelo.configurador)
+            url = urlparse(modelo.url_configurador)
             self.assertEqual(url.scheme, "https", modelo.id)
             self.assertTrue(url.hostname.endswith(dominios[modelo.marca]), modelo.id)
 

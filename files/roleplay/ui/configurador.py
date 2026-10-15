@@ -704,7 +704,7 @@ class Configurador(QDialog):
         self._botones: dict[str, dict[str, QPushButton]] = {}
         self.foto: Optional[QImage] = None  # la del garage
         self.setWindowTitle(f"Configurador · {modelo.nombre_completo}")
-        self.navegador = crear_navegador(modelo.configurador, self)
+        self.navegador = crear_navegador(modelo.url_configurador, self)
         con_web = self.navegador is not None
 
         layout = QHBoxLayout(self)
@@ -737,7 +737,7 @@ class Configurador(QDialog):
                 "la foto para tu garage (si no, se saca sola al pedir)."
             ))
             izquierda.addWidget(self.navegador, 1)
-            sacar = boton("Sacar foto", primario=True)
+            sacar = boton("Capturar vista", primario=True)
             sacar.clicked.connect(self._sacar_foto)
             pegar = boton("Pegar imagen")
             pegar.setToolTip("Una imagen copiada (por ejemplo, con la captura de Windows: Win+Shift+S)")
