@@ -20,6 +20,7 @@ from PySide6.QtWidgets import QButtonGroup, QDialog, QHBoxLayout, QLabel, QMessa
 
 from roleplay.database import (
     get_economia,
+    get_estado_clubes,
     get_estado_eventos,
     get_reputacion_actual,
     get_seguidores,
@@ -27,10 +28,11 @@ from roleplay.database import (
     save_actividad_instagram,
     save_noticia_prensa,
     set_economia,
+    set_estado_clubes,
     set_estado_eventos,
     sumar_reputacion_y_seguidores,
 )
-from roleplay.servicios import autos, economia, eventos
+from roleplay.servicios import autos, clubes, economia, eventos
 from roleplay.servicios.economia import CATALOGO, CATEGORIAS, POR_ID, dinero
 from roleplay.servicios.partida_real import contexto_temporada
 from roleplay.ui import estilos
@@ -370,6 +372,8 @@ class PaginaVida(QWidget):
         set_economia(perfil.id, e)
         for ocurrido in ocurridos:
             sumar_reputacion_y_seguidores(perfil.id, ocurrido.reputacion, ocurrido.seguidores, motivo=ocurrido.titulo)
+            # tu hinchada tambien se entera (y una polemica abre una decision en el Resumen)
+            set_estado_clubes(perfil.id, clubes.por_evento(get_estado_clubes(perfil.id), ocurrido.tipo.id, ocurrido.fecha))
             self.compra_hecha.emit()  # la reputacion cambio
             self.evento_inesperado.emit(ocurrido.titulo, ocurrido.reto)
             ejecutar_en_hilo(

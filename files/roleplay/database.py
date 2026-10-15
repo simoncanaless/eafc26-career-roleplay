@@ -395,6 +395,17 @@ def set_estado_eventos(player_id: int, estado_eventos: dict) -> None:
         estado["eventos"] = estado_eventos
 
 
+def get_estado_clubes(player_id: int) -> dict:
+    """El carino de la hinchada de cada club y las decisiones (servicios/clubes.py): estado_json.clubes."""
+    leido = _leer_estado(player_id)
+    return dict(leido[0].get("clubes", {})) if leido else {}
+
+
+def set_estado_clubes(player_id: int, estado_clubes: dict) -> None:
+    with _editar_estado(player_id) as (estado, _):
+        estado["clubes"] = estado_clubes
+
+
 def sumar_reputacion_y_seguidores(player_id: int, reputacion: int, seguidores: int, motivo: str) -> None:
     """Lo que provoca una compra, una donacion o un evento, en una sola llamada."""
     if reputacion:

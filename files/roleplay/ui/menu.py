@@ -4,7 +4,7 @@ Temporada, Entrevistas, Instagram, Vida), sobre el fondo de estadio. Cada pagina
 de un scroll.
 """
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication,
@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 from roleplay.database import (
     actualizar_club,
     agregar_meta,
+    get_estado_clubes,
     get_estado_prensa,
     get_metas,
     get_reputacion_actual,
@@ -35,10 +36,16 @@ from roleplay.database import (
     load_match_interviews,
     load_noticias_prensa,
     quitar_meta,
+    save_actividad_instagram,
+    save_noticia_prensa,
+    set_estado_clubes,
+    sumar_reputacion_y_seguidores,
 )
 from roleplay import config
+from roleplay.servicios import clubes, eventos
+from roleplay.servicios.hinchada import _escala
 from roleplay.servicios.metas import CONTABLES, TIPOS, nueva_meta, texto_meta
-from roleplay.servicios.partida_real import resumen_temporada
+from roleplay.servicios.partida_real import contexto_temporada, resumen_temporada
 from roleplay.servicios.prensa import calcular_estadisticas_acumuladas
 from roleplay.ui import estilos
 from roleplay.ui.comun import con_scroll, ejecutar_en_hilo, esc, miles
@@ -79,8 +86,12 @@ class PaginaResumen(QWidget):
     """Vistazo del personaje: su carta, los numeros de la carrera, la
     historia, las tramas abiertas y las ultimas noticias."""
 
+    decision_pendiente = Signal(str)  # el titulo: el menu avisa en la bandeja
+    reputacion_cambiada = Signal()  # una decision o un traspaso movio la reputacion
+
     def __init__(self, on_crear_personaje, on_club_cambiado=None):
         super().__init__()
+        self._contexto_real = ""  # de la ultima partida leida, para la prensa de la hinchada
         self._on_crear_personaje = on_crear_personaje
         self._on_club_cambiado = on_club_cambiado  # para que la barra lateral se entere
         self._perfil = None
@@ -170,6 +181,39 @@ class PaginaResumen(QWidget):
         self.temporada.cuerpo.addWidget(self.temporada_proximo)
         self.temporada.hide()
         contenido.addWidget(self.temporada)
+
+        # ---- la hinchada de cada club y las decisiones (servicios/clubes.py) ----
+        self.hinchada = Tarjeta("Tu hinchada")
+        self.hinchada_label = QLabel()
+        self.hinchada_barra = QProgressBar()
+        self.hinchada_barra.setRange(0, 100)
+        self.hinchada_barra.setTextVisible(False)
+        self.hinchada_barra.setFixedWidth(220)
+        self.hinchada.cuerpo.addLayout(fila(self.hinchada_label, None, self.hinchada_barra))
+        self.decision = QFrame()
+        self.decision.setObjectName("decision")
+        self.decision.setStyleSheet(
+            f"QFrame#decision {{ border: 1px solid {estilos.ACENTO}; border-radius: 10px; }}"
+        )
+        decision = QVBoxLayout(self.decision)
+        decision.setContentsMargins(14, 12, 14, 12)
+        decision.setSpacing(8)
+        self.decision_label = QLabel()
+        self.decision_label.setWordWrap(True)
+        decision.addWidget(self.decision_label)
+        self.decision_botones = QHBoxLayout()
+        self.decision_botones.setSpacing(8)
+        decision.addLayout(self.decision_botones)
+        self.decision.hide()
+        self.hinchada.cuerpo.addWidget(self.decision)
+        self.eleccion_label = QLabel()
+        self.eleccion_label.setWordWrap(True)
+        self.eleccion_label.hide()
+        self.hinchada.cuerpo.addWidget(self.eleccion_label)
+        self.hinchada_antes = texto_suave()
+        self.hinchada.cuerpo.addWidget(self.hinchada_antes)
+        self.hinchada.hide()
+        contenido.addWidget(self.hinchada)
 
         # ---- metas de la temporada (se siguen con la partida) ----
         self.metas = Tarjeta("Metas de la temporada")
@@ -274,10 +318,113 @@ class PaginaResumen(QWidget):
             self.tramas_layout.addWidget(trama)
         self.tramas.setVisible(bool(perfil.ganchos_narrativos))
 
+        self._mostrar_hinchada()
         estado_prensa = get_estado_prensa(perfil.id)
         self._cargar_vitrina(estado_prensa)
         self._cargar_trayectoria(estado_prensa)
         self._cargar_noticias(perfil)
+
+    # ---- la hinchada ----
+
+    def actualizar_hinchada(self, carrera):
+        """Con cada guardado: los partidos nuevos mueven el carino, un
+        traspaso es noticia y, si la historia lo pide, aparece una decision."""
+        perfil = load_latest_profile()
+        if perfil is None or carrera is None:
+            return
+        self._contexto_real = contexto_temporada(carrera)
+        antes = get_estado_clubes(perfil.id)
+        estado, hitos = clubes.actualizar(antes, carrera, get_reputacion_actual(perfil.id))
+        set_estado_clubes(perfil.id, estado)
+        for hito in hitos:
+            self._contar(perfil, hito, carrera.fecha_actual().isoformat())
+        nueva = estado.get("decision")
+        if nueva and nueva != antes.get("decision"):
+            self.decision_pendiente.emit(clubes.decision_pendiente(estado)[0].titulo.format(
+                club=estado["clubes"][nueva["club"]]["nombre"]))
+        self._mostrar_hinchada()
+
+    def _contar(self, perfil, hito, fecha: str):
+        """Aplica lo que mueve (reputacion, seguidores) y lanza la noticia."""
+        seguidores = round(_escala(get_seguidores(perfil.id), get_reputacion_actual(perfil.id)) * hito.seguidores)
+        sumar_reputacion_y_seguidores(perfil.id, hito.reputacion, seguidores, motivo=hito.titulo)
+        if hito.reputacion:
+            self.reputacion_cambiada.emit()
+        ejecutar_en_hilo(
+            eventos.contar, perfil, hito.titulo, f"{perfil.nombre_jugador} {hito.descripcion}", hito.tono, seguidores,
+            fecha, f"hinchada:{hito.tipo}", "hinchada", self._contexto_real,
+            al_completar=self._on_contado, al_fallar=lambda _mensaje: None,
+        )
+        return seguidores
+
+    def _on_contado(self, resultado):
+        noticia, actividad = resultado
+        save_noticia_prensa(noticia)
+        save_actividad_instagram(actividad)
+        if self._perfil is not None:
+            self._cargar_noticias(self._perfil)
+
+    def _mostrar_hinchada(self):
+        perfil = self._perfil or load_latest_profile()
+        estado = get_estado_clubes(perfil.id) if perfil is not None else {}
+        if not estado.get("actual"):
+            self.hinchada.hide()
+            return
+        club = estado["clubes"][estado["actual"]]
+        self.hinchada_label.setText(
+            f"<b>{esc(club['nombre'])}</b> · {clubes.rotulo(club['carino'])} "
+            f"<span style='color:{estilos.TEXTO_SUAVE}'>({club['carino']}/100)</span>"
+        )
+        self.hinchada_barra.setValue(club["carino"])
+        color = estilos.NEGATIVO if club["carino"] < clubes.EN_CONTRA else estilos.MIXTO if club["carino"] < 45 else estilos.ACENTO
+        self.hinchada_barra.setStyleSheet(f"QProgressBar::chunk {{ background-color: {color}; border-radius: 3px; }}")
+        limpiar_layout(self.decision_botones)
+        pendiente = clubes.decision_pendiente(estado)
+        if pendiente is not None:
+            decision, nombre_club = pendiente
+            self.decision_label.setText(
+                f"<span style='color:{estilos.ACENTO}'>Tenes que decidir</span><br>"
+                f"<b>{esc(decision.titulo.format(club=nombre_club))}</b><br>{esc(decision.pregunta.format(club=nombre_club))}"
+            )
+            for i, opcion in enumerate(decision.opciones):
+                eleccion = boton(opcion.texto, primario=i == 0)
+                eleccion.setProperty("opcion", opcion.id)
+                eleccion.clicked.connect(lambda _=False, o=opcion.id: self.elegir(o))
+                self.decision_botones.addWidget(eleccion)
+            self.decision_botones.addStretch()
+        self.decision.setVisible(pendiente is not None)
+        antes = [c for clave, c in estado["clubes"].items() if clave != estado["actual"] and c.get("hasta")]
+        como = {"idolo": "se fue como idolo", "mala": "se fue por la puerta de atras", "normal": "se fue"}
+        self.hinchada_antes.setText(
+            "Antes: " + " · ".join(f"{esc(c['nombre'])} ({clubes.rotulo(c['carino']).lower()}, "
+                                   f"{como.get(c.get('salida'), 'se fue')})" for c in antes) if antes else
+            "El carino de los hinchas sube con tus goles y las victorias, y baja con las derrotas y las polemicas."
+        )
+        self.hinchada.show()
+
+    def elegir(self, opcion_id: str):
+        perfil = self._perfil or load_latest_profile()
+        estado = get_estado_clubes(perfil.id) if perfil is not None else {}
+        if perfil is None or not estado.get("decision"):
+            return
+        from datetime import date
+
+        fecha = date.fromisoformat(estado["hasta"]) if estado.get("hasta") else date.today()
+        estado, hito, carino = clubes.elegir(estado, opcion_id, fecha)
+        set_estado_clubes(perfil.id, estado)
+        seguidores = self._contar(perfil, hito, fecha.isoformat())
+        partes = [f"<b>Elegiste: {esc(hito.titulo)}</b>", f"carino {'+' if carino >= 0 else ''}{carino}"]
+        if hito.reputacion:
+            partes.append(f"reputacion {'+' if hito.reputacion > 0 else ''}{hito.reputacion}")
+        if seguidores:
+            partes.append(f"{'+' if seguidores > 0 else ''}{miles(seguidores)} seguidores")
+        texto = " · ".join(partes)
+        if hito.reto:
+            texto += f"<br><span style='color:{estilos.ACENTO}'>Reto:</span> {esc(hito.reto)}"
+        texto += f"<br><span style='color:{estilos.TEXTO_SUAVE}'>La prensa ya se entero...</span>"
+        self.eleccion_label.setText(texto)
+        self.eleccion_label.show()
+        self._mostrar_hinchada()
 
     def _cargar_trayectoria(self, estado_prensa: dict):
         limpiar_layout(self.trayectoria_grilla)
@@ -493,6 +640,8 @@ class MainMenuWindow(QMainWindow):
         self.pagina_vida.compra_hecha.connect(self._refrescar_jugador)
         self.pagina_vida.auto_entregado.connect(self._on_auto_entregado)
         self.pagina_vida.evento_inesperado.connect(self._on_evento_inesperado)
+        self.pagina_resumen.decision_pendiente.connect(self._on_decision_pendiente)
+        self.pagina_resumen.reputacion_cambiada.connect(self._refrescar_jugador)
         self._paginas = [
             ("Resumen", "inicio", self.pagina_resumen),
             ("Temporada", "trofeo", self.pagina_temporada),
@@ -668,6 +817,13 @@ class MainMenuWindow(QMainWindow):
                 QSystemTrayIcon.MessageIcon.Information, 10000,
             )
 
+    def _on_decision_pendiente(self, titulo: str):
+        if self.bandeja is not None and not self.isActiveWindow():
+            self.bandeja.showMessage(
+                "Tenes que decidir algo", f"{titulo}. Contestalo en el Resumen.",
+                QSystemTrayIcon.MessageIcon.Information, 10000,
+            )
+
     def _on_noticias_publicadas(self, noticias: list, manual: bool):
         self.pagina_instagram.revisar_hinchada()  # los hinchas reaccionan a las noticias
         if manual or self.bandeja is None or self.isActiveWindow():
@@ -677,6 +833,7 @@ class MainMenuWindow(QMainWindow):
 
     def _on_partida_actualizada(self, lectura):
         self.pagina_vida.acreditar_con(lectura.carrera)  # el sueldo se cobra con los dias del juego
+        self.pagina_resumen.actualizar_hinchada(lectura.carrera)  # el carino de tu hinchada y las decisiones
         if self.stack.currentIndex() == self.PAGINA_RESUMEN:
             self.pagina_resumen.actualizar()
         elif self.stack.currentIndex() == self.PAGINA_TEMPORADA:

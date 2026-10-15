@@ -85,6 +85,12 @@ un hospital, una escuela de futbol o tu propia fundacion. Lo que hagas mueve tus
 y tu reputacion: donar suma; presumir un jet en plena mala racha resta (mas si sos humilde).
 Si es noticia, sale en la prensa, y los hinchas lo comentan en tu Instagram.
 
+**Tu hinchada**: cada club tiene su carino por vos, que sube con tus goles y las victorias y baja
+con las derrotas y las polemicas. Si te vas como idolo a un rival de la misma liga, tus ex hinchas
+te tratan de traidor; si volves, te reciben segun como te fuiste. Y a veces te toca decidir: la
+hinchada en tu contra (quedarte y ganartelos o pedir que te vendan), una polemica que no para
+(disculpas o redoblar la apuesta), un grande que pregunta por vos. Esta en el Resumen.
+
 **Lo que te pasa**: a medida que pasan las semanas del juego te pasan cosas, buenas y malas: una
 multa por exceso de velocidad (si tenes auto), una gripe, una polemica en redes (mas si sos
 polemico), una campana publicitaria, un video viral... Mueven tu plata, tus seguidores y tu

@@ -244,15 +244,14 @@ class NoticiaEvento(BaseModel):
     cuerpo: str
 
 
-def repercusion(perfil: PlayerProfile, ocurrido: Ocurrido, moneda: str, contexto_real: str = ""
-                ) -> tuple[NoticiaPrensa, ActividadInstagram]:
-    """Corre en un hilo. Sin IA, la noticia sale con el titular del evento y
-    los hinchas sin comentarios; los numeros ya se aplicaron igual."""
+def contar(perfil: PlayerProfile, titulo: str, descripcion: str, tono: str, seguidores: int, fecha: str, hito: str,
+           tipo_actividad: str = "evento", contexto_real: str = "") -> tuple[NoticiaPrensa, ActividadInstagram]:
+    """Corre en un hilo. La noticia de algo que le paso al jugador (la
+    escribe la IA; sin IA, sale con `titulo`) y lo que comentan los hinchas
+    en Instagram. Los numeros ya se aplicaron antes: esto es solo el relato.
+    La usan los eventos inesperados y la hinchada de cada club."""
     from roleplay.servicios.hinchada import EventoHinchada, comentar_eventos
 
-    descripcion = f"{perfil.nombre_jugador} {ocurrido.detalle}"
-    if ocurrido.dinero:
-        descripcion += f" ({'cobra' if ocurrido.dinero > 0 else 'le cuesta'} {economia.dinero(abs(ocurrido.dinero), moneda)})"
     try:
         redactada = generar_json(
             f"""
@@ -263,25 +262,35 @@ jugador en un modo carrera roleplay de EAFC 26:
 {descripcion}.
 {ficha_jugador(perfil)}
 {contexto_real}
-El tono es {ocurrido.tipo.tono} (respetalo). No nombres marcas ni personas
-reales (salvo la marca del auto si aparece arriba). No inventes resultados
-ni datos que no esten arriba.
+El tono es {tono} (respetalo). No nombres marcas ni personas reales (salvo
+la marca del auto o el club si aparecen arriba). No inventes resultados ni
+datos que no esten arriba.
 """.strip(),
             NoticiaEvento,
             "No se pudo escribir la noticia esta vez.",
         )
         titular, cuerpo = redactada.titular.strip(), redactada.cuerpo.strip()
     except RuntimeError:
-        titular, cuerpo = f"{perfil.nombre_jugador}: {ocurrido.titulo[0].lower()}{ocurrido.titulo[1:]}", ""
-    noticia = NoticiaPrensa(player_id=perfil.id, categoria="jugador", tono=ocurrido.tipo.tono, titular=titular,
-                            cuerpo=cuerpo, hitos=[f"evento:{ocurrido.tipo.id}"])
-    evento = EventoHinchada("evento", ocurrido.fecha.isoformat(), ocurrido.titulo, descripcion, ocurrido.seguidores)
+        titular, cuerpo = f"{perfil.nombre_jugador}: {titulo[0].lower()}{titulo[1:]}", ""
+    noticia = NoticiaPrensa(player_id=perfil.id, categoria="jugador", tono=tono, titular=titular, cuerpo=cuerpo,
+                            hitos=[hito])
+    evento = EventoHinchada(tipo_actividad, fecha, titulo, descripcion, seguidores)
     try:
         comentarios = comentar_eventos(perfil, [evento], contexto_real).get(0, [])
     except RuntimeError:
         comentarios = []
     actividad = ActividadInstagram(
-        player_id=perfil.id, fecha_juego=ocurrido.fecha.isoformat(), tipo="evento", titulo=ocurrido.titulo,
-        crecimiento_seguidores=ocurrido.seguidores, comentarios=comentarios,
+        player_id=perfil.id, fecha_juego=fecha, tipo=tipo_actividad, titulo=titulo,
+        crecimiento_seguidores=seguidores, comentarios=comentarios,
     )
     return noticia, actividad
+
+
+def repercusion(perfil: PlayerProfile, ocurrido: Ocurrido, moneda: str, contexto_real: str = ""
+                ) -> tuple[NoticiaPrensa, ActividadInstagram]:
+    """Corre en un hilo: la noticia y los comentarios de un evento."""
+    descripcion = f"{perfil.nombre_jugador} {ocurrido.detalle}"
+    if ocurrido.dinero:
+        descripcion += f" ({'cobra' if ocurrido.dinero > 0 else 'le cuesta'} {economia.dinero(abs(ocurrido.dinero), moneda)})"
+    return contar(perfil, ocurrido.titulo, descripcion, ocurrido.tipo.tono, ocurrido.seguidores,
+                  ocurrido.fecha.isoformat(), f"evento:{ocurrido.tipo.id}", contexto_real=contexto_real)

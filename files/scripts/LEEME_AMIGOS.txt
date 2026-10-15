@@ -44,6 +44,8 @@ JUGAR
 - En VIDA cobras tu sueldo real y te compras lo que quieras (o donas):
   la prensa y tus hinchas reaccionan. En Autos configuras y pedis tu auto
   (Ferrari, Porsche, Lamborghini...) y llega unos dias despues en el juego.
+- En el RESUMEN esta "Tu hinchada": el carino de los hinchas de tu club y,
+  cuando la historia lo pide, una decision que tomas vos (te avisa la bandeja).
 - Con los dias del juego te pasan cosas (una multa, una gripe, una campana
   publicitaria...): mira "Lo que te paso" en VIDA. Algunas traen un reto
   para el proximo partido, como arrancar en el banco. Cumplirlo es cosa tuya.
