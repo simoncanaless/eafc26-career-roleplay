@@ -46,6 +46,8 @@ JUGAR
   (Ferrari, Porsche, Lamborghini...) y llega unos dias despues en el juego.
 - En el RESUMEN esta "Tu hinchada": el carino de los hinchas de tu club y,
   cuando la historia lo pide, una decision que tomas vos (te avisa la bandeja).
+- En VIDA tambien esta tu vida sentimental: tu pareja, los rumores con una
+  famosa (inventada) y decisiones como proponer casamiento.
 - Con los dias del juego te pasan cosas (una multa, una gripe, una campana
   publicitaria...): mira "Lo que te paso" en VIDA. Algunas traen un reto
   para el proximo partido, como arrancar en el banco. Cumplirlo es cosa tuya.

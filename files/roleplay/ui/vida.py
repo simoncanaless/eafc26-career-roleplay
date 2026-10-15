@@ -12,14 +12,26 @@ configuran (ui/configurador.py), se pagan al pedir y llegan dias despues en
 el juego; lo que provocan pasa cuando llegan (acreditar_con los entrega).
 
 Con los dias del juego tambien pasan cosas sin que uno las compre: los
-eventos inesperados (servicios/eventos.py), en la tarjeta "Lo que te paso".
+eventos inesperados (servicios/eventos.py), en la tarjeta "Lo que te paso",
+y la vida sentimental (servicios/amor.py), con sus decisiones.
 """
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QButtonGroup, QDialog, QHBoxLayout, QLabel, QMessageBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QButtonGroup,
+    QDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QProgressBar,
+    QVBoxLayout,
+    QWidget,
+)
 
 from roleplay.database import (
     get_economia,
+    get_estado_amor,
     get_estado_clubes,
     get_estado_eventos,
     get_reputacion_actual,
@@ -28,11 +40,13 @@ from roleplay.database import (
     save_actividad_instagram,
     save_noticia_prensa,
     set_economia,
+    set_estado_amor,
     set_estado_clubes,
     set_estado_eventos,
     sumar_reputacion_y_seguidores,
 )
-from roleplay.servicios import autos, clubes, economia, eventos
+from roleplay.servicios import amor, autos, clubes, economia, eventos
+from roleplay.servicios.hinchada import _escala
 from roleplay.servicios.economia import CATALOGO, CATEGORIAS, POR_ID, dinero
 from roleplay.servicios.partida_real import contexto_temporada
 from roleplay.ui import estilos
@@ -64,6 +78,7 @@ class PaginaVida(QWidget):
     compra_hecha = Signal()  # la reputacion cambio: el menu refresca la barra lateral
     auto_entregado = Signal(str)  # llego un auto pedido: el menu avisa en la bandeja
     evento_inesperado = Signal(str, str)  # (titulo, reto): el menu avisa en la bandeja
+    decision_pendiente = Signal(str)  # una decision de la vida sentimental: el menu avisa en la bandeja
 
     def __init__(self):
         super().__init__()
@@ -122,6 +137,39 @@ class PaginaVida(QWidget):
         self.eventos.cuerpo.addLayout(self.eventos_layout)
         self.eventos.hide()
         contenido.addWidget(self.eventos)
+
+        self.amor = Tarjeta("Vida sentimental")
+        self.amor_label = QLabel()  # una linea: con ajuste, al lado de la barra se achica a nada
+        self.amor_barra = QProgressBar()
+        self.amor_barra.setRange(0, 100)
+        self.amor_barra.setTextVisible(False)
+        self.amor_barra.setFixedWidth(220)
+        self.amor.cuerpo.addLayout(fila(self.amor_label, None, self.amor_barra))
+        self.amor_decision = QFrame()
+        self.amor_decision.setObjectName("decisionAmor")
+        self.amor_decision.setStyleSheet(
+            f"QFrame#decisionAmor {{ border: 1px solid {estilos.ACENTO}; border-radius: 10px; }}"
+        )
+        decision = QVBoxLayout(self.amor_decision)
+        decision.setContentsMargins(14, 12, 14, 12)
+        decision.setSpacing(8)
+        self.amor_decision_label = QLabel()
+        self.amor_decision_label.setWordWrap(True)
+        decision.addWidget(self.amor_decision_label)
+        self.amor_botones = QHBoxLayout()
+        self.amor_botones.setSpacing(8)
+        decision.addLayout(self.amor_botones)
+        self.amor_decision.hide()
+        self.amor.cuerpo.addWidget(self.amor_decision)
+        self.amor_eleccion = QLabel()
+        self.amor_eleccion.setWordWrap(True)
+        self.amor_eleccion.hide()
+        self.amor.cuerpo.addWidget(self.amor_eleccion)
+        self.amor_historial = QVBoxLayout()
+        self.amor_historial.setSpacing(6)
+        self.amor.cuerpo.addLayout(self.amor_historial)
+        self.amor.hide()
+        contenido.addWidget(self.amor)
 
         tienda = Tarjeta("Tienda")
         self._grupo = QButtonGroup(self)
@@ -207,6 +255,7 @@ class PaginaVida(QWidget):
                 self.auto_entregado.emit(articulo.nombre)
         if self.perfil is not None and hoy is not None and carrera.sueldo_usuario:
             self._revisar_eventos(carrera, hoy)
+            self._revisar_amor(carrera, hoy)
         self._mostrar()
 
     # ---- dibujo ----
@@ -240,6 +289,7 @@ class PaginaVida(QWidget):
         self.mosaico_gastos.poner(dinero(economia.mantenimiento_semanal(e), moneda))
         self.mosaico_patrimonio.poner(dinero(economia.patrimonio(e), moneda))
         self._mostrar_eventos()
+        self._mostrar_amor()
         self._mostrar_tienda(e)
         self._mostrar_pedidos(e)
         self._mostrar_posesiones(e)
@@ -422,6 +472,125 @@ class PaginaVida(QWidget):
             etiqueta.setWordWrap(True)
             self.eventos_layout.addWidget(etiqueta)
         self.eventos.setVisible(bool(historial))
+
+    # ---- vida sentimental ----
+
+    def _revisar_amor(self, carrera, hoy):
+        perfil = self.perfil
+        antes = get_estado_amor(perfil.id)
+        estado, e, sucesos = amor.revisar(perfil, antes, get_economia(perfil.id), hoy)
+        set_estado_amor(perfil.id, estado)
+        set_economia(perfil.id, e)
+        for suceso in sucesos:
+            self._contar_amor(perfil, suceso, estado, contexto_temporada(carrera))
+        nueva = estado.get("decision")
+        if nueva and nueva != antes.get("decision"):
+            decision, pareja = amor.decision_pendiente(estado)
+            self.decision_pendiente.emit(decision.titulo.format(pareja=pareja))
+
+    def _contar_amor(self, perfil, suceso, estado: dict, contexto_real: str = "") -> int:
+        seguidores = round(_escala(get_seguidores(perfil.id), get_reputacion_actual(perfil.id)) * suceso.seguidores)
+        sumar_reputacion_y_seguidores(perfil.id, suceso.reputacion, seguidores, motivo=suceso.titulo)
+        self.compra_hecha.emit()
+        descripcion = f"{perfil.nombre_jugador} {suceso.detalle}"
+        if (estado.get("pareja") or {}).get("real"):
+            descripcion += (" (su pareja es una persona real: la noticia la trata con carino y respeto, "
+                            "sin chismes ni detalles intimos)")
+        ejecutar_en_hilo(
+            eventos.contar, perfil, suceso.titulo, descripcion, suceso.tono, seguidores,
+            suceso.fecha.isoformat(), suceso.clave, "amor", contexto_real,
+            al_completar=self._on_repercusion_amor, al_fallar=self._on_repercusion_error,
+        )
+        return seguidores
+
+    def _on_repercusion_amor(self, resultado):
+        noticia, actividad = resultado
+        save_noticia_prensa(noticia)
+        save_actividad_instagram(actividad)
+
+    def _mostrar_amor(self):
+        estado = get_estado_amor(self.perfil.id) if self.perfil is not None else {}
+        if not estado:
+            self.amor.hide()
+            return
+        pareja = estado.get("pareja")
+        textos = {
+            "pareja": "En pareja con", "comprometido": "Comprometido con", "casado": "Casado con",
+            "conociendo": "Lo ven con",
+        }
+        if pareja and estado["estado"] in textos:
+            quien = f"<b>{esc(pareja['nombre'])}</b>" + (f", {esc(pareja['oficio'])}" if pareja.get("oficio") else "")
+            texto = f"{textos[estado['estado']]} {quien}"
+            if estado["estado"] != "conociendo":
+                desde = pareja.get("desde", "")
+                texto += (f" <span style='color:{estilos.TEXTO_SUAVE}'>· {amor.rotulo(pareja['relacion'])}"
+                          + (f" · desde el {desde[8:10]}/{desde[5:7]}/{desde[:4]}" if desde else "") + "</span>")
+            self.amor_label.setText(texto)
+            mostrar_barra = estado["estado"] != "conociendo"
+            self.amor_barra.setVisible(mostrar_barra)
+            if mostrar_barra:
+                self.amor_barra.setValue(pareja["relacion"])
+                color = (estilos.NEGATIVO if pareja["relacion"] < amor.CRISIS else
+                         estilos.MIXTO if pareja["relacion"] < 50 else estilos.ACENTO)
+                self.amor_barra.setStyleSheet(f"QProgressBar::chunk {{ background-color: {color}; border-radius: 3px; }}")
+        else:
+            self.amor_label.setText("<b>Soltero</b> <span style='color:" + estilos.TEXTO_SUAVE + "'>· lo que pase, "
+                                    "pasa con las semanas del juego</span>")
+            self.amor_barra.hide()
+        limpiar_layout(self.amor_botones)
+        pendiente = amor.decision_pendiente(estado)
+        if pendiente is not None:
+            decision, nombre = pendiente
+            self.amor_decision_label.setText(
+                f"<span style='color:{estilos.ACENTO}'>Tenes que decidir</span><br>"
+                f"<b>{esc(decision.titulo.format(pareja=nombre))}</b><br>{esc(decision.pregunta)}"
+            )
+            for i, opcion in enumerate(decision.opciones):
+                eleccion = boton(opcion.texto, primario=i == 0)
+                eleccion.setProperty("opcion", opcion.id)
+                eleccion.clicked.connect(lambda _=False, o=opcion.id: self.elegir_amor(o))
+                self.amor_botones.addWidget(eleccion)
+            self.amor_botones.addStretch()
+        self.amor_decision.setVisible(pendiente is not None)
+        limpiar_layout(self.amor_historial)
+        moneda = self._moneda()
+        for h in estado.get("historial", [])[:4]:
+            efectos = []
+            if h.get("relacion"):
+                efectos.append(f"relacion {_con_signo(h['relacion'])}")
+            if h.get("dinero"):
+                efectos.append(dinero(h["dinero"], moneda))
+            dia = h["fecha"]
+            linea = QLabel(f"<span style='color:{estilos.TEXTO_SUAVE}'>{dia[8:10]}/{dia[5:7]}</span>&nbsp; "
+                           f"{esc(h['titulo'])}" + (f" <span style='color:{estilos.TEXTO_SUAVE}'>· "
+                                                     f"{esc(' · '.join(efectos))}</span>" if efectos else ""))
+            linea.setWordWrap(True)
+            self.amor_historial.addWidget(linea)
+        self.amor.show()
+
+    def elegir_amor(self, opcion_id: str):
+        perfil = self.perfil
+        estado = get_estado_amor(perfil.id) if perfil is not None else {}
+        if perfil is None or not estado.get("decision"):
+            return
+        from datetime import date
+
+        hoy = self._carrera.fecha_actual() if self._carrera is not None and self._carrera.fecha_actual() else \
+            date.fromisoformat(estado["hasta"])
+        estado, e, suceso = amor.elegir(estado, get_economia(perfil.id), opcion_id, hoy)
+        set_estado_amor(perfil.id, estado)
+        set_economia(perfil.id, e)
+        seguidores = self._contar_amor(perfil, suceso, estado,
+                                       contexto_temporada(self._carrera) if self._carrera is not None else "")
+        partes = [f"<b>Elegiste: {esc(suceso.titulo)}</b>"]
+        if seguidores:
+            partes.append(f"{_con_signo(seguidores)} seguidores")
+        if suceso.dinero:
+            partes.append(dinero(suceso.dinero, self._moneda()))
+        self.amor_eleccion.setText(" · ".join(partes) + f"<br><span style='color:{estilos.TEXTO_SUAVE}'>"
+                                   "La prensa ya se entero...</span>")
+        self.amor_eleccion.show()
+        self._mostrar()
 
     # ---- comprar y vender ----
 

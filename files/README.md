@@ -91,6 +91,11 @@ te tratan de traidor; si volves, te reciben segun como te fuiste. Y a veces te t
 hinchada en tu contra (quedarte y ganartelos o pedir que te vendan), una polemica que no para
 (disculpas o redoblar la apuesta), un grande que pregunta por vos. Esta en el Resumen.
 
+**Vida sentimental**: arranca de lo que elegiste al crear el personaje. Con tu pareja pasan cosas
+con las semanas del juego (una cena, la tribuna, vacaciones, roces por tantos viajes) y llegan las
+decisiones: proponerle casamiento, la boda (a lo grande o intima), que hacer en una crisis. Si estas
+soltero, te pueden ver con una famosa (inventada) y decidis si lo haces oficial. Esta en VIDA.
+
 **Lo que te pasa**: a medida que pasan las semanas del juego te pasan cosas, buenas y malas: una
 multa por exceso de velocidad (si tenes auto), una gripe, una polemica en redes (mas si sos
 polemico), una campana publicitaria, un video viral... Mueven tu plata, tus seguidores y tu

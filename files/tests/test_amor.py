@@ -1,0 +1,176 @@
+"""Vida sentimental: arranque, sorteo, decisiones y la tarjeta en Vida."""
+
+import tempfile
+from datetime import date, timedelta
+from pathlib import Path
+from unittest import mock
+
+import ayuda
+import fabrica_partida as f
+from roleplay import database
+from roleplay.models import PlayerProfile
+from roleplay.partida import lector
+from roleplay.partida.carrera import construir
+from roleplay.servicios import amor, economia, eventos, hinchada, partida_real
+
+HOY = date(2027, 1, 16)
+
+
+def perfil(relacion="novia_real", pareja="Denisse"):
+    return PlayerProfile(id=7, nombre_jugador="Simon Canales", estado_relacion=relacion, nombre_pareja=pareja)
+
+
+def plata():
+    return economia.acreditar(None, HOY, f.SUELDO)
+
+
+def con_momentos(*ids):
+    return mock.patch.object(amor, "MOMENTOS", [amor.POR_ID[i] for i in ids])
+
+
+class TestArranque(ayuda.PruebaConBase):
+    def test_con_novia_real(self):
+        estado, _, sucesos = amor.revisar(perfil(), {}, plata(), HOY)
+        self.assertEqual((estado["estado"], sucesos), ("pareja", []))
+        self.assertEqual(estado["pareja"]["nombre"], "Denisse")
+        self.assertTrue(estado["pareja"]["real"])
+
+    def test_soltero(self):
+        estado, _, _ = amor.revisar(perfil("celebridad", ""), {}, plata(), HOY)
+        self.assertEqual((estado["estado"], estado["pareja"]), ("soltero", None))
+        self.assertEqual(amor.revisar(perfil("novia_real", " "), {}, plata(), HOY)[0]["estado"], "soltero")
+
+
+class TestConLaNoviaReal(ayuda.PruebaConBase):
+    def setUp(self):
+        super().setUp()
+        self.estado = amor.inicial(perfil(), HOY)
+
+    def test_nunca_le_toca_la_prensa_del_corazon(self):
+        posibles = {m.id for m, _ in amor.posibles(perfil(), self.estado, date(2027, 7, 1))}
+        self.assertIn("vacaciones", posibles)
+        self.assertFalse(posibles & {"alfombra", "rumores_crisis", "entrevista_famosa", "lo_ven", "rumores"})
+        self.assertNotIn("vacaciones", {m.id for m, _ in amor.posibles(perfil(), self.estado, HOY)})  # solo en verano
+
+    def test_una_cena_mejora_la_relacion(self):
+        with mock.patch.object(amor, "PROBABILIDAD_POR_SEMANA", 1), con_momentos("cena"):
+            estado, _, (suceso,) = amor.revisar(perfil(), self.estado, plata(), HOY + timedelta(days=7))
+        self.assertEqual(suceso.titulo, "Cena romantica con Denisse")
+        self.assertEqual(estado["pareja"]["relacion"], amor.RELACION_INICIAL + 5)
+        self.assertEqual(suceso.clave, "amor:cena")
+
+    def test_proponer_casamiento_y_la_boda(self):
+        self.estado["pareja"].update(relacion=85, desde="2026-01-01")
+        with mock.patch.object(amor, "PROBABILIDAD_POR_SEMANA", 0):
+            estado, _, _ = amor.revisar(perfil(), self.estado, plata(), HOY + timedelta(days=7))
+        decision, nombre = amor.decision_pendiente(estado)
+        self.assertEqual(decision.titulo.format(pareja=nombre), "Le propones casamiento a Denisse?")
+        e = plata()
+        estado, nueva, suceso = amor.elegir(estado, e, "anillo", HOY)
+        self.assertEqual(estado["estado"], "comprometido")
+        self.assertEqual(nueva["saldo"], e["saldo"] - round(6 * f.SUELDO * economia.NETO))  # el anillo
+        self.assertEqual(suceso.detalle, "le propuso casamiento a Denisse")
+        with mock.patch.object(amor, "PROBABILIDAD_POR_SEMANA", 0):
+            estado, _, _ = amor.revisar(perfil(), estado, nueva, HOY + timedelta(days=amor.BODA_DESDE_DIAS + 7))
+        self.assertEqual(estado["decision"]["tipo"], "boda")
+        estado, _, _ = amor.elegir(estado, nueva, "intima", HOY + timedelta(days=amor.BODA_DESDE_DIAS + 7))
+        self.assertEqual(estado["estado"], "casado")
+
+    def test_decir_todavia_no_vuelve_a_preguntar_enseguida(self):
+        self.estado["pareja"].update(relacion=85, desde="2026-01-01")
+        with mock.patch.object(amor, "PROBABILIDAD_POR_SEMANA", 0):
+            estado, _, _ = amor.revisar(perfil(), self.estado, plata(), HOY + timedelta(days=7))
+            estado, _, _ = amor.elegir(estado, plata(), "todavia", HOY + timedelta(days=7))
+            estado["pareja"]["relacion"] = 90
+            estado, _, _ = amor.revisar(perfil(), estado, plata(), HOY + timedelta(days=14))
+        self.assertIsNone(estado["decision"])
+
+    def test_terminar_con_una_persona_real_no_es_drama(self):
+        self.estado["pareja"]["relacion"] = 10
+        with mock.patch.object(amor, "PROBABILIDAD_POR_SEMANA", 0):
+            estado, _, _ = amor.revisar(perfil(), self.estado, plata(), HOY + timedelta(days=7))
+        self.assertEqual(estado["decision"]["tipo"], "crisis")
+        estado, _, suceso = amor.elegir(estado, plata(), "terminar", HOY)
+        self.assertEqual((estado["estado"], estado["pareja"], suceso.tono), ("soltero", None, "neutral"))
+
+
+class TestConUnaFamosa(ayuda.PruebaConBase):
+    def test_lo_ven_con_una_famosa_inventada_y_lo_hace_oficial(self):
+        estado = amor.inicial(perfil("celebridad", ""), HOY)
+        with mock.patch.object(amor, "PROBABILIDAD_POR_SEMANA", 1), con_momentos("lo_ven"):
+            estado, _, (suceso,) = amor.revisar(perfil("celebridad", ""), estado, plata(), HOY + timedelta(days=7))
+        famosa = estado["pareja"]
+        self.assertEqual(estado["estado"], "conociendo")
+        self.assertFalse(famosa["real"])
+        nombre, apellido = famosa["nombre"].split(" ", 1)
+        self.assertIn(nombre, amor.NOMBRES)  # inventada: sale de las listas propias
+        self.assertIn(apellido, amor.APELLIDOS)
+        self.assertIn(famosa["oficio"], suceso.titulo)
+        self.assertEqual(estado["decision"]["tipo"], "oficial")
+        estado, _, suceso = amor.elegir(estado, plata(), "oficializar", HOY + timedelta(days=7))
+        self.assertEqual((estado["estado"], estado["pareja"]["relacion"]), ("pareja", 60))
+        posibles = {m.id for m, _ in amor.posibles(perfil("celebridad", ""), estado, HOY)}
+        self.assertIn("alfombra", posibles)  # con una famosa si hay prensa del corazon
+
+    def test_negarlo(self):
+        estado = amor.inicial(perfil("soltero", ""), HOY)
+        with mock.patch.object(amor, "PROBABILIDAD_POR_SEMANA", 1), con_momentos("lo_ven"):
+            estado, _, _ = amor.revisar(perfil("soltero", ""), estado, plata(), HOY + timedelta(days=7))
+        estado, _, _ = amor.elegir(estado, plata(), "negar", HOY)
+        self.assertEqual((estado["estado"], estado["pareja"]), ("soltero", None))
+
+    def test_la_misma_partida_la_misma_famosa(self):
+        def sortear():
+            with mock.patch.object(amor, "PROBABILIDAD_POR_SEMANA", 1), con_momentos("lo_ven"):
+                return amor.revisar(perfil("celebridad", ""), amor.inicial(perfil("celebridad", ""), HOY), plata(),
+                                    HOY + timedelta(days=7))[0]["pareja"]["nombre"]
+
+        self.assertEqual(sortear(), sortear())
+
+
+class TestTarjetaEnVida(ayuda.PruebaDeInterfaz):
+    def setUp(self):
+        super().setUp()
+        carpeta = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        (carpeta / "CmPlr1").write_bytes(f.construir_bytes())
+        mock.patch.object(lector, "CARPETA_GUARDADOS", carpeta).start()
+        mock.patch.object(partida_real, "identificar_jugadores", return_value={}).start()
+        mock.patch.object(partida_real, "identificar_competiciones", return_value={}).start()
+        mock.patch.object(hinchada, "comentar_eventos", return_value={}).start()
+        mock.patch.object(eventos, "generar_json", return_value=eventos.NoticiaEvento(titular="Anillo", cuerpo="C")).start()
+        mock.patch.object(eventos, "PROBABILIDAD_POR_SEMANA", 0).start()
+        mock.patch.object(amor, "PROBABILIDAD_POR_SEMANA", 0).start()
+        self.addCleanup(mock.patch.stopall)
+        self.addCleanup(ayuda.esperar_tareas)
+        self.pid = database.save_profile(PlayerProfile(nombre_jugador="Simon Canales", club_actual="Man Utd",
+                                                       estado_relacion="novia_real", nombre_pareja="Denisse"))
+        from roleplay.ui.vida import PaginaVida
+
+        self.pagina = PaginaVida()
+        self.avisos = []
+        self.pagina.decision_pendiente.connect(self.avisos.append)
+        self.pagina.actualizar()
+        ayuda.esperar_tareas()
+
+    def test_muestra_la_pareja(self):
+        self.assertFalse(self.pagina.amor.isHidden())
+        self.assertIn("En pareja con <b>Denisse</b>", self.pagina.amor_label.text())
+        self.assertTrue(self.pagina.amor_decision.isHidden())
+
+    def test_la_propuesta(self):
+        estado = database.get_estado_amor(self.pid)
+        estado["pareja"].update(relacion=90, desde="2026-01-01")
+        database.set_estado_amor(self.pid, estado)
+        una_semana_despues = construir(f.construir_bytes(otros_partidos=[(20270123, f.LIGA, f.CITY, f.LIVERPOOL, 1, 0, True)]))
+        self.pagina.acreditar_con(una_semana_despues)
+        self.assertEqual(self.avisos, ["Le propones casamiento a Denisse?"])
+        self.assertFalse(self.pagina.amor_decision.isHidden())
+        seguidores = database.get_seguidores(self.pid)
+        self.pagina.elegir_amor("anillo")
+        ayuda.esperar_tareas()
+        self.assertEqual(database.get_estado_amor(self.pid)["estado"], "comprometido")
+        self.assertIn("Comprometido con", self.pagina.amor_label.text())
+        self.assertGreater(database.get_seguidores(self.pid), seguidores)
+        noticia = database.load_noticias_prensa(self.pid)[0]
+        self.assertEqual(noticia.hitos, ["amor:proponer:anillo"])
+        self.assertEqual([a.tipo for a in database.load_actividad_instagram(self.pid)], ["amor"])

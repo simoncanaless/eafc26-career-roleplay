@@ -395,6 +395,17 @@ def set_estado_eventos(player_id: int, estado_eventos: dict) -> None:
         estado["eventos"] = estado_eventos
 
 
+def get_estado_amor(player_id: int) -> dict:
+    """La vida sentimental (servicios/amor.py): estado_json.amor."""
+    leido = _leer_estado(player_id)
+    return dict(leido[0].get("amor", {})) if leido else {}
+
+
+def set_estado_amor(player_id: int, estado_amor: dict) -> None:
+    with _editar_estado(player_id) as (estado, _):
+        estado["amor"] = estado_amor
+
+
 def get_estado_clubes(player_id: int) -> dict:
     """El carino de la hinchada de cada club y las decisiones (servicios/clubes.py): estado_json.clubes."""
     leido = _leer_estado(player_id)

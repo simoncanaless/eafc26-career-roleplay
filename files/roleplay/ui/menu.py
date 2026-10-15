@@ -641,6 +641,7 @@ class MainMenuWindow(QMainWindow):
         self.pagina_vida.auto_entregado.connect(self._on_auto_entregado)
         self.pagina_vida.evento_inesperado.connect(self._on_evento_inesperado)
         self.pagina_resumen.decision_pendiente.connect(self._on_decision_pendiente)
+        self.pagina_vida.decision_pendiente.connect(lambda titulo: self._on_decision_pendiente(titulo, "Vida"))
         self.pagina_resumen.reputacion_cambiada.connect(self._refrescar_jugador)
         self._paginas = [
             ("Resumen", "inicio", self.pagina_resumen),
@@ -817,10 +818,10 @@ class MainMenuWindow(QMainWindow):
                 QSystemTrayIcon.MessageIcon.Information, 10000,
             )
 
-    def _on_decision_pendiente(self, titulo: str):
+    def _on_decision_pendiente(self, titulo: str, pagina: str = "Resumen"):
         if self.bandeja is not None and not self.isActiveWindow():
             self.bandeja.showMessage(
-                "Tenes que decidir algo", f"{titulo}. Contestalo en el Resumen.",
+                "Tenes que decidir algo", f"{titulo}. Contestalo en {pagina}.",
                 QSystemTrayIcon.MessageIcon.Information, 10000,
             )
 

@@ -11,7 +11,7 @@ from roleplay import database
 from roleplay.models import NoticiaPrensa, PlayerProfile
 from roleplay.partida import lector
 from roleplay.partida.carrera import Partido, construir
-from roleplay.servicios import economia, eventos, hinchada, partida_real
+from roleplay.servicios import amor, economia, eventos, hinchada, partida_real
 from roleplay.servicios.economia import POR_ID
 
 HOY = date(2027, 1, 16)
@@ -168,6 +168,7 @@ class TestPaginaVida(ayuda.PruebaDeInterfaz):
         mock.patch.object(hinchada, "comentar_eventos", return_value={}).start()
         mock.patch.object(economia, "generar_json", return_value=economia.NoticiaCompra(titular="T", cuerpo="C")).start()
         mock.patch.object(eventos, "PROBABILIDAD_POR_SEMANA", 0).start()  # sin eventos inesperados: aca se prueba la plata
+        mock.patch.object(amor, "PROBABILIDAD_POR_SEMANA", 0).start()  # ni la vida sentimental
         self.addCleanup(mock.patch.stopall)
         self.pid = database.save_profile(
             PlayerProfile(nombre_jugador="Simon Canales", club_actual="Man Utd", personalidad="humilde")
