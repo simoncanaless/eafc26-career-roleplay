@@ -70,6 +70,26 @@ class TestDatabase(ayuda.PruebaConBase):
         database.actualizar_club(perfil.id, "Palermo")
         self.assertEqual(database.load_profile(perfil.id).club_actual, "Palermo")
 
+    def test_la_tabla_de_partidos_de_la_primera_version_se_completa(self):
+        # la base real de Simon: partido_entrevista sin respuestas, reaccion ni delta
+        # (guardar una entrevista daba "has no column named respuestas_jugador")
+        pid = self._perfil()
+        with database.conectar() as conn:
+            conn.execute("DROP TABLE partido_entrevista")
+            conn.execute(
+                "CREATE TABLE partido_entrevista (id INTEGER PRIMARY KEY AUTOINCREMENT, player_id INTEGER NOT NULL, "
+                "fecha TEXT, goles_equipo INTEGER, goles_rival INTEGER, equipo_rival TEXT, goles_jugador INTEGER, "
+                "asistencias_jugador INTEGER, rating_jugador REAL, minutos_jugados INTEGER, tarjeta_amarilla INTEGER, "
+                "tarjeta_roja INTEGER, hombre_del_partido INTEGER, preguntas_entrevista TEXT)"
+            )
+        database.init_db()
+        registro = MatchInterviewRecord(player_id=pid, equipo_rival="Arsenal", preguntas_entrevista=["P?"],
+                                        respuestas_jugador=["R"], reaccion_prensa="Bien", delta_reputacion=4,
+                                        origen="partida", fecha_juego="2027-01-16")
+        registro.id = database.save_match_interview(registro)
+        self.assertEqual(database.load_match_interviews(pid), [registro])
+        database.init_db()  # otra vez: no agrega nada de nuevo ni falla
+
     def test_la_reputacion_parte_de_la_inicial_se_acota_y_deja_historial(self):
         pid = self._perfil(reputacion_inicial=40)
         self.assertEqual(database.get_reputacion_actual(pid), 40)

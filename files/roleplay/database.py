@@ -155,6 +155,14 @@ def conectar() -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
+def _tipo_de_columna(defecto) -> str:
+    if isinstance(defecto, bool) or isinstance(defecto, int):
+        return "INTEGER"
+    if isinstance(defecto, float):
+        return "REAL"
+    return "TEXT"
+
+
 def init_db() -> None:
     with conectar() as conn:
         conn.executescript(SCHEMA)
@@ -162,6 +170,17 @@ def init_db() -> None:
             existentes = {fila["name"] for fila in conn.execute(f"PRAGMA table_info({tabla})")}
             if columna not in existentes:
                 conn.execute(f"ALTER TABLE {tabla} ADD COLUMN {columna} {definicion}")
+        # y cualquier campo de un modelo que la tabla no tenga: la base de Simon
+        # venia de la primera version SIN respuestas_jugador, reaccion_prensa ni
+        # delta_reputacion, y guardar una entrevista fallaba. NULL = el defecto
+        # del modelo al leer (_desde_fila).
+        for clase, tabla in TABLAS.items():
+            existentes = {fila["name"] for fila in conn.execute(f"PRAGMA table_info({tabla})")}
+            por_defecto = clase()
+            for campo in fields(clase):
+                if campo.name not in existentes:
+                    tipo = _tipo_de_columna(getattr(por_defecto, campo.name))
+                    conn.execute(f"ALTER TABLE {tabla} ADD COLUMN {campo.name} {tipo}")
 
 
 # ---- Mapeo generico dataclass <-> fila ----
