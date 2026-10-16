@@ -14,6 +14,25 @@ Corre en Windows, desde `C:\Users\canal\Desktop\Proyecto Fifa\files`, con un ven
 `.venv` (Python 3.11.9). Repo git en `Proyecto Fifa\` (rama `main`; identidad
 configurada solo en este repo).
 
+## Para retomar en una sesion nueva (leer primero)
+
+- **Empezar cada mensaje con "Simón"**. Respuestas en espanol, directas y practicas.
+- Abrir la sesion en `C:\Users\canal\Desktop\Proyecto Fifa` (no en Proyecto Fitogreen: carga otro CLAUDE.md enorme).
+- **Repo**: https://github.com/simoncanaless/eafc26-career-roleplay (PUBLICO, rama `main`; `gh` autenticado como
+  `simoncanaless`, ejecutable en `C:\Program Files\GitHub CLI\gh.exe`). Despues de cada cambio con las pruebas en
+  verde: commit y push (`files\scripts\sincronizar_git.py "mensaje"` revisa que no se cuele nada privado). Al ser
+  publico: nunca subir claves, la base, fotos ni datos personales.
+- **Uso**: Simon tiene plan Pro y pide **parar al 90% del uso semanal** (mirarlo con la herramienta de uso antes de
+  tareas largas y avisarle). Trabajar con pocas llamadas.
+- **Estado al 2026-10-16** (315 pruebas en verde, todo en GitHub):
+  1. LO PRIMERO: sacar las noticias inventadas (ver "LO PRIMERO" en Estado / roadmap).
+  2. Pilar 3 (tienda universal): a medias, falta la pantalla (detalle en Estado / roadmap).
+  3. Pilar 4 (overlay bimodal): sin empezar.
+- Arreglado el 2026-10-15: la base real de Simon no tenia `respuestas_jugador`/`reaccion_prensa`/`delta_reputacion`
+  en `partido_entrevista` (nunca se habia guardado una entrevista); `database.init_db` ahora agrega sola cualquier
+  columna que falte. Hay que cerrar y abrir la app para que lo tome.
+- `files/CODIGO_TEXTO.txt` (sin trackear) no lo creo Claude: preguntar antes de subirlo o borrarlo.
+
 ## Como correrlo
 
 ```powershell
