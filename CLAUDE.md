@@ -291,7 +291,7 @@ Hecho tambien: iconos "EA FC 26" / "EA FC 26 + Roleplay", boton JUGAR, Ajustes c
 diagnostico, el paquete para amigos (cada uno con sus datos en APPDATA) y
 la lectura de la partida de FC 26 (ver arriba).
 
-**Noticias inventadas: SACADAS el 2026-10-16** (pedido de Simon del 2026-10-15). Ya no existen `prensa.noticia_de_ambiente`, `PROBABILIDAD_NOTICIA_GENERAL` ni el kwarg `incluir_general` (ni `solo_hechos` en la sala), y del corpus se fueron `t_general`/`c_general`/`#club_ficticio#`/`#jugador_ficticio#`/`#ciudad_ficticia#`. Las que ya estaban en la base de Simon (categoria "general" con esos titulares) siguen ahi hasta que el diga si se borran: en `noticia_prensa` son las ids 2, 3, 4, 8, 9, 10 y 13 (la 7, el hat-trick de Grealish, parece de un hecho real y se deja).
+**Noticias inventadas: SACADAS el 2026-10-16** (pedido de Simon del 2026-10-15). Ya no existen `prensa.noticia_de_ambiente`, `PROBABILIDAD_NOTICIA_GENERAL` ni el kwarg `incluir_general` (ni `solo_hechos` en la sala), y del corpus se fueron `t_general`/`c_general`/`#club_ficticio#`/`#jugador_ficticio#`/`#ciudad_ficticia#`. Las que ya estaban en la base de Simon (ids 2, 3, 4, 8, 9, 10 y 13 de `noticia_prensa`) se borraron con su si el 2026-10-16 (respaldo previo en `Proyecto Fifaespaldo-db-antes-de-borrar-inventadas-2026-10-16.db`; la 7, el hat-trick de Grealish, se dejo).
 
 **Evolucion en 4 pilares (pedida por Simon el 2026-10-15, en orden; correr la bateria
 despues de cada uno y actualizar este archivo):**
