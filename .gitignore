@@ -24,3 +24,6 @@ files/compras/
 
 # volcado local del codigo (de Simon): no va al repo
 files/CODIGO_TEXTO.txt
+
+# catalogo de EA FC (lo baja scripts/nombres_faltantes.py --catalogo-ea): solo local, si va en el paquete
+files/roleplay/datos/catalogo_ea.json

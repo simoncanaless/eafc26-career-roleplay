@@ -20,6 +20,10 @@ T_JUGADORES, C_JUGADOR_ID, C_NACIMIENTO = "CZUM", "ykFq", "WVIU"  # dias desde 1
 # media y potencial (el potencial nunca es menor: se cumple en los 21.507
 # jugadores de la partida real) y genero (1 = jugadora)
 C_MEDIA, C_POTENCIAL, C_MUJER = "UERs", "mpuH", "EveZ"
+# ids de la tabla de nombres del juego (playernames, que NO esta en la partida: el texto
+# sale de servicios/identificar.py). Haaland: nombre 10973, apellido 14348 (= camiseta);
+# Vinicius: comun 38056 ("Vini Jr."). 0 = sin nombre comun
+C_ID_NOMBRE, C_ID_APELLIDO, C_ID_COMUN = "tHlO", "QCfa", "HDYx"
 C_POSICION_PREFERIDA = "wZQU"  # mismos numeros que POSICIONES (Haaland 25, Vinicius 27, Bellingham 18)
 T_VINCULOS, C_VINCULO_EQUIPO, C_VINCULO_POSICION = "RrqT", "mCXg", "vjla"  # equipo + 1
 T_LIGAS, C_LIGA_ID, C_LIGA_NOMBRE = "onMQ", "aQrQ", "HEQX"  # id + 1
@@ -164,6 +168,8 @@ class Carrera:
     medias: dict[int, int] = field(default_factory=dict)
     mujeres: set[int] = field(default_factory=set)
     posiciones: dict[int, int] = field(default_factory=dict)  # posicion preferida
+    ids_de_nombre: dict[int, tuple[int, int, int]] = field(default_factory=dict)  # (nombre, apellido, comun)
+    memo: dict = field(default_factory=dict, repr=False, compare=False)  # calculos caros (diccionario de nombres)
 
     # ---- tiempo ----
 
@@ -313,6 +319,8 @@ class Carrera:
         goles = sum(e.goles for e in self.estadisticas_de(jugador))
         if goles:
             ficha["goles_en_la_temporada"] = goles
+        if jugador in self.ids_de_nombre:
+            ficha["ids_nombre"] = self.ids_de_nombre[jugador]
         return ficha
 
 
@@ -337,8 +345,10 @@ def construir(datos: bytes, archivo: str = "", guardada_en: Optional[datetime] =
 
     equipos = {f[C_EQUIPO_ID] + 1: f[C_EQUIPO_NOMBRE] for f in mundo[T_EQUIPOS].registros}
     nombres_ligas = {f[C_LIGA_ID] + 1: f[C_LIGA_NOMBRE] for f in mundo[T_LIGAS].registros}
-    nacimientos, medias, mujeres, posiciones = {}, {}, set(), {}
+    nacimientos, medias, mujeres, posiciones, ids_de_nombre = {}, {}, set(), {}, {}
     for f in mundo[T_JUGADORES].registros:
+        if f.get(C_ID_NOMBRE) is not None or f.get(C_ID_APELLIDO) is not None:
+            ids_de_nombre[f[C_JUGADOR_ID]] = (f.get(C_ID_NOMBRE) or 0, f.get(C_ID_APELLIDO) or 0, f.get(C_ID_COMUN) or 0)
         dias = f.get(C_NACIMIENTO)
         if dias:
             nacimientos[f[C_JUGADOR_ID]] = ORIGEN_FECHAS + timedelta(days=dias)
@@ -440,4 +450,5 @@ def construir(datos: bytes, archivo: str = "", guardada_en: Optional[datetime] =
         medias=medias,
         mujeres=mujeres,
         posiciones=posiciones,
+        ids_de_nombre=ids_de_nombre,
     )

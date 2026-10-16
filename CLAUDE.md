@@ -29,7 +29,10 @@ configurada solo en este repo).
   publico: nunca subir claves, la base, fotos ni datos personales.
 - **Uso**: Simon tiene plan Pro y pide **parar al 90% del uso semanal** (mirarlo con la herramienta de uso antes de
   tareas largas y avisarle). Trabajar con pocas llamadas.
-- **Estado al 2026-10-16** (328 pruebas en verde, todo en GitHub):
+- **Estado al 2026-10-16** (337 pruebas en verde, todo en GitHub):
+  0. Nombres de jugadores: HECHO el 2026-10-16 (catalogo de EA local + diccionario de ids de nombre;
+     ver `identificar.py`). En un PC nuevo, correr `scripts\nombres_faltantes.py --catalogo-ea` (sin el
+     catalogo, casi todos salen descritos y `empaquetar.py` se niega a armar el paquete).
   1. Noticias inventadas: SACADAS el 2026-10-16 (la prensa solo escribe sobre lo real).
   2. Pilar 3 (tienda universal): a medias, falta la pantalla (detalle en Estado / roadmap).
   3. Pilar 4 (overlay bimodal): HECHO el 2026-10-16, falta probarlo encima del juego real.
@@ -107,7 +110,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 | `roleplay/partida/carrera.py` | `construir(datos) -> Carrera`: equipos, competiciones, partidos, `actuaciones_en(partido)` (quien jugo/marco, de los ultimos 5 partidos de cada jugador), `tabla()` calculada con los resultados, `goleadores()`, `ficha(jugador)`. Los codigos de tablas/campos de FC 26 estan arriba del archivo |
 | `roleplay/partida/lector.py` | `carrera_actual()`: el `CmPlr*` mas reciente (o el elegido en Ajustes) de `%LOCALAPPDATA%\EA SPORTS FC 26\settings`, con cache por fecha/tamano. Solo lee. `EAFC_FC26_GUARDADOS` cambia la carpeta |
 | `roleplay/servicios/partida_real.py` | Lo que la app hace con la partida: `ultimo_partido()` (stats del ultimo partido; asistencias/tarjetas/figura por diferencia con la lectura anterior, `estado_json.partida`), `hechos_destacados()` (hat-trick > goleada > choque de punta, elegidos por codigo) y `hecho_para_prensa()`/`premio_para_prensa()`/`mercado_para_prensa()` (el hecho como dict con sus datos sueltos para el titular), `revisar_prensa_con_partida()`, `resumen_temporada()`, `leer_para_entrevista()`. `nombres_de_jugadores()`: editados en la partida > base local; el resto se describe. La tabla `nombre_conocido` (lo que adivino la IA en versiones viejas) ya NO se lee |
-| `roleplay/servicios/identificar.py` | Nombres desde `roleplay/datos/jugadores_fc26.json` y `competiciones_fc26.json` por id de EA. Si la base trae el nacimiento y no calza con la ficha, nombre vacio (otra persona). **Nunca inventar nombres** |
+| `roleplay/servicios/identificar.py` | Nombres por id de EA, en orden: `jugadores_fc26.json` (a mano) > `catalogo_ea.json` (el catalogo oficial de ratings de EA, ~21.500 jugadores con `pila`/`apellido`/`comun`/`nacimiento`; **SOLO local**: `.gitignore`, lo baja `nombres_faltantes.py --catalogo-ea`, va en el paquete; `EAFC_CATALOGO_EA` cambia la ruta) > **diccionario de ids de nombre** (`diccionario_de_nombres`: la partida trae para cada jugador los ids de nombre/apellido/comun de la tabla `playernames` del juego, pero NO el texto; el texto se aprende de los jugadores de la partida que estan en el catalogo con el nacimiento que calza, y un id con dos textos se descarta; asi se nombra a regens y juveniles: comun, o nombre + apellido, o solo el apellido). En la base a mano y el catalogo, si el nacimiento no calza con la ficha, nombre vacio (otra persona). `partida_real.diccionario_de(carrera)` lo arma una vez por lectura (`Carrera.memo`). Copas: `competiciones_fc26.json`. **Nunca inventar nombres** |
 | `roleplay/ui/vigilante.py` | **Modo en vivo**: `VigilantePartida` mira el guardado cada 5 s (sin abrirlo); si cambio y se asento, lo lee en un hilo. `partido_nuevo` si el club del usuario jugo un partido que no se aviso (`estado_json.partida.avisado`; la primera lectura solo marca); si no, `dia_nuevo` cuando avanzo la fecha del juego (`partida.dia_visto`: jugaron otros). Ajustes `en_vivo.vigilar` / `en_vivo.preguntas_solas` |
 | `roleplay/ui/overlay.py` | `SalaFlotante`: panel semitransparente siempre encima (Tool + Frameless + StaysOnTop, `WA_ShowWithoutActivating`: no le quita el foco al juego). Es un ESPEJO de la sala de prensa: lee su estado al recibir `InterviewWindow.cambio` y sus botones llaman a los de la sala (una sola entrevista). **Bimodal**: HUD (`mostrar()`, `WindowTransparentForInput`: mouse y teclado pasan al juego; `avisar(titulo, texto)` muestra un aviso 9 s y, si estaba escondida, aparece compacta (`cuerpo` oculto) y se esconde sola) e interactivo (`atajo_presionado()` / `modo_interactivo()`: guarda la ventana del frente (`GetForegroundWindow`), toma el foco; `modo_hud()` o "Volver al juego" le devuelve el foco con `SetForegroundWindow`). Cambiar el flag esconde la ventana: `_aplicar_modo` la vuelve a mostrar. Sin el atajo (`click_a_traves=False`) nunca deja pasar los clicks. Las llamadas a Windows solo con la plataforma "windows" (no en offscreen). El menu manda avisos de partido nuevo, dia nuevo (si esta a la vista), auto entregado, evento inesperado y prensa (`_avisar_encima`: con "flotante" prendido y la app sin foco) |
 | `roleplay/ui/atajo.py` | `AtajoGlobal`: Ctrl+Shift+F12 con `RegisterHotKey` (ctypes) + `QAbstractNativeEventFilter`. Ojo: el tipo de evento llega como QByteArray (comparar con `bytes(tipo)`). Si la combinacion esta tomada, `registrar()` da False y la app sigue |
@@ -138,7 +141,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 | `scripts/seed_test_matches.py` | Siembra/borra partidos "Rival de prueba N" en el ultimo personaje (base REAL) |
 | `scripts/crear_acceso_directo.py` + `scripts/lanzador/Lanzador.cs` | Icono, .exe lanzador (dev) y los dos iconos del escritorio |
 | `scripts/empaquetar.py` + `scripts/LEEME_AMIGOS.txt` | Paquete PyInstaller + zip para amigos (`--add-data` de `ui/iconos` y `roleplay/datos`; `podar_chromium`) |
-| `scripts/nombres_faltantes.py` | Lista los goleadores de las competiciones del usuario que no tienen nombre (id, club, posicion, seleccion, nacimiento) y `--agregar ID "Nombre"` los suma a `jugadores_fc26.json` con el nacimiento de la partida. **Solo nombres seguros**: el 2026-10-15 se verifico la base vieja contra la partida y la IA se habia equivocado en 8 de 20 (ej. el id de Vinicius Jr como Haaland; 851 era la Copa de Francia, no la Ligue 1) |
+| `scripts/nombres_faltantes.py` | `--catalogo-ea` baja el catalogo de EA (`drop-api.ea.com/rating/ea-sports-fc`, 100 por pagina; el orden de la API no es estable y con todo junto se saltea siempre a los mismos ~660, por eso recorre tambien `&gender=0` y `&gender=1` y suma; reintenta paginas cortadas) y muestra la cobertura; `--cobertura` solo la cobertura (el 2026-10-16, con la partida de Simon: 85% de los 21.507 jugadores, 96% de los goleadores, 585/597 de los que pueden ser noticia de mercado; lo que falta son agentes libres generados y ligas con nombres ficticios de EA como Brasil, India o Corea). Sin flags, lista los goleadores de las competiciones del usuario que no tienen nombre (id, club, posicion, seleccion, nacimiento) y `--agregar ID "Nombre"` los suma a `jugadores_fc26.json` con el nacimiento de la partida. **Solo nombres seguros**: el 2026-10-15 se verifico la base vieja contra la partida y la IA se habia equivocado en 8 de 20 (ej. el id de Vinicius Jr como Haaland; 851 era la Copa de Francia, no la Ligue 1) |
 | `tests/` | `ayuda.py` (base temporal, dialogos mudos, `texto_de_noticias`) + `test_*.py`; `test_narrador.py` prueba el motor (gramatica, cola de 40, corpus completos y sin tildes, lexico, cruces, memoria de entrevistas, backstory) |
 
 ## Convenciones (respetarlas)
@@ -160,7 +163,8 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
   liderato ganado/perdido, campeon. Se suman a los hitos del historial de entrevistas.
 - **La partida de FC 26 se LEE, nunca se escribe** (y no se toca el juego). Los numeros
   (resultados, goles, tablas, quien es noticia) los decide el codigo; los nombres que la
-  partida no trae salen de la base local (`roleplay/datos`). Un nombre que no esta (o cuyo
+  partida no trae salen de la base local (`roleplay/datos`: la de a mano, el catalogo de EA
+  y el diccionario de ids de nombre). Un nombre que no esta (o cuyo
   nacimiento no calza) va vacio y el jugador se describe ("el delantero centro del
   Arsenal"): nunca inventar.
 - **El juego nunca se toca**: ni archivos, ni memoria, ni inyeccion. Se abre por su
@@ -222,8 +226,10 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 
 ## Testing
 
-`.venv\Scripts\python.exe -m unittest discover -s tests` (328 pruebas, ~20 s). `tests/ayuda.py`:
+`.venv\Scripts\python.exe -m unittest discover -s tests` (337 pruebas, ~25 s). `tests/ayuda.py`:
 - Fija `EAFC_FC26_GUARDADOS` a una carpeta vacia: las pruebas no leen la partida real.
+- Fija `EAFC_CATALOGO_EA` a un archivo que no existe: los nombres no dependen del catalogo del PC
+  (`test_nombres.py` arma el suyo).
 - Fija `EAFC_SIN_IA=1`: ninguna prueba sale a internet. Las de la IA (`test_narrador.py`, clase `ConIA`)
   la prenden con `urlopen` mockeado (`self.red`: respuestas o excepciones en orden) y fallan si sale una
   llamada que no se esperaba.

@@ -91,10 +91,16 @@ mismos de siempre de EA / sofifa). Competiciones vistas: 808 (liga), 122
 
 ## Lo que NO esta en la partida
 
-- **Nombres de los jugadores actuales**: la tabla de jugadores de la partida no
-  trae a la mayoria (ej. 240243) y la de nombres es parcial. Los nombres viven en
-  los archivos del juego. Opciones: una lista id -> nombre (los ids son los de
-  sofifa), o aprenderlos de las capturas.
+- **El texto de los nombres de los jugadores**: `CZUM` trae los IDS de nombre de
+  cada jugador en la tabla `playernames` del juego (verificado el 2026-10-16 con
+  Haaland 239085, Vinicius 238794 y Lukaku 192505): `tHlO` = nombre (Erling 10973),
+  `QCfa` = apellido (Haaland 14348), `Vqpv` = nombre de la camiseta (casi siempre =
+  apellido), `HDYx` = nombre comun (Vini Jr. 38056; 0 si no tiene). Van de ~1 a
+  ~49.600. Pero `playernames` vive en los archivos del juego: "Haaland" y "Lukaku"
+  aparecen 0 veces en el guardado. `bneD` (5.627 textos, ids 0-5.626) es otra lista
+  y no calza con esos ids. La app los resuelve con el catalogo oficial de EA (solo
+  local) y aprende el texto de cada id de nombre de los jugadores de ese catalogo
+  (ver `servicios/identificar.py`).
 
 ## Rendimiento
 

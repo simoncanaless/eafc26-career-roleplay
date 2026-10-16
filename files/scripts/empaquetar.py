@@ -64,6 +64,8 @@ def construir() -> Path:
     colados = [ruta for ruta in carpeta.rglob("*") if ruta.name in NO_VA]
     if colados:
         raise SystemExit(f"Se colaron datos personales en el paquete: {colados}")
+    if not (DATOS / "catalogo_ea.json").exists():  # sin el, casi nadie tendria nombre en la prensa
+        raise SystemExit("Falta roleplay/datos/catalogo_ea.json: corre scripts/nombres_faltantes.py --catalogo-ea")
     faltan = [r.name for r in DATOS.glob("*.json") if not (carpeta / "_internal" / "roleplay" / "datos" / r.name).exists()]
     if faltan:  # sin los corpus, la app no tendria que decir
         raise SystemExit(f"Faltan los datos del motor narrativo en el paquete: {faltan}")

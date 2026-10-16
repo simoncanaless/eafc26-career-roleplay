@@ -173,7 +173,7 @@ class TestPartidaReal(ayuda.PruebaConBase):
 
     def test_los_nombres_salen_de_la_base_local(self):
         locales = {f.HAALAND: ("Erling Haaland", True), f.DELANTERO_ARSENAL: ("", False)}
-        with mock.patch.object(partida_real, "identificar_jugadores", side_effect=lambda fichas: {
+        with mock.patch.object(partida_real, "identificar_jugadores", side_effect=lambda fichas, *_: {
                 ficha["id"]: locales[ficha["id"]] for ficha in fichas}):
             nombres = partida_real.nombres_de_jugadores(self.c, {f.HAALAND, f.USUARIO, f.DELANTERO_ARSENAL})
             self.assertEqual(nombres, {f.HAALAND: "Erling Haaland", f.USUARIO: "Simon Canales"})  # el editado, de la partida
@@ -237,7 +237,7 @@ class TestPartidaReal(ayuda.PruebaConBase):
             return [h for h in hechos if h["tipo"] in ("hat_trick", "goleada", "choque")]
 
         with mock.patch.object(prensa, "noticia_del_mundo", espiar), \
-                mock.patch.object(partida_real, "identificar_jugadores", side_effect=lambda fichas: {
+                mock.patch.object(partida_real, "identificar_jugadores", side_effect=lambda fichas, *_: {
                     ficha["id"]: ("Erling Haaland", True) if ficha["id"] == f.HAALAND else ("", False) for ficha in fichas}), \
                 mock.patch.object(partida_real, "identificar_competiciones", return_value={f.CHAMPIONS: ("Champions League", True)}):
             resultado = partida_real.revisar_prensa_con_partida(perfil, [], {"partida_hasta": "2027-01-01"}, self.c)
@@ -372,6 +372,8 @@ class TestPartidaRealDelPC(unittest.TestCase):
                     revisados += 1
                     cuadran += sum(a.goles for a in suyas) == partido.goles_de(equipo)
         self.assertGreater(cuadran / revisados, 0.9, f"solo {cuadran}/{revisados} marcadores cuadran")
+        # los ids de nombre (tHlO/QCfa/HDYx) estan para casi todos
+        self.assertGreater(len(carrera.ids_de_nombre), 0.95 * len(carrera.nacimientos))
 
 
 if __name__ == "__main__":

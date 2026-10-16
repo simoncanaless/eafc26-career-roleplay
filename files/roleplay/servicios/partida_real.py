@@ -128,17 +128,27 @@ def ya_entrevistado(partido: UltimoPartido, historial: list[MatchInterviewRecord
 
 
 def nombres_de_jugadores(carrera: Carrera, ids) -> dict[int, str]:
-    """{id: nombre} de los que se conocen: los editados en la partida y la base
-    local de nombres (servicios/identificar.py). Los demas se describen, nunca
-    se inventan. (La tabla nombre_conocido, de cuando los adivinaba la IA, ya
+    """{id: nombre} de los que se conocen: los editados en la partida y las
+    bases locales (servicios/identificar.py: la de a mano, el catalogo de EA y
+    el diccionario de ids de nombre). Los demas se describen, nunca se inventan. (La tabla nombre_conocido, de cuando los adivinaba la IA, ya
     no se usa: medido contra la partida, 8 de 20 estaban mal.)"""
     ids = {i for i in ids if i is not None}
     nombres = {i: carrera.nombre_editado(i) for i in ids if carrera.nombre_editado(i)}
     resto = ids - set(nombres)
     if resto:
-        locales = identificar_jugadores([carrera.ficha(i) for i in sorted(resto)])
+        locales = identificar_jugadores([carrera.ficha(i) for i in sorted(resto)], diccionario_de(carrera))
         nombres.update({i: nombre for i, (nombre, _) in locales.items() if nombre})
     return nombres
+
+
+def diccionario_de(carrera: Carrera) -> dict[int, str]:
+    """El diccionario de ids de nombre de esta partida (se arma una vez por lectura)."""
+    if "diccionario_nombres" not in carrera.memo:
+        from roleplay.servicios.identificar import diccionario_de_nombres
+
+        nacimientos = {j: n.isoformat() for j, n in carrera.nacimientos.items()}
+        carrera.memo["diccionario_nombres"] = diccionario_de_nombres(carrera.ids_de_nombre, nacimientos)
+    return carrera.memo["diccionario_nombres"]
 
 
 def nombrar_competiciones(carrera: Carrera, ids) -> None:
