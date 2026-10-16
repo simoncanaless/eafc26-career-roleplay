@@ -430,7 +430,7 @@ class ConIA(ayuda.PruebaConBase):
         self.addCleanup(parche.stop)
 
     def _urlopen(self, pedido, timeout=None):
-        self.pedidos.append((pedido.full_url, json.loads(pedido.data)))
+        self.pedidos.append((pedido.full_url, json.loads(pedido.data) if pedido.data else None))
         if not self.red:
             raise AssertionError("la IA salio a la red sin que se esperara")
         respuesta = self.red.pop(0)
@@ -457,14 +457,23 @@ class TestRouterIA(ConIA):
         self.red = [_http(429), _groq({"ok": True})]
         self.assertEqual(ia.pedir_json("s", "u", {"ok": True}), {"ok": True})
         modelos = [cuerpo["model"] for _, cuerpo in self.pedidos]
-        self.assertEqual(modelos, list(ia.GROQ_MODELOS))
+        self.assertEqual(modelos, list(ia.GROQ_MODELOS[:2]))
         self.assertEqual(self.pedidos[0][1]["response_format"], {"type": "json_object"})
-        self.assertEqual((ia.ultimo["proveedor"], ia.ultimo["modelo"]), ("groq", "llama-3.1-8b-instant"))
+        self.assertEqual((ia.ultimo["proveedor"], ia.ultimo["modelo"]), ("groq", ia.GROQ_MODELOS[1]))
+
+    def test_si_groq_dio_de_baja_los_modelos_usa_los_que_tenga(self):
+        ajustes.guardar(groq_api_key="clave")
+        lista = _Respuesta({"data": [{"id": "whisper-large-v3"}, {"id": "llama-guard-9"}, {"id": "llama-5-70b"},
+                                     {"id": ia.GROQ_MODELOS[0]}]})
+        self.red = [_http(404)] * len(ia.GROQ_MODELOS) + [lista, _groq({"ok": True})]
+        self.assertEqual(ia.pedir_json("s", "u", {"ok": True}), {"ok": True})
+        self.assertEqual(self.pedidos[-2][0], ia.GROQ_MODELOS_URL)
+        self.assertEqual(ia.ultimo["modelo"], "llama-5-70b")  # ni whisper ni el guard ni uno ya probado
 
     def test_sin_groq_contesta_gemini(self):
         (self.carpeta / ".env").write_text("GROQ_API_KEYS=mala1, mala2\nGEMINI_API_KEY=buena\n", encoding="utf-8")
         self.assertEqual(ia.claves("groq"), ["mala1", "mala2"])
-        self.red = [_http(401), _http(401), _http(500), _gemini({"ok": 1})]
+        self.red = [_http(401), _http(403), _http(500), _gemini({"ok": 1})]
         self.assertEqual(ia.pedir_json("s", "u", {"ok": 1}), {"ok": 1})
         urls = [url for url, _ in self.pedidos]
         self.assertTrue(all("groq" in u for u in urls[:2]))  # una clave mala no prueba el otro modelo
@@ -474,10 +483,10 @@ class TestRouterIA(ConIA):
 
     def test_sin_internet_o_basura_cae_al_motor_local_sin_excepcion(self):
         ajustes.guardar(groq_api_key="a", gemini_api_key="b")
-        self.red = [urllib.error.URLError("sin red"), _Respuesta({"choices": []}),
-                    _groq("no es un objeto"), TimeoutError()]
+        self.red = [urllib.error.URLError("sin red"), _Respuesta({"choices": []}), _groq("no es un objeto"),
+                    TimeoutError(), _gemini(["una lista"])]
         self.assertIsNone(ia.pedir_json("s", "u", {"ok": True}))
-        self.assertEqual(len(self.pedidos), 4)
+        self.assertEqual(len(self.pedidos), 5)
 
     def test_probar_dice_quien_contesto(self):
         self.assertIn("motor local", ia.probar())
@@ -516,7 +525,7 @@ class TestHibrido(ConIA):
         self.assertIn("Yo hice lo mio", self.pedidos[0][1]["messages"][1]["content"])  # le llega lo que dijo
 
     def test_sin_respuesta_de_la_ia_queda_el_motor_local(self):
-        self.red = [_http(500), _http(500)]
+        self.red = [_http(500)] * len(ia.GROQ_MODELOS)
         r = entrevista.evaluar_respuestas(self.perfil, self.stats, self.respuestas)
         self.assertTrue(r.reaccion_prensa)
         self.assertLessEqual(abs(r.delta_reputacion), entrevista.DELTA_REPUTACION_MAXIMO)

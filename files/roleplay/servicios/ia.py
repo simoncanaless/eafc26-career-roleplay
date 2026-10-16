@@ -3,7 +3,8 @@ IA hibrida (opcional): reescribe con la IA lo que el motor local ya decidio,
 para que la prensa y los hinchas contesten a lo que de verdad escribio el
 jugador. Cascada:
 
-1. Groq (llama-3.3-70b-versatile; con 429/5xx, llama-3.1-8b-instant);
+1. Groq (openai/gpt-oss-120b; con 429/5xx, gpt-oss-20b y qwen; si Groq dio de
+   baja TODOS esos modelos (404), pregunta cuales tiene y prueba esos);
 2. Gemini por REST (gemini-2.5-flash; si no, gemini-2.5-flash-lite);
 3. None: el que llama usa lo del motor local (narrador + lexico + cruce),
    que se calcula SIEMPRE antes. Nunca lanza excepciones.
@@ -28,7 +29,11 @@ from typing import Optional
 from roleplay import ajustes, config
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-GROQ_MODELOS = ("llama-3.3-70b-versatile", "llama-3.1-8b-instant")
+GROQ_MODELOS_URL = "https://api.groq.com/openai/v1/models"
+# los Llama 3.x se dieron de baja en 2026 (404 model_not_found): por eso el descubrimiento
+GROQ_MODELOS = ("openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b")
+GROQ_FAMILIAS = ("gpt-oss", "llama", "qwen", "gemma", "mistral", "kimi", "deepseek")  # modelos de chat
+GROQ_NO_CHAT = ("guard", "whisper", "orpheus", "tts")
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{modelo}:generateContent"
 GEMINI_MODELOS = ("gemini-2.5-flash", "gemini-2.5-flash-lite")
 TEMPERATURA = 0.75
@@ -48,9 +53,10 @@ ultimo = {"proveedor": "", "modelo": "", "ms": 0}  # para "Probar IA" y el diagn
 class _Fallo(Exception):
     """Algo salio mal con un modelo; `otra_clave` si la clave no sirve."""
 
-    def __init__(self, motivo: str, otra_clave: bool = False):
+    def __init__(self, motivo: str, otra_clave: bool = False, no_existe: bool = False):
         super().__init__(motivo)
         self.otra_clave = otra_clave
+        self.no_existe = no_existe  # el modelo ya no esta (404)
 
 
 # ---- configuracion ----
@@ -114,7 +120,7 @@ def _post(url: str, cuerpo: dict, cabeceras: dict, timeout: float) -> dict:
         with urllib.request.urlopen(pedido, timeout=timeout) as respuesta:
             return json.loads(respuesta.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
-        raise _Fallo(f"HTTP {exc.code}", otra_clave=exc.code in (400, 401, 403)) from None
+        raise _Fallo(f"HTTP {exc.code}", otra_clave=exc.code in (401, 403), no_existe=exc.code == 404) from None
     except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
         raise _Fallo(type(exc).__name__) from None
 
@@ -133,10 +139,13 @@ def _json_de(texto: str) -> dict:
 
 
 def _groq(clave: str, modelo: str, sistema: str, usuario: str, timeout: float) -> dict:
-    respuesta = _post(GROQ_URL, {
+    cuerpo = {
         "model": modelo, "temperature": TEMPERATURA, "response_format": {"type": "json_object"},
         "messages": [{"role": "system", "content": sistema}, {"role": "user", "content": usuario}],
-    }, {"Authorization": f"Bearer {clave}"}, timeout)
+    }
+    if "gpt-oss" in modelo:
+        cuerpo["reasoning_effort"] = "low"  # razona poco: ~0,5 s
+    respuesta = _post(GROQ_URL, cuerpo, {"Authorization": f"Bearer {clave}"}, timeout)
     try:
         return _json_de(respuesta["choices"][0]["message"]["content"])
     except (KeyError, IndexError, TypeError):
@@ -155,6 +164,19 @@ def _gemini(clave: str, modelo: str, sistema: str, usuario: str, timeout: float)
         raise _Fallo("respuesta rara") from None
 
 
+def modelos_de_groq(clave: str, timeout: float) -> list[str]:
+    """Los modelos de chat que Groq tiene hoy (para cuando dio de baja los nuestros)."""
+    pedido = urllib.request.Request(GROQ_MODELOS_URL, headers={"User-Agent": "EAFC26-Roleplay",
+                                                                "Authorization": f"Bearer {clave}"})
+    try:
+        with urllib.request.urlopen(pedido, timeout=timeout) as respuesta:
+            datos = json.loads(respuesta.read().decode("utf-8"))
+        ids = [m["id"] for m in datos["data"] if m.get("active", True)]
+    except Exception:  # noqa: BLE001
+        return []
+    return [i for i in ids if any(f in i for f in GROQ_FAMILIAS) and not any(n in i for n in GROQ_NO_CHAT)]
+
+
 PROVEEDORES = (("groq", GROQ_MODELOS, _groq), ("gemini", GEMINI_MODELOS, _gemini))
 
 
@@ -170,7 +192,9 @@ def pedir_json(prompt_sistema: str, prompt_usuario: str, esquema_ejemplo: dict,
         limite = time.monotonic() + timeout * TOPE_TOTAL
         for proveedor, modelos, llamar in PROVEEDORES:
             for clave in claves(proveedor):
-                for modelo in modelos:
+                pendientes, borrados, descubiertos = list(modelos), 0, False
+                while pendientes:
+                    modelo = pendientes.pop(0)
                     queda = limite - time.monotonic()
                     if queda <= 0.3:
                         return None
@@ -180,6 +204,10 @@ def pedir_json(prompt_sistema: str, prompt_usuario: str, esquema_ejemplo: dict,
                     except _Fallo as fallo:
                         if fallo.otra_clave:
                             break  # esta clave no sirve: la siguiente
+                        borrados += fallo.no_existe
+                        if proveedor == "groq" and not pendientes and not descubiertos and borrados == len(modelos):
+                            descubiertos = True  # Groq dio de baja todos los nuestros: los que tenga hoy
+                            pendientes = [m for m in modelos_de_groq(clave, min(timeout, queda)) if m not in modelos]
                         continue  # cuota, caida o respuesta rara: el siguiente modelo
                     ultimo.update(proveedor=proveedor, modelo=modelo, ms=round((time.monotonic() - inicio) * 1000))
                     return datos
