@@ -335,51 +335,6 @@
     "Habra que ver como impactan estos movimientos.",
     "Los clubes ya mueven sus fichas."
   ],
-  "t_general": [
-    "#club_ficticio# despide a su entrenador tras una racha negativa",
-    "Polemica arbitral en el clasico de #ciudad_ficticia#",
-    "#club_ficticio# sorprende y se mete en zona de copas",
-    "Rumor de mercado: #jugador_ficticio# en la mira de #club_ficticio#",
-    "#club_ficticio# presenta un nuevo estadio",
-    "Escandalo en #club_ficticio#: pelea en el vestuario",
-    "#jugador_ficticio# anuncia su retiro a los 35",
-    "La revelacion de la temporada se llama #jugador_ficticio#"
-  ],
-  "c_general": [
-    "La noticia sacudio el ambiente del futbol local y los hinchas no hablan de otra cosa.",
-    "En las redes, las opiniones estan divididas.",
-    "Los proximos dias seran decisivos para entender el impacto de la noticia.",
-    "Mientras tanto, la temporada sigue su curso.",
-    "Desde el club prefirieron no hacer declaraciones por ahora."
-  ],
-  "club_ficticio": [
-    "Atletico Estelar",
-    "Deportivo Aurora",
-    "Real Costanera",
-    "Union Portena",
-    "Sporting del Valle",
-    "Racing Austral",
-    "Club Atletico Cordillera",
-    "Olimpia del Sur",
-    "Deportes Bahia"
-  ],
-  "ciudad_ficticia": [
-    "Puerto Esperanza",
-    "Valle Alto",
-    "San Eleuterio",
-    "Costa Brava del Sur",
-    "Nueva Albion"
-  ],
-  "jugador_ficticio": [
-    "Mateo Arrieta",
-    "Joaquin Valverde",
-    "Thiago Cardenal",
-    "Bruno Lezama",
-    "Kevin Ostrowski",
-    "Dario Montenegro",
-    "Emil Hartmann",
-    "Facundo Rivadeneira"
-  ],
   "t_vida_positiva": [
     "{titulo}",
     "{apellido}: {titulo_min}",

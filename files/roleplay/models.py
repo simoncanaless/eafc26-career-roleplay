@@ -121,7 +121,7 @@ class MatchInterviewRecord:
 @dataclass
 class NoticiaPrensa:
     """Una noticia: sobre el jugador (disparada por un hito, ej. racha
-    goleadora) o general del mundo del futbol (inventada, de ambiente)."""
+    goleadora) o general, sobre un hecho real del mundo de la partida."""
 
     id: Optional[int] = None
     player_id: int = 0

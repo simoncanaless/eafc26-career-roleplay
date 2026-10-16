@@ -802,7 +802,7 @@ class MainMenuWindow(QMainWindow):
         sala = self.pagina_entrevistas
         sala._on_partida_leida(lectura)  # la sala trabaja con la partida al dia
         if sala.perfil is not None:
-            sala._iniciar_revision_prensa(manual=False, solo_hechos=True)
+            sala._iniciar_revision_prensa(manual=False)
         self.pagina_instagram.revisar_hinchada()
         if self.sala_flotante.isVisible():
             self.sala_flotante.avisar("El juego avanzo", "La prensa revisa lo que paso en la fecha.")

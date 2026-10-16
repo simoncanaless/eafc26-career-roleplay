@@ -276,13 +276,10 @@ def revisar_prensa_con_partida(
     historial: list[MatchInterviewRecord],
     estado_prensa: dict,
     carrera: Carrera,
-    incluir_general: bool = True,
 ) -> dict:
     """revisar_prensa con datos reales: el contexto de la temporada para la
-    noticia sobre el jugador, y una noticia del mundo sobre un hecho real
-    (en vez de una inventada). Corre en un hilo (lee la partida y la base).
-    `incluir_general=False` (las revisiones automaticas de cada dia): si no
-    hay nada real que contar, no sale una noticia de ambiente inventada."""
+    noticia sobre el jugador, y una noticia del mundo sobre un hecho real.
+    Corre en un hilo (lee la partida y la base)."""
     nombrar_competiciones(carrera, competiciones_del_usuario(carrera))
     desde = estado_prensa.get("partida_hasta")
     publicados = set(estado_prensa.get("hechos_publicados", []))
@@ -330,7 +327,6 @@ def revisar_prensa_con_partida(
         perfil,
         historial,
         estado_prensa,
-        incluir_general=incluir_general,
         hechos_reales=hechos_mundo,
         hitos_reales=hitos_reales,
         carrera=carrera,

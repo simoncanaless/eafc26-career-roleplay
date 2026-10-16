@@ -173,8 +173,9 @@ Como funciona por dentro: `docs/partida-fc26.md`.
 3. **Prensa.** Despues de cada entrevista se revisa el historial: goles
    totales, rachas con y sin gol, y el rating promedio de los ultimos 5
    partidos disparan noticias sobre vos, cruzadas con el resto de tu vida (la
-   compra cara en plena mala racha, la meta que esta cerca). A veces sale
-   tambien una noticia de ambiente del mundo del futbol.
+   compra cara en plena mala racha, la meta que esta cerca). Con la partida,
+   tambien escribe sobre hechos reales del mundo (partidos, premios, mercado);
+   si no paso nada, no hay noticia: nunca se inventa una.
 4. **Instagram.** Escribis un post y la app lo lee (humilde, polemico, para la
    hinchada...) y arma comentarios, likes y cuantos seguidores ganas o perdes,
    segun tu reputacion.

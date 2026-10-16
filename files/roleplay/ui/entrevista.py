@@ -869,9 +869,7 @@ class InterviewWindow(QWidget):
     def _on_revisar_prensa_clicked(self):
         self._iniciar_revision_prensa(manual=True)
 
-    def _iniciar_revision_prensa(self, manual: bool, solo_hechos: bool = False):
-        """`solo_hechos`: la revision automatica de cada dia del juego, que
-        no inventa una noticia de ambiente si no paso nada real."""
+    def _iniciar_revision_prensa(self, manual: bool):
         # Una revision a la vez: dos en paralelo leen el mismo estado de
         # prensa y publican dos veces el mismo hito.
         if self._prensa_en_curso:
@@ -888,11 +886,9 @@ class InterviewWindow(QWidget):
             funcion, argumentos = revisar_prensa_con_partida, [*argumentos, self._lectura.carrera]
         else:
             funcion = revisar_prensa
-        extra = {"incluir_general": False} if solo_hechos else {}
         ejecutar_en_hilo(
             funcion,
             *argumentos,
-            **extra,
             al_completar=self._on_prensa_completada,
             al_fallar=self._on_prensa_error,
         )

@@ -1,8 +1,9 @@
+import json
 import unittest
 from unittest import mock
 
 import ayuda
-from roleplay import database
+from roleplay import config, database
 from roleplay.models import MatchInterviewRecord, PlayerProfile
 from roleplay.servicios import prensa
 
@@ -78,13 +79,12 @@ class TestRevisarPrensa(ayuda.PruebaConBase):
         self.perfil = PlayerProfile(nombre_jugador="Simon Canales", club_actual="Palermo")
         self.perfil.id = database.save_profile(self.perfil)
 
-    def _revisar(self, historial, estado=None, azar=0.99):
-        with mock.patch.object(prensa.random, "random", return_value=azar):
-            return prensa.revisar_prensa(self.perfil, historial, estado or {})
+    def _revisar(self, historial, estado=None):
+        return prensa.revisar_prensa(self.perfil, historial, estado or {})
 
     def test_la_noticia_del_jugador(self):
         resultado = self._revisar(partidos(*[(1, 7.0)] * 3))
-        (noticia,) = resultado["noticias"]  # azar alto: sin la de ambiente
+        (noticia,) = resultado["noticias"]  # sin noticias inventadas
         self.assertEqual((noticia.categoria, noticia.tono, noticia.player_id), ("jugador", "positiva", self.perfil.id))
         self.assertEqual(noticia.hitos, ["racha_goleadora:3"])
         self.assertIn("Canales", noticia.titular)
@@ -92,20 +92,14 @@ class TestRevisarPrensa(ayuda.PruebaConBase):
         self.assertNotRegex(noticia.titular + noticia.cuerpo, r"[{}]|#\w+#")
         self.assertEqual(noticia.cuerpo[0], noticia.cuerpo[0].upper())
 
-    def test_las_dos_noticias(self):
-        resultado = self._revisar(partidos(*[(1, 7.0)] * 3), azar=0.0)
-        self.assertEqual([n.categoria for n in resultado["noticias"]], ["jugador", "general"])
-        ambiente = resultado["noticias"][1]
-        self.assertNotRegex(ambiente.titular + ambiente.cuerpo, r"[{}]|#\w+#")  # los #clubes# ficticios se expanden
-
-    def test_sin_hitos_solo_la_de_ambiente_si_toca(self):
-        self.assertEqual(self._revisar([])["noticias"], [])
-        self.assertEqual([n.categoria for n in self._revisar([], azar=0.0)["noticias"]], ["general"])
-
-    def test_los_titulares_de_ambiente_no_se_repiten(self):
-        titulares = [self._revisar([], azar=0.0)["noticias"][0].titular for _ in range(6)]
-        self.assertEqual(len(set(titulares)), 6, titulares)
-        self.assertTrue(database.get_narrador_usados(self.perfil.id)["textos"])
+    def test_sin_nada_real_no_hay_noticia(self):
+        for azar in (0.0, 0.5, 0.99):  # el azar ya no inventa nada
+            with mock.patch("random.random", return_value=azar):
+                self.assertEqual(self._revisar([])["noticias"], [])
+        self.assertFalse(hasattr(prensa, "noticia_de_ambiente"))
+        corpus = json.loads((config.RAIZ_PROYECTO / "roleplay" / "datos" / "corpus_prensa.json").read_text(encoding="utf-8"))
+        for clave in ("t_general", "c_general", "club_ficticio", "jugador_ficticio", "ciudad_ficticia"):
+            self.assertNotIn(clave, corpus)
 
     def test_la_entrevista_sale_con_su_cita(self):
         registro = MatchInterviewRecord(

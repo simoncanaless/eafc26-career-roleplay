@@ -198,7 +198,7 @@ class TestDiaNuevo(ConPartida):
                 mock.patch.object(ventana.pagina_instagram, "revisar_hinchada") as hinchas:
             ventana._on_dia_nuevo(lectura)
             ayuda.esperar_tareas()
-        self.assertEqual(prensa.call_args.kwargs, {"incluir_general": False})  # solo hechos reales
+        self.assertEqual(prensa.call_args.kwargs, {})
         self.assertIs(prensa.call_args.args[3], carrera)  # con la partida al dia
         self.assertGreaterEqual(hinchas.call_count, 2)  # por el dia y por las noticias
         ventana.close()

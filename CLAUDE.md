@@ -29,8 +29,8 @@ configurada solo en este repo).
   publico: nunca subir claves, la base, fotos ni datos personales.
 - **Uso**: Simon tiene plan Pro y pide **parar al 90% del uso semanal** (mirarlo con la herramienta de uso antes de
   tareas largas y avisarle). Trabajar con pocas llamadas.
-- **Estado al 2026-10-16** (330 pruebas en verde, todo en GitHub):
-  1. LO PRIMERO: sacar las noticias inventadas (ver "LO PRIMERO" en Estado / roadmap).
+- **Estado al 2026-10-16** (328 pruebas en verde, todo en GitHub):
+  1. Noticias inventadas: SACADAS el 2026-10-16 (la prensa solo escribe sobre lo real).
   2. Pilar 3 (tienda universal): a medias, falta la pantalla (detalle en Estado / roadmap).
   3. Pilar 4 (overlay bimodal): HECHO el 2026-10-16, falta probarlo encima del juego real.
   4. IA hibrida (Groq -> Gemini -> motor local): HECHA el 2026-10-16; falta probarla con una
@@ -87,7 +87,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 | `roleplay/config.py` | Rutas. Recursos desde la carpeta del codigo; DATOS (`DB_PATH`, `ajustes.json`, `errores.log`, `garage/`, `navegador/`) en `CARPETA_DATOS`: raiz del proyecto corriendo desde codigo, `%APPDATA%\EAFC26 Roleplay` empaquetada, o `EAFC_ROLEPLAY_DATOS` si esta en el entorno |
 | `roleplay/ajustes.py` | `ajustes.json` de cada persona (`juego` elegido a mano, `en_vivo`...); leer nunca falla |
 | `roleplay/diagnostico.py` | `revisar()`: modo, motor narrativo (cuantos archivos en `roleplay/datos`), IA hibrida (`ia.estado()`: cuantas claves, sin mostrarlas), base, juego, microfonos, una captura de prueba (solo el tamano), navegador |
-| `roleplay/datos/` | **Los datos del motor narrativo** (JSON, sin tildes; los emojis si van): `corpus_entrevista.json` (preguntas de los 3 periodistas, reacciones, previa), `corpus_prensa.json` (titulares/cuerpos por hito, cruces `x_*`, mundo, ambiente con clubes ficticios `#club_ficticio#`), `corpus_redes.json` (comentarios por tipo y tono, autores, posts sugeridos por personalidad), `corpus_vida.json` (backstory y ganchos), `lexico.json` (5 ejes con pesos por palabra/frase, negaciones, promesas), `jugadores_fc26.json` / `competiciones_fc26.json` (nombres por id de EA CON fecha de nacimiento: si la de la partida no calza, es otra persona y queda sin nombre; se suman con `scripts/nombres_faltantes.py --agregar`). Claves que empiezan con `_` son comentarios |
+| `roleplay/datos/` | **Los datos del motor narrativo** (JSON, sin tildes; los emojis si van): `corpus_entrevista.json` (preguntas de los 3 periodistas, reacciones, previa), `corpus_prensa.json` (titulares/cuerpos por hito, cruces `x_*`, mundo: solo hechos reales), `corpus_redes.json` (comentarios por tipo y tono, autores, posts sugeridos por personalidad), `corpus_vida.json` (backstory y ganchos), `lexico.json` (5 ejes con pesos por palabra/frase, negaciones, promesas), `jugadores_fc26.json` / `competiciones_fc26.json` (nombres por id de EA CON fecha de nacimiento: si la de la partida no calza, es otra persona y queda sin nombre; se suman con `scripts/nombres_faltantes.py --agregar`). Claves que empiezan con `_` son comentarios |
 | `roleplay/servicios/ia.py` | **IA hibrida opcional** (solo `urllib`): `pedir_json(sistema, usuario, esquema, timeout=6)` -> dict o None, NUNCA lanza. Cascada: Groq `llama-3.3-70b-versatile` (429/5xx -> `llama-3.1-8b-instant`; 400/401/403 -> la siguiente clave) -> Gemini REST `gemini-2.5-flash` -> `-flash-lite` -> None (toda la cascada a lo sumo 2x timeout). `REGLAS` en cada pedido: no inventar datos ni nombres reales. Apagada con `sin_ia` en ajustes o `EAFC_SIN_IA=1` (lo pone `tests/ayuda.py`). `probar()` (boton de Ajustes), `estado()` (diagnostico), y piezas: `texto` (limpia y acota), `entero` (acota), `ficha`, `describir_cruces`, `comentarios_validos`, `cita_literal` (la cita solo vale si son palabras textuales del jugador). Quien la usa: `entrevista.preguntas_con_ia` / `reaccion_con_ia` (tambien la previa), `instagram._comentarios_con_ia`, `hinchada._comentarios_con_ia` (una llamada para todos los eventos; los que falten, del corpus) y `prensa._nota_con_ia`. Siempre DESPUES de calcular lo local, que queda de respaldo |
 | `roleplay/servicios/narrador.py` | **Motor de gramaticas**: `Narrador(*corpus, usados=, dado=, ricas=)`: `decir(simbolo, **datos)` (texto nuevo, anotado), `elegir()` (pieza sin anotar), `puede()`, `tiene()`. Alternativas con `{variable}` (solo entran si estan todos los datos) y `#simbolo#` (recursivo). Anti-repeticion: por simbolo los ultimos bloques (min(40, n-1): siempre queda uno libre) + huellas de los ultimos 40 textos; si sale uno reciente se rearma sorteando entre TODAS las piezas (con la rueda, dos piezas iguales rotan en fila). `narrador(player_id, *corpus)` (context manager) carga/guarda `estado_json.narrador_usados`; sin perfil (o borrado), sin memoria. `unir()`/`limpiar()` (espacios, mayuscula tras punto) |
 | `roleplay/servicios/lexico.py` | **Evaluador lexico**: `puntuar(texto)` (5 ejes: humildad_equipo, amor_hinchada, ego_confianza, excusa_polemica, ambicion_foco; tildes y mayusculas no importan; una negacion en las 2 palabras previas invierte el peso), `leer(respuestas) -> Lectura` (eje dominante o `neutro` bajo 1.5, intensidad, `cita` = la oracion mas jugosa recortada a 150, `promesa`, palabras) |
@@ -96,7 +96,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 | `roleplay/database.py` | SQLite. Mapeo GENERICO dataclass <-> fila (`TABLAS`, `_insertar`, `_desde_fila`); `_editar_estado` para leer-modificar-escribir `estado_json` en una transaccion |
 | `roleplay/servicios/backstory.py` | `generar_backstory(perfil, dado=)`: 3 parrafos (origen, personalidad+motivacion, vida personal+anecdota+cierre) con `ricas=True` (prefiere las alternativas que usan mas datos del quiz) + 3-4 ganchos distintos |
 | `roleplay/servicios/entrevista.py` | **Tres periodistas** (`PERIODISTAS`): Ignacio Ferrada (Pizarra Tactica: numeros, tabla, racha), Valentina Aros (Radio Tribuna: vestuario, hinchada, metas, ex club) y Rocco Salinas (El Picante: compras, pareja, eventos, contradicciones). `generar_entrevista(perfil, stats)`: cada uno elige la pregunta de mas prioridad que el corpus pueda escribir; `_memoria()` mira las ultimas 10 entrevistas (sequia rota >= 3, racha, caida de nota, mismo rival antes, contradiccion: ego la fecha pasada y hoy derrota) y `_tabla()` la tabla antes/despues del partido. `evaluar_respuestas()`: `lexico.leer` -> delta (BASE por eje x resultado, intensidad, personalidad, rating, respuestas secas, promesa; tope ±15), `delta_carino` (lo aplica la sala a `clubes.sumar_carino`), cita y gancho si prometio algo. `reaccionar()` = apertura + nucleo + cruce + cierre |
-| `roleplay/servicios/prensa.py` | Hitos deterministas (rachas, goles, rating ultimos 5) + noticias del motor: `noticia_de_hitos` (apertura + un nucleo por hito + un cruce `x_*` + cierre), `noticia_de_entrevista` (la cita entre «», una vez por entrevista: `estado_prensa.entrevista_reportada`), `noticia_del_mundo(hecho)` (dict de partida_real o texto suelto), `noticia_de_ambiente`. `revisar_prensa` no falla ni espera. `calcular_estadisticas_acumuladas` tambien alimenta la carta del Resumen |
+| `roleplay/servicios/prensa.py` | Hitos deterministas (rachas, goles, rating ultimos 5) + noticias del motor: `noticia_de_hitos` (apertura + un nucleo por hito + un cruce `x_*` + cierre), `noticia_de_entrevista` (la cita entre «», una vez por entrevista: `estado_prensa.entrevista_reportada`), `noticia_del_mundo(hecho)` (dict de partida_real o texto suelto). Nada inventado: si no paso nada real, no hay noticia. `revisar_prensa` no falla ni espera. `calcular_estadisticas_acumuladas` tambien alimenta la carta del Resumen |
 | `roleplay/servicios/instagram.py` | `generar_reaccion_post(perfil, texto, rep, seg)`: lee el post con `lexico` (humilde/hinchada suma; ego/polemica junta de todo y con reputacion < 40 resta), comentarios del corpus y likes >= 0; `sugerir_post(perfil, ultimo_partido)` por personalidad y resultado. `ComentarioIA`/`InstagramReaccionIA` quedaron con el nombre viejo |
 | `roleplay/servicios/vision.py` | Solo `MatchStats`. `extraer_stats_partido` lanza RuntimeError: leer la captura de fin de partido necesitaba IA y no hay forma confiable sin ella (quedan "Cargar de mi partida" y escribir las stats a mano) |
 | `roleplay/servicios/captura.py` | Captura con dxcam en BGRA + PNG con Qt: **sin OpenCV** (se saco el 2026-10-14). Hoy solo la usa el diagnostico |
@@ -148,11 +148,10 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
   las preguntas si esta libre (`InterviewWindow.ocupada()`: nunca pisar una entrevista a
   medias) y corre la prensa. `set_estado_partida` MEZCLA claves (no reemplaza).
   Ante un `dia_nuevo` (autoguardado sin partido del usuario), `_on_dia_nuevo` le pasa la
-  partida a la sala y corre la prensa con `solo_hechos=True` (-> `incluir_general=False`: sin
-  noticia de ambiente inventada). Toda revision de prensa emite `noticias_publicadas`: el
+  partida a la sala y corre la prensa (solo hechos reales: la prensa nunca inventa
+  noticias). Toda revision de prensa emite `noticias_publicadas`: el
   menu avisa en la bandeja (solo las automaticas, con la ventana sin foco) y los hinchas
-  reaccionan. El kwarg `incluir_general` se pasa SOLO cuando es False (reemplazos de prueba
-  de la prensa no lo aceptan).
+  reaccionan.
 - **Sala flotante**: toda accion nueva de la sala de prensa que cambie lo que se ve debe
   emitir `self.cambio` (o pasar por `_refrescar_botones`, que lo emite), o el panel no se
   entera. El panel nunca hace logica propia.
@@ -210,13 +209,14 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
   su columna: el mapeo generico falla fuerte si falta.
 - Las paginas del menu exponen `actualizar()`, que recarga el perfil; el menu lo llama al navegar.
 - Strings de UI en espanol (voseo/chileno informal), sin tildes en el codigo ni en los corpus.
-- Nunca inventar nombres de personas/jugadores reales: los clubes y jugadores de las
-  noticias de ambiente son ficticios (`#club_ficticio#`, `#jugador_ficticio#`) y las
-  famosas de la vida sentimental, inventadas.
+- Nunca inventar nombres de personas/jugadores reales, ni noticias: la prensa solo
+  escribe sobre lo real (hitos, la cita de la entrevista, hechos/premios/mercado de la
+  partida; si no paso nada, no hay noticia). Las famosas de la vida sentimental si son
+  inventadas (nunca personas reales).
 
 ## Testing
 
-`.venv\Scripts\python.exe -m unittest discover -s tests` (330 pruebas, ~20 s). `tests/ayuda.py`:
+`.venv\Scripts\python.exe -m unittest discover -s tests` (328 pruebas, ~20 s). `tests/ayuda.py`:
 - Fija `EAFC_FC26_GUARDADOS` a una carpeta vacia: las pruebas no leen la partida real.
 - Fija `EAFC_SIN_IA=1`: ninguna prueba sale a internet. Las de la IA (`test_narrador.py`, clase `ConIA`)
   la prenden con `urlopen` mockeado (`self.red`: respuestas o excepciones en orden) y fallan si sale una
@@ -291,7 +291,7 @@ Hecho tambien: iconos "EA FC 26" / "EA FC 26 + Roleplay", boton JUGAR, Ajustes c
 diagnostico, el paquete para amigos (cada uno con sus datos en APPDATA) y
 la lectura de la partida de FC 26 (ver arriba).
 
-**LO PRIMERO en la proxima sesion (pedido de Simon, 2026-10-15): NADA de noticias inventadas.** Sacar por completo `prensa.noticia_de_ambiente` (y `PROBABILIDAD_NOTICIA_GENERAL`, `incluir_general`, `t_general`/`c_general`/`#club_ficticio#`/`#jugador_ficticio#`/`#ciudad_ficticia#` del corpus): la prensa solo escribe sobre lo real (hitos, la cita de la entrevista, hechos/premios/mercado de la partida); si no paso nada, no hay noticia. Corregir la convencion de abajo que dice que las de ambiente usan clubes ficticios. Ofrecerle (solo con su si) borrar de su base las noticias inventadas que ya tiene.
+**Noticias inventadas: SACADAS el 2026-10-16** (pedido de Simon del 2026-10-15). Ya no existen `prensa.noticia_de_ambiente`, `PROBABILIDAD_NOTICIA_GENERAL` ni el kwarg `incluir_general` (ni `solo_hechos` en la sala), y del corpus se fueron `t_general`/`c_general`/`#club_ficticio#`/`#jugador_ficticio#`/`#ciudad_ficticia#`. Las que ya estaban en la base de Simon (categoria "general" con esos titulares) siguen ahi hasta que el diga si se borran: en `noticia_prensa` son las ids 2, 3, 4, 8, 9, 10 y 13 (la 7, el hat-trick de Grealish, parece de un hecho real y se deja).
 
 **Evolucion en 4 pilares (pedida por Simon el 2026-10-15, en orden; correr la bateria
 despues de cada uno y actualizar este archivo):**

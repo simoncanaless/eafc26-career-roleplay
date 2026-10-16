@@ -127,7 +127,7 @@ class TestPersistencia(ayuda.PruebaConBase):
 
     def test_un_perfil_que_no_existe_no_rompe_nada(self):
         with narrador.narrador(99_999, "prensa") as escritor:
-            self.assertTrue(escritor.decir("t_general"))
+            self.assertTrue(escritor.decir("c_mercado"))
 
     def test_dos_entrevistas_seguidas_no_repiten_preguntas(self):
         stats = MatchStats(goles_equipo=2, goles_rival=0, equipo_rival="Arsenal", goles_jugador=1, rating_jugador=7.8,

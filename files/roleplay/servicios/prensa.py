@@ -1,7 +1,8 @@
 """
 Motor de prensa: noticias sobre el jugador, disparadas por hitos de su
-historial (rachas, goles totales, rating), y noticias generales del mundo
-del futbol, de ambiente.
+historial (rachas, goles totales, rating), y noticias del mundo sobre hechos
+reales de la partida (partidos, premios, mercado). Nada inventado: si no
+paso nada, no hay noticia.
 
 La deteccion de hitos es deterministica (Python), y la redaccion tambien:
 servicios/narrador.py con roleplay/datos/corpus_prensa.json, cruzando con el
@@ -9,7 +10,6 @@ resto de su vida (servicios/cruce.py). Despues de cada entrevista sale una
 nota con su frase mas jugosa entre «».
 """
 
-import random
 from typing import Optional
 
 from roleplay.models import MatchInterviewRecord, NoticiaPrensa, PlayerProfile
@@ -28,7 +28,6 @@ CHECKPOINTS_RATING_BAJO = [6.0, 5.5, 5.0]  # promedio ultimos 5, de menos a mas 
 # con 0 partidos el promedio daba 0.0 y salia una noticia de "mal momento".
 PARTIDOS_PARA_RATING = 5
 
-PROBABILIDAD_NOTICIA_GENERAL = 0.5  # chance de que tambien salga una de ambiente
 MAXIMO_NOTICIAS_MUNDO = 2  # con la partida: noticias del mundo sobre hechos reales por revision
 
 DESCRIPCIONES_HITOS = {
@@ -288,29 +287,21 @@ def noticia_del_mundo(escritor, perfil: PlayerProfile, hecho) -> NoticiaPrensa:
                          cuerpo=cuerpo)
 
 
-def noticia_de_ambiente(escritor, perfil: PlayerProfile) -> NoticiaPrensa:
-    """Una noticia inventada del mundo del futbol, con clubes y jugadores ficticios."""
-    titular = escritor.decir("t_general")
-    cuerpo = unir(escritor.elegir("c_general"), escritor.elegir("c_general"))
-    return NoticiaPrensa(player_id=perfil.id, categoria="general", tono="neutral", titular=titular, cuerpo=cuerpo)
-
-
 def revisar_prensa(
     perfil: PlayerProfile,
     historial: list[MatchInterviewRecord],
     estado_prensa: dict,
-    incluir_general: bool = True,
     hechos_reales: Optional[list] = None,
     hitos_reales: Optional[list[dict]] = None,
     carrera=None,
 ) -> dict:
-    """Busca hitos nuevos en el historial y, a veces, agrega una noticia
-    general de ambiente. Todo sale del motor narrativo: no falla ni espera.
+    """Busca hitos nuevos en el historial y escribe sobre lo que paso de
+    verdad. Todo sale del motor narrativo: no falla ni espera. Si no paso
+    nada real, no hay noticia (nunca se inventa una de ambiente).
 
     Con la partida de FC 26 (servicios/partida_real.py): si hay
     `hechos_reales` (dicts con "tipo" y "texto"), las noticias del mundo son
-    sobre los primeros (hasta MAXIMO_NOTICIAS_MUNDO), en vez de una
-    inventada al azar. `hitos_reales` (los de la partida) se suman a los del
+    sobre los primeros (hasta MAXIMO_NOTICIAS_MUNDO). `hitos_reales` (los de la partida) se suman a los del
     historial. La ultima entrevista sin nota tiene la suya, con su cita.
 
     Devuelve {"noticias": list[NoticiaPrensa] (sin guardar),
@@ -335,8 +326,6 @@ def revisar_prensa(
             nuevo_estado["entrevista_reportada"] = entrevistas[0].id
         if hechos_reales:
             noticias += [noticia_del_mundo(escritor, perfil, h) for h in hechos_reales[:MAXIMO_NOTICIAS_MUNDO]]
-        elif incluir_general and random.random() < PROBABILIDAD_NOTICIA_GENERAL:
-            noticias.append(noticia_de_ambiente(escritor, perfil))
 
     return {
         "noticias": noticias,
