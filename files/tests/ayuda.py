@@ -23,6 +23,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ["EAFC_ROLEPLAY_DATOS"] = tempfile.mkdtemp(prefix="eafc_pruebas_")
 # ...y una carpeta de guardados de FC 26 vacia: nunca se lee la partida real
 os.environ["EAFC_FC26_GUARDADOS"] = tempfile.mkdtemp(prefix="eafc_guardados_")
+# ...y la IA hibrida apagada: las pruebas nunca salen a internet (test_ia.py la prende con mocks)
+os.environ["EAFC_SIN_IA"] = "1"
 RAIZ = Path(__file__).resolve().parent.parent
 if str(RAIZ) not in sys.path:
     sys.path.insert(0, str(RAIZ))

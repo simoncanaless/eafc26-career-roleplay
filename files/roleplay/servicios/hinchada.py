@@ -6,7 +6,9 @@ jugador y a las noticias sobre el, sin que publique nada.
 Cuantos seguidores gana o pierde lo decide el codigo (resultado, sus goles,
 su nota, el tono de la noticia, escalado por sus seguidores y reputacion), y
 los comentarios tambien: servicios/narrador.py con roleplay/datos/corpus_redes.json
-(autores inventados, el tono sigue lo que paso). Sin IA, al instante.
+(autores inventados, el tono sigue lo que paso), o la IA hibrida si esta
+(servicios/ia.py: una sola llamada para todos los eventos, hablando del
+marcador y del titular exactos).
 """
 
 import re
@@ -154,11 +156,39 @@ def comentarios(escritor, tipo: str, crecimiento: int, datos: dict) -> list[dict
     return resultado
 
 
+SISTEMA_HINCHAS = (
+    "Sos los hinchas que comentan en el Instagram de un futbolista en un juego de roleplay. Para cada evento "
+    "escribi 2 o 3 comentarios de cuentas inventadas (@hinchas, rivales, memes) que hablen del marcador, los "
+    "goles o el titular EXACTOS del evento. Si gano seguidores, mas hinchas contentos; si perdio, mas criticas. "
+    "`tono`: positivo, negativo, neutral o gracioso. Nunca nombres de personas reales."
+)
+
+
+def _comentarios_con_ia(perfil: PlayerProfile, eventos: list[EventoHinchada]) -> dict[int, list[dict]]:
+    from roleplay.servicios import ia
+
+    lista = "\n".join(f"{i}. [{e.tipo}] {e.titulo}. {e.detalle[:400]} (seguidores: {e.crecimiento:+d})"
+                      for i, e in enumerate(eventos))
+    datos = ia.pedir_json(
+        SISTEMA_HINCHAS, f"{ia.ficha(perfil)}\n\nLos eventos:\n{lista}",
+        {"eventos": [{"indice": 0, "comentarios": [{"autor": "@usuario", "texto": "...", "tono": "positivo"}]}]},
+    )
+    resultado = {}
+    for item in (datos or {}).get("eventos") or []:
+        if isinstance(item, dict) and isinstance(item.get("indice"), int) and 0 <= item["indice"] < len(eventos):
+            validos = ia.comentarios_validos(item.get("comentarios"), maximo=3)
+            if validos:
+                resultado[item["indice"]] = validos
+    return resultado
+
+
 def comentar_eventos(perfil: PlayerProfile, eventos: list[EventoHinchada]) -> dict[int, list[dict]]:
-    """{indice del evento: [comentarios]} (todos de una vez, al instante)."""
+    """{indice del evento: [comentarios]}: los de la IA si esta y, los que
+    falten, del motor local (al instante)."""
     with narrador(perfil.id, "redes") as escritor:
-        return {i: comentarios(escritor, e.tipo, e.crecimiento, datos_de_redes(perfil, e.titulo))
-                for i, e in enumerate(eventos)}
+        locales = {i: comentarios(escritor, e.tipo, e.crecimiento, datos_de_redes(perfil, e.titulo))
+                   for i, e in enumerate(eventos)}
+    return {**locales, **(_comentarios_con_ia(perfil, eventos) if eventos else {})}
 
 
 def procesar(

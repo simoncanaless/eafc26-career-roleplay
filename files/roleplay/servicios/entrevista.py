@@ -18,6 +18,11 @@ Evaluacion: servicios/lexico.py lee las respuestas (5 ejes, con negaciones),
 y el eje dominante, cruzado con el resultado, la nota y la personalidad,
 decide el delta de reputacion (tope +-15), el carino de la hinchada y la
 reaccion de la prensa, con la frase del jugador entre «».
+
+IA hibrida (servicios/ia.py, opcional): con todo lo anterior ya calculado,
+la IA reescribe las preguntas con los mismos temas y hechos, y escribe la
+reaccion contestando a lo que dijo el jugador (sus deltas, acotados). Si no
+hay IA, queda lo del motor local tal cual.
 """
 
 from dataclasses import replace
@@ -26,7 +31,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from roleplay.models import MatchInterviewRecord, PlayerProfile
-from roleplay.servicios import cruce, lexico
+from roleplay.servicios import cruce, ia, lexico
 from roleplay.servicios.narrador import narrador, unir
 from roleplay.servicios.vision import MatchStats
 
@@ -244,7 +249,105 @@ def generar_entrevista(perfil: PlayerProfile, stats: MatchStats) -> list[str]:
             simbolo, datos = _elegir(libres, escritor, candidatas)
             usados.add(simbolo.split("_", 1)[1])  # el mismo tema no lo pregunta otro periodista
             preguntas.append(f"{nombre} ({medio}): {escritor.decir(simbolo, **datos)}")
-    return preguntas
+    contexto = [f"Partido de hoy: {describir_partido(stats)}"]
+    if memoria:
+        contexto.append(f"Memoria de partidos anteriores: {memoria}")
+    if tabla:
+        contexto.append(f"Tabla de {tabla['liga']}: paso del {tabla['posicion_antes']} al {tabla['posicion']}")
+    if historial and historial[0].respuestas_jugador:
+        anterior = zip(historial[0].preguntas_entrevista, historial[0].respuestas_jugador)
+        contexto.append("Su entrevista anterior (vs " + (historial[0].equipo_rival or "?") + "): "
+                        + " | ".join(f"P: {p[:160]} R: {r[:200]}" for p, r in anterior))
+    return preguntas_con_ia(perfil, "\n".join(contexto), preguntas, cruces) or preguntas
+
+
+# ---- la IA hibrida (opcional) ----
+
+ESTILOS = {
+    "Pizarra Tactica": "tactico y de numeros: el partido, la tabla, las rachas",
+    "Radio Tribuna": "del vestuario: el grupo, la hinchada, las metas, los ex clubes",
+    "El Picante": "picante: lo de afuera de la cancha, la vida privada, las contradicciones",
+}
+SISTEMA_PREGUNTAS = (
+    "Sos el editor de una conferencia de prensa de futbol en un juego de roleplay. Tres periodistas le hacen "
+    "una pregunta cada uno al jugador. Reescribi la pregunta de cada periodista con su estilo, sobre EL MISMO "
+    "tema que ya se eligio, con variedad y gancho (1 a 2 oraciones, tuteando al jugador). Usa los hechos dados "
+    "tal cual. Devolve las preguntas en el mismo orden, sin el nombre del periodista adelante."
+)
+SISTEMA_REACCION = (
+    "Sos la prensa deportiva que cubre la conferencia de un futbolista en un juego de roleplay. "
+    "`reaccion_prensa`: 3 a 4 oraciones en tono periodistico, en tercera persona, que analicen y contesten "
+    "ESPECIFICAMENTE lo que dijo el jugador (sus argumentos, quejas, chistes o detalles; podes citarlo textual "
+    "entre «»), conectandolo con el partido y, si aplica, con lo primero de su vida. "
+    "`delta_reputacion`: entero (cuanto le suma o resta a su reputacion; parti del sugerido por el sistema). "
+    "`delta_carino`: entero de -6 a 6 (la hinchada de su club). `cita`: su frase mas jugosa COPIADA TEXTUAL de "
+    "sus respuestas, o vacio. `nuevo_gancho_narrativo`: una trama que deja abierta (promesa, desafio), o vacio."
+)
+
+
+def preguntas_con_ia(perfil: PlayerProfile, contexto: str, preguntas: list[str], cruces) -> Optional[list[str]]:
+    """Las mismas preguntas (mismo periodista, mismo tema) reescritas por la IA, o None."""
+    partes = [p.split(": ", 1) for p in preguntas]
+    lista = "\n".join(
+        f"{i + 1}. {quien} - estilo {next((e for m, e in ESTILOS.items() if m in quien), 'general')}. "
+        f"Tema y pregunta base: {base}" for i, (quien, base) in enumerate(partes)
+    )
+    datos = ia.pedir_json(
+        SISTEMA_PREGUNTAS,
+        f"{ia.ficha(perfil)}\n{contexto}\nLo que pasa en su vida:\n{ia.describir_cruces(cruces)}\n\n"
+        f"Las preguntas base:\n{lista}",
+        {"preguntas": [f"pregunta {i + 1}" for i in range(len(partes))]},
+    )
+    nuevas = datos.get("preguntas") if datos else None
+    if not isinstance(nuevas, list) or len(nuevas) != len(partes):
+        return None
+    limpias = []
+    for (quien, _), pregunta in zip(partes, nuevas):
+        pregunta = ia.texto(pregunta, 400)
+        nombre = quien.split(" (")[0]
+        if pregunta.startswith(nombre) and ": " in pregunta[:80]:
+            pregunta = pregunta.split(": ", 1)[1]
+        if not pregunta:
+            return None
+        limpias.append(f"{quien}: {pregunta}")
+    return limpias
+
+
+def reaccion_con_ia(perfil: PlayerProfile, contexto: str, respuestas: list[tuple[str, str]], cruces,
+                    lectura: lexico.Lectura, delta: int, carino: int, tope: int,
+                    con_titular: bool = False) -> Optional[dict]:
+    """La reaccion escrita por la IA contestando a lo que dijo, o None.
+    Devuelve reaccion, delta (acotado a tope), carino (+-6), cita (solo si
+    es textual; si no, la del lexico), gancho y, si se pide, titular."""
+    pares = "\n".join(f"P: {p}\nR: {r}" for p, r in respuestas)
+    esquema = {"reaccion_prensa": "...", "delta_reputacion": 0, "delta_carino": 0, "cita": "...",
+               "nuevo_gancho_narrativo": "..."}
+    sistema = SISTEMA_REACCION + f" El delta de reputacion va de -{tope} a {tope}."
+    if con_titular:
+        esquema = {"titular": "...", **esquema}
+        sistema += " `titular`: titular de diario con gancho (si hay cita, entre «»)."
+    datos = ia.pedir_json(
+        sistema,
+        f"{ia.ficha(perfil)}\n{contexto}\nLo que pasa en su vida:\n{ia.describir_cruces(cruces)}\n\n"
+        f"La conferencia (preguntas y respuestas textuales del jugador):\n{pares}\n\n"
+        f"Lectura del sistema: tono dominante {lectura.eje}, delta de reputacion sugerido {delta}, "
+        f"carino de la hinchada sugerido {carino}.",
+        esquema,
+    )
+    reaccion = ia.texto(datos.get("reaccion_prensa"), 1000) if datos else ""
+    if not reaccion:
+        return None
+    textos = [r for _, r in respuestas]
+    resultado = {
+        "reaccion": reaccion,
+        "delta": ia.entero(datos.get("delta_reputacion"), tope, delta),
+        "carino": ia.entero(datos.get("delta_carino"), 6, carino),
+        "cita": ia.cita_literal(datos.get("cita"), textos) or (lectura.cita if lectura.palabras >= PALABRAS_SECAS else ""),
+        "gancho": ia.texto(datos.get("nuevo_gancho_narrativo"), 200),
+    }
+    if con_titular:
+        resultado["titular"] = ia.texto(datos.get("titular"), 160)
+    return resultado
 
 
 # ---- la evaluacion ----
@@ -323,8 +426,14 @@ def evaluar_respuestas(
     with narrador(perfil.id, "entrevista") as escritor:
         texto = reaccionar(escritor, perfil, lectura, delta, f"r_apertura_{resultado}", datos, cruces)
         nuevo_gancho = gancho(escritor, lectura)
+    cita = lectura.cita if lectura.palabras >= PALABRAS_SECAS else ""
+    carino = _carino(lectura, resultado)
+    hibrida = reaccion_con_ia(perfil, f"Partido: {describir_partido(stats)}", respuestas, cruces, lectura, delta,
+                              carino, DELTA_REPUTACION_MAXIMO)
+    if hibrida:
+        texto, delta, carino, cita = hibrida["reaccion"], hibrida["delta"], hibrida["carino"], hibrida["cita"]
+        nuevo_gancho = hibrida["gancho"] or nuevo_gancho
     return ReaccionPrensa(
         reaccion_prensa=texto, delta_reputacion=delta, nuevo_gancho_narrativo=nuevo_gancho, eje=lectura.eje,
-        cita=lectura.cita if lectura.palabras >= PALABRAS_SECAS else "", delta_carino=_carino(lectura, resultado),
-        tono=tono_de(delta),
+        cita=cita, delta_carino=carino, tono=tono_de(delta),
     )

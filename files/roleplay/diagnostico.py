@@ -24,7 +24,10 @@ def revisar() -> list[tuple[bool, str]]:
     from roleplay.servicios.narrador import CARPETA_DATOS
 
     corpus = sorted(r.stem for r in CARPETA_DATOS.glob("*.json"))
-    anotar(len(corpus) >= 5, f"Motor narrativo (sin IA): {len(corpus)} archivos de datos ({', '.join(corpus)})")
+    anotar(len(corpus) >= 5, f"Motor narrativo local: {len(corpus)} archivos de datos ({', '.join(corpus)})")
+    from roleplay.servicios import ia
+
+    anotar(True, f"IA hibrida (opcional): {ia.estado()}")
 
     try:
         from roleplay.database import conectar, init_db

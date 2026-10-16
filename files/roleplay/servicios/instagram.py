@@ -1,12 +1,13 @@
 """Reacciones a un post de Instagram del jugador (comentarios, likes y
-cuantos seguidores gana o pierde) y el post sugerido con su voz. Sin IA: el
-evaluador lexico lee el post (servicios/lexico.py) y el motor narrativo
-escribe (roleplay/datos/corpus_redes.json)."""
+cuantos seguidores gana o pierde) y el post sugerido con su voz. Los numeros
+los decide el codigo: el evaluador lexico lee el post (servicios/lexico.py).
+Los comentarios: la IA hibrida (servicios/ia.py) si esta, contestando al
+post textual; si no, el motor narrativo (roleplay/datos/corpus_redes.json)."""
 
 from pydantic import BaseModel
 
 from roleplay.models import PlayerProfile
-from roleplay.servicios import lexico
+from roleplay.servicios import ia, lexico
 from roleplay.servicios.narrador import narrador
 
 TASA_LIKES = 0.05  # un post normal: ~5% de los seguidores, mas con reputacion
@@ -48,11 +49,43 @@ def generar_reaccion_post(
             dichos += comentarios(escritor, "post", -1, datos)[:2]
         else:
             dichos += comentarios(escritor, "post", 1, datos)[:1]
+    dichos = _comentarios_con_ia(perfil, texto_post, crecimiento, polemico) or dichos
     return InstagramReaccionIA(
         comentarios=[ComentarioIA(**c) for c in dichos],
         likes_estimados=max(0, round(seguidores_actuales * tasa)),
         crecimiento_seguidores=crecimiento,
     )
+
+
+SISTEMA_COMENTARIOS = (
+    "Sos la seccion de comentarios del Instagram de un futbolista en un juego de roleplay. Escribi 4 o 5 "
+    "comentarios de cuentas inventadas (@usuarios de hinchas fanaticos, rivales, cuentas de memes) que "
+    "RESPONDAN DIRECTAMENTE a lo que dice el post, con humor y jerga de redes (pueden llevar emojis). "
+    "El tono general sigue a como le cayo el post a la gente. `tono` de cada uno: positivo, negativo, "
+    "neutral o gracioso. Las cuentas son inventadas: nunca nombres de personas reales."
+)
+
+
+def _comentarios_con_ia(perfil: PlayerProfile, texto_post: str, crecimiento: int, polemico: bool) -> list[dict]:
+    from roleplay.servicios import cruce, entrevista
+
+    ultimo = ""
+    if perfil.id:
+        from roleplay import database
+
+        r = next((r for r in database.load_match_interviews(perfil.id) if r.origen != "previa"), None)
+        if r is not None:
+            ultimo = f"Su ultimo partido: {r.goles_equipo}-{r.goles_rival} vs {r.equipo_rival or 'el rival'}, " \
+                     f"{r.goles_jugador} goles, nota {r.rating_jugador:.1f}."
+    vida = ia.describir_cruces(cruce.cruces(perfil.id, None, None, entrevista._carrera()) if perfil.id else [])
+    como = "le cayo bien" if crecimiento > 0 and not polemico else "genero polemica" if polemico else "le cayo mal"
+    datos = ia.pedir_json(
+        SISTEMA_COMENTARIOS,
+        f"{ia.ficha(perfil)}\n{ultimo}\nLo que pasa en su vida:\n{vida}\n\nEl post (textual):\n{texto_post[:1500]}\n\n"
+        f"Como cayo: {como}.",
+        {"comentarios": [{"autor": "@usuario", "texto": "...", "tono": "positivo"}]},
+    )
+    return ia.comentarios_validos(datos.get("comentarios") if datos else None, minimo=3)
 
 
 def post_de_compra(perfil: PlayerProfile, objeto: str, tienda: str = "") -> str:

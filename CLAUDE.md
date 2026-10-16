@@ -6,10 +6,15 @@ Discord/OBS: lee la partida guardada, nunca escribe archivos ni toca la memoria 
 post-partido (escritas o por voz), prensa espontanea, Instagram ficticio y reputacion
 que evoluciona. Proyecto personal de Simon (estudiante de Ing. Informatica, Chile).
 
-**SIN IA desde el 2026-10-15** (Pilar 1 de la evolucion pedida por Simon): todos los
-textos los arma un motor narrativo local (`servicios/narrador.py` + `roleplay/datos/`),
-offline, al instante y sin clave. `roleplay/gemini.py`, `servicios/contexto.py`, la clave
-(`DialogoClave`) y la lectura de la captura con IA ya no existen. No volver a meter IA.
+**Motor local + IA hibrida OPCIONAL (desde el 2026-10-16, pedido de Simon)**: todos los
+textos los arma primero el motor narrativo local (`servicios/narrador.py` + `roleplay/datos/`),
+offline y al instante; si hay clave de Groq/Gemini, `servicios/ia.py` REESCRIBE encima
+(preguntas, reaccion de la prensa, nota de la entrevista, comentarios de Instagram y de la
+hinchada) para contestar a lo que escribio el jugador. Los hechos (resultados, goles, tablas,
+cruces) y los numeros base los sigue calculando el codigo y se le pasan a la IA; sus deltas
+quedan acotados y una cita solo vale si es textual. Sin clave, con "solo motor local" o sin
+internet, la app funciona igual que antes. (Del 2026-10-15 al 16 la app fue 100% sin IA:
+`roleplay/gemini.py`, `servicios/contexto.py`, `DialogoClave` y la captura con IA no volvieron.)
 Corre en Windows, desde `C:\Users\canal\Desktop\Proyecto Fifa\files`, con un venv en
 `.venv` (Python 3.11.9). Repo git en `Proyecto Fifa\` (rama `main`; identidad
 configurada solo en este repo).
@@ -24,10 +29,12 @@ configurada solo en este repo).
   publico: nunca subir claves, la base, fotos ni datos personales.
 - **Uso**: Simon tiene plan Pro y pide **parar al 90% del uso semanal** (mirarlo con la herramienta de uso antes de
   tareas largas y avisarle). Trabajar con pocas llamadas.
-- **Estado al 2026-10-16** (315 pruebas en verde, todo en GitHub):
+- **Estado al 2026-10-16** (330 pruebas en verde, todo en GitHub):
   1. LO PRIMERO: sacar las noticias inventadas (ver "LO PRIMERO" en Estado / roadmap).
   2. Pilar 3 (tienda universal): a medias, falta la pantalla (detalle en Estado / roadmap).
-  3. Pilar 4 (overlay bimodal): sin empezar.
+  3. Pilar 4 (overlay bimodal): HECHO el 2026-10-16, falta probarlo encima del juego real.
+  4. IA hibrida (Groq -> Gemini -> motor local): HECHA el 2026-10-16; falta probarla con una
+     clave real (Simon la pega en Ajustes > Motor narrativo e IA hibrida > Probar IA).
 - Arreglado el 2026-10-15: la base real de Simon no tenia `respuestas_jugador`/`reaccion_prensa`/`delta_reputacion`
   en `partido_entrevista` (nunca se habia guardado una entrevista); `database.init_db` ahora agrega sola cualquier
   columna que falte. Hay que cerrar y abrir la app para que lo tome.
@@ -55,7 +62,7 @@ esta en Steam, biblioteca `F:\SteamLibrary` (EA app instalada, la usa Steam).
 **Paquete para amigos**: `dist\EAFC Roleplay (amigos).zip` (~195 MB, casi todo Chromium) con
 `EAFC Roleplay.exe` (PyInstaller onedir, no necesita Python) y `LEEME.txt`. Sin datos
 personales y CON `roleplay/datos` (los corpus; el script verifica las dos cosas). Empaquetada,
-los datos van a `%APPDATA%\EAFC26 Roleplay`; no pide ninguna clave. `build/` y `dist/` estan
+los datos van a `%APPDATA%\EAFC26 Roleplay`; la clave de IA es opcional (cada amigo la suya). `build/` y `dist/` estan
 en `.gitignore`.
 
 Doble click: `files\EAFC Roleplay.exe` o el acceso "EAFC 26 Roleplay" del escritorio.
@@ -64,8 +71,10 @@ El .exe es un lanzador de 39 KB (`scripts/lanzador/Lanzador.cs`, compilado con e
 corre siempre el codigo actual, no hay que recompilarlo al cambiar Python. Esta en
 `.gitignore`; se regenera con `crear_acceso_directo.py` (tambien rehace `app.ico`).
 
-No requiere `.env` ni clave. Si queda un `.env` viejo de cuando habia Gemini, se ignora;
-igual nunca imprimir, loguear ni pegar su contenido.
+No requiere `.env` ni clave. Las claves OPCIONALES de la IA (`groq_api_key` / `gemini_api_key`
+en `ajustes.json`, o `GROQ_API_KEY(S)` / `GEMINI_API_KEY(S)` en el `.env` de la carpeta de datos;
+varias separadas por coma) nunca se imprimen, loguean ni pegan. `ajustes.json` y `.env` estan en
+`.gitignore` (el repo es publico).
 
 ## Arquitectura
 
@@ -77,8 +86,9 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 | `app.py` | Unico entry point; argumento opcional para abrir un modulo suelto. Icono de ventana, AppUserModelID (barra de tareas) y `sys.excepthook` -> `errores.log` + QMessageBox (con pythonw no hay consola) |
 | `roleplay/config.py` | Rutas. Recursos desde la carpeta del codigo; DATOS (`DB_PATH`, `ajustes.json`, `errores.log`, `garage/`, `navegador/`) en `CARPETA_DATOS`: raiz del proyecto corriendo desde codigo, `%APPDATA%\EAFC26 Roleplay` empaquetada, o `EAFC_ROLEPLAY_DATOS` si esta en el entorno |
 | `roleplay/ajustes.py` | `ajustes.json` de cada persona (`juego` elegido a mano, `en_vivo`...); leer nunca falla |
-| `roleplay/diagnostico.py` | `revisar()`: modo, motor narrativo (cuantos archivos en `roleplay/datos`), base, juego, microfonos, una captura de prueba (solo el tamano), navegador |
+| `roleplay/diagnostico.py` | `revisar()`: modo, motor narrativo (cuantos archivos en `roleplay/datos`), IA hibrida (`ia.estado()`: cuantas claves, sin mostrarlas), base, juego, microfonos, una captura de prueba (solo el tamano), navegador |
 | `roleplay/datos/` | **Los datos del motor narrativo** (JSON, sin tildes; los emojis si van): `corpus_entrevista.json` (preguntas de los 3 periodistas, reacciones, previa), `corpus_prensa.json` (titulares/cuerpos por hito, cruces `x_*`, mundo, ambiente con clubes ficticios `#club_ficticio#`), `corpus_redes.json` (comentarios por tipo y tono, autores, posts sugeridos por personalidad), `corpus_vida.json` (backstory y ganchos), `lexico.json` (5 ejes con pesos por palabra/frase, negaciones, promesas), `jugadores_fc26.json` / `competiciones_fc26.json` (nombres por id de EA CON fecha de nacimiento: si la de la partida no calza, es otra persona y queda sin nombre; se suman con `scripts/nombres_faltantes.py --agregar`). Claves que empiezan con `_` son comentarios |
+| `roleplay/servicios/ia.py` | **IA hibrida opcional** (solo `urllib`): `pedir_json(sistema, usuario, esquema, timeout=6)` -> dict o None, NUNCA lanza. Cascada: Groq `llama-3.3-70b-versatile` (429/5xx -> `llama-3.1-8b-instant`; 400/401/403 -> la siguiente clave) -> Gemini REST `gemini-2.5-flash` -> `-flash-lite` -> None (toda la cascada a lo sumo 2x timeout). `REGLAS` en cada pedido: no inventar datos ni nombres reales. Apagada con `sin_ia` en ajustes o `EAFC_SIN_IA=1` (lo pone `tests/ayuda.py`). `probar()` (boton de Ajustes), `estado()` (diagnostico), y piezas: `texto` (limpia y acota), `entero` (acota), `ficha`, `describir_cruces`, `comentarios_validos`, `cita_literal` (la cita solo vale si son palabras textuales del jugador). Quien la usa: `entrevista.preguntas_con_ia` / `reaccion_con_ia` (tambien la previa), `instagram._comentarios_con_ia`, `hinchada._comentarios_con_ia` (una llamada para todos los eventos; los que falten, del corpus) y `prensa._nota_con_ia`. Siempre DESPUES de calcular lo local, que queda de respaldo |
 | `roleplay/servicios/narrador.py` | **Motor de gramaticas**: `Narrador(*corpus, usados=, dado=, ricas=)`: `decir(simbolo, **datos)` (texto nuevo, anotado), `elegir()` (pieza sin anotar), `puede()`, `tiene()`. Alternativas con `{variable}` (solo entran si estan todos los datos) y `#simbolo#` (recursivo). Anti-repeticion: por simbolo los ultimos bloques (min(40, n-1): siempre queda uno libre) + huellas de los ultimos 40 textos; si sale uno reciente se rearma sorteando entre TODAS las piezas (con la rueda, dos piezas iguales rotan en fila). `narrador(player_id, *corpus)` (context manager) carga/guarda `estado_json.narrador_usados`; sin perfil (o borrado), sin memoria. `unir()`/`limpiar()` (espacios, mayuscula tras punto) |
 | `roleplay/servicios/lexico.py` | **Evaluador lexico**: `puntuar(texto)` (5 ejes: humildad_equipo, amor_hinchada, ego_confianza, excusa_polemica, ambicion_foco; tildes y mayusculas no importan; una negacion en las 2 palabras previas invierte el peso), `leer(respuestas) -> Lectura` (eje dominante o `neutro` bajo 1.5, intensidad, `cita` = la oracion mas jugosa recortada a 150, `promesa`, palabras) |
 | `roleplay/servicios/cruce.py` | **Estado cruzado**: `cruces(player_id, rival=, rating=, carrera=)` -> lista de `Cruce(tipo, peso, datos)` del mas jugoso al menos: compra cara (>= 150.000, ultimos 45 dias; con rating < 6.2 `compra_mal` con modelo y precio), pareja real/famosa/rumor/crisis, meta cerca (con la partida, lo que lleva HOY) o complicada, ex club (traidor/idolo/mala salida), hinchada en contra/idolo, evento reciente (21 dias). Solo lee. Importa `metas` adentro de la funcion (ciclo metas -> partida_real -> prensa -> cruce) |
@@ -99,7 +109,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 | `roleplay/servicios/partida_real.py` | Lo que la app hace con la partida: `ultimo_partido()` (stats del ultimo partido; asistencias/tarjetas/figura por diferencia con la lectura anterior, `estado_json.partida`), `hechos_destacados()` (hat-trick > goleada > choque de punta, elegidos por codigo) y `hecho_para_prensa()`/`premio_para_prensa()`/`mercado_para_prensa()` (el hecho como dict con sus datos sueltos para el titular), `revisar_prensa_con_partida()`, `resumen_temporada()`, `leer_para_entrevista()`. `nombres_de_jugadores()`: editados en la partida > base local; el resto se describe. La tabla `nombre_conocido` (lo que adivino la IA en versiones viejas) ya NO se lee |
 | `roleplay/servicios/identificar.py` | Nombres desde `roleplay/datos/jugadores_fc26.json` y `competiciones_fc26.json` por id de EA. Si la base trae el nacimiento y no calza con la ficha, nombre vacio (otra persona). **Nunca inventar nombres** |
 | `roleplay/ui/vigilante.py` | **Modo en vivo**: `VigilantePartida` mira el guardado cada 5 s (sin abrirlo); si cambio y se asento, lo lee en un hilo. `partido_nuevo` si el club del usuario jugo un partido que no se aviso (`estado_json.partida.avisado`; la primera lectura solo marca); si no, `dia_nuevo` cuando avanzo la fecha del juego (`partida.dia_visto`: jugaron otros). Ajustes `en_vivo.vigilar` / `en_vivo.preguntas_solas` |
-| `roleplay/ui/overlay.py` | `SalaFlotante`: panel semitransparente siempre encima (Tool + Frameless + StaysOnTop, `WA_ShowWithoutActivating`: no le quita el foco al juego). Es un ESPEJO de la sala de prensa: lee su estado al recibir `InterviewWindow.cambio` y sus botones llaman a los de la sala (una sola entrevista) |
+| `roleplay/ui/overlay.py` | `SalaFlotante`: panel semitransparente siempre encima (Tool + Frameless + StaysOnTop, `WA_ShowWithoutActivating`: no le quita el foco al juego). Es un ESPEJO de la sala de prensa: lee su estado al recibir `InterviewWindow.cambio` y sus botones llaman a los de la sala (una sola entrevista). **Bimodal**: HUD (`mostrar()`, `WindowTransparentForInput`: mouse y teclado pasan al juego; `avisar(titulo, texto)` muestra un aviso 9 s y, si estaba escondida, aparece compacta (`cuerpo` oculto) y se esconde sola) e interactivo (`atajo_presionado()` / `modo_interactivo()`: guarda la ventana del frente (`GetForegroundWindow`), toma el foco; `modo_hud()` o "Volver al juego" le devuelve el foco con `SetForegroundWindow`). Cambiar el flag esconde la ventana: `_aplicar_modo` la vuelve a mostrar. Sin el atajo (`click_a_traves=False`) nunca deja pasar los clicks. Las llamadas a Windows solo con la plataforma "windows" (no en offscreen). El menu manda avisos de partido nuevo, dia nuevo (si esta a la vista), auto entregado, evento inesperado y prensa (`_avisar_encima`: con "flotante" prendido y la app sin foco) |
 | `roleplay/ui/atajo.py` | `AtajoGlobal`: Ctrl+Shift+F12 con `RegisterHotKey` (ctypes) + `QAbstractNativeEventFilter`. Ojo: el tipo de evento llega como QByteArray (comparar con `bytes(tipo)`). Si la combinacion esta tomada, `registrar()` da False y la app sigue |
 | `roleplay/ui/comun.py` | `ejecutar_en_hilo`, `esc` (escape HTML), `miles`, `fecha_corta`, `con_scroll` (pagina transparente) |
 | `roleplay/ui/estilos.py` | Tema oscuro estilo EA FC: colores (unico lugar), `fuente_titulo()`, QSS, paleta forzada |
@@ -119,7 +129,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 | `roleplay/servicios/temporada.py` | `vista_temporada(carrera, competicion)`: lo que muestra la pagina Temporada (tabla con el club marcado, goleadores con el jugador del usuario marcado, resultados y proximos del club, la ultima fecha). Liga primero; una competicion ajena cae en la del club |
 | `roleplay/ui/temporada.py` | `PaginaTemporada`: chips para elegir competicion, tabla (QGridLayout de QLabel; la fila del club lleva un QFrame resaltado DEBAJO, en la misma celda), goleadores, tus partidos y la ultima fecha. Si se cambia de competicion mientras lee, vuelve a leer al terminar |
 | `roleplay/ui/menu.py` | `MainMenuWindow(pagina_inicial)` (lateral con JUGAR FC 26 y AJUSTES + `FondoEstadio`) + `PaginaResumen` (carta, mosaicos, historia, tramas, central de noticias) |
-| `roleplay/ui/ajustes.py` | `DialogoAjustes` (juego, partida, modo en vivo, iconos, diagnostico), `abrir_juego_o_preguntar`. Ya no hay bienvenida ni clave |
+| `roleplay/ui/ajustes.py` | `DialogoAjustes` (juego, partida, modo en vivo, "Motor narrativo e IA hibrida": claves de Groq y Gemini en modo password, "Usar solo motor local", "Probar IA" en un hilo con proveedor y ms; iconos, diagnostico), `abrir_juego_o_preguntar`. Ya no hay bienvenida |
 | `roleplay/ui/personaje.py` | `CharacterWizard` (ClassicStyle; titulos en rich text con "PASO n/8"; backstory editable o escrito a mano) |
 | `roleplay/ui/entrevista.py` | `InterviewWindow` "Sala de prensa": marcador ("Cargar de mi partida" o a mano; no hay captura) -> preguntas de los 3 periodistas (cada una con boton de voz) -> reaccion -> prensa. Despues de evaluar, `_mover_carino()` aplica `delta_carino` a la hinchada del club |
 | `roleplay/ui/instagram.py` | `InstagramWindow`: perfil (avatar + mosaicos), nuevo post, resultado, "Tus hinchas" (actividad sin publicar) y feed en tarjetas. `revisar_hinchada()`: una a la vez; si se pide otra mientras corre, se hace al terminar |
@@ -206,8 +216,11 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 
 ## Testing
 
-`.venv\Scripts\python.exe -m unittest discover -s tests` (314 pruebas, ~20 s). `tests/ayuda.py`:
+`.venv\Scripts\python.exe -m unittest discover -s tests` (330 pruebas, ~20 s). `tests/ayuda.py`:
 - Fija `EAFC_FC26_GUARDADOS` a una carpeta vacia: las pruebas no leen la partida real.
+- Fija `EAFC_SIN_IA=1`: ninguna prueba sale a internet. Las de la IA (`test_narrador.py`, clase `ConIA`)
+  la prenden con `urlopen` mockeado (`self.red`: respuestas o excepciones en orden) y fallan si sale una
+  llamada que no se esperaba.
   `tests/fabrica_partida.py` arma un guardado FALSO con el mismo formato (para todo lo de
   `roleplay/partida`). `TestPartidaRealDelPC` lee la partida real si existe (solo lectura,
   exige que >90% de los marcadores cuadren con los goles de los jugadores); si no, se salta.
@@ -234,7 +247,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
   no hay fuentes de Windows salvo con `QT_QPA_FONTDIR=C:/Windows/Fonts`.)
 - Paquete: probarlo como amigo nuevo con `EAFC_ROLEPLAY_DATOS=<carpeta vacia>` y
   `"dist\EAFC Roleplay\EAFC Roleplay.exe" --diagnostico`.
-- No probado automaticamente: microfono real, el reconocedor de voz real y abrir el juego
+- No probado automaticamente: la IA con claves reales (Groq/Gemini), microfono real, el reconocedor de voz real y abrir el juego
   de verdad (`os.startfile` va mockeado; no lanzar FC 26 en el PC de Simon sin preguntar).
 
 ## Gotchas conocidos
@@ -301,8 +314,11 @@ despues de cada uno y actualizar este archivo):**
    `runJavaScript`), en Vida el boton de las tiendas y "PRESUMIR EN INSTAGRAM" en "Lo que tenes",
    `InstagramWindow.precargar` (+ `InstagramPost.foto`, columna en COLUMNAS_AGREGADAS), el menu, las
    pruebas (`test_tiendas.py`) y la doc.
-4. Overlay bimodal (HUD que deja pasar los clicks con toasts + centro de mando con
-   Ctrl+Shift+F12 que devuelve el foco al juego con `SetForegroundWindow`): pendiente.
+4. Overlay bimodal: **HECHO el 2026-10-16** (ver `ui/overlay.py`). Probado con pruebas (flags, avisos,
+   modos); NO probado encima del juego real ni que Windows deje devolver el foco (requiere FC 26 en
+   "ventana sin bordes").
+5. **IA hibrida: HECHA el 2026-10-16** (pedido de Simon, revierte el "no volver a meter IA" del Pilar 1, pero
+   como capa opcional encima del motor local; ver `servicios/ia.py`). No probada con claves reales.
 
 Siguiente (decidido con Simon el 2026-10-14):
 - **Overlay**: hecho (ver arriba). En pantalla completa EXCLUSIVA ninguna ventana se puede

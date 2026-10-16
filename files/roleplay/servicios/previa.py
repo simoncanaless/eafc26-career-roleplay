@@ -3,7 +3,8 @@ Conferencia de prensa PREVIA al proximo partido del club. Los datos salen
 de la partida de FC 26 (rival, tabla, rachas, si ya se enfrentaron, el
 goleador del rival). Las preguntas y la evaluacion son las de la entrevista
 post-partido (servicios/entrevista.py): los mismos tres periodistas, el
-motor narrativo y el evaluador lexico, sin IA.
+motor narrativo y el evaluador lexico (y la IA hibrida si esta, igual que
+en la entrevista: reescribe sobre los mismos hechos).
 
 No se guarda como partido (no suma partidos ni goles): deja una noticia
 con el titular de la conferencia y mueve la reputacion.
@@ -181,7 +182,12 @@ def generar_previa(perfil: PlayerProfile, previa: PreviaPartido) -> list[str]:
         for (nombre, medio), candidatas in zip(entrevista.PERIODISTAS, (tactico, vestuario, picante)):
             simbolo, elegidos = entrevista._elegir(candidatas, escritor, candidatas)
             preguntas.append(f"{nombre} ({medio}): {escritor.decir(simbolo, **elegidos)}")
-    return preguntas
+    return entrevista.preguntas_con_ia(perfil, _contexto(previa), preguntas, cruces) or preguntas
+
+
+def _contexto(previa: PreviaPartido) -> str:
+    return (f"Conferencia PREVIA (todavia no se jugo): {previa.club} {previa.resumen}.\n"
+            + "\n".join(f"- {d}" for d in previa.datos))
 
 
 def evaluar_previa(
@@ -205,10 +211,16 @@ def evaluar_previa(
         titular = escritor.decir("pv_titular_cita" if cita else "pv_titular", **datos, cita=cita)
         texto = entrevista.reaccionar(escritor, perfil, lectura, delta, "r_apertura_previa", datos, cruces)
         nuevo_gancho = entrevista.gancho(escritor, lectura)
+    carino = CARINO_PREVIA.get(lectura.eje, 0)
+    hibrida = entrevista.reaccion_con_ia(perfil, _contexto(previa), respuestas, cruces, lectura, delta, carino,
+                                         DELTA_REPUTACION_MAXIMO, con_titular=True)
+    if hibrida:
+        texto, delta, carino, cita = hibrida["reaccion"], hibrida["delta"], hibrida["carino"], hibrida["cita"]
+        titular = hibrida["titular"] or titular
+        nuevo_gancho = hibrida["gancho"] or nuevo_gancho
     return ReaccionPrevia(
         titular=titular, reaccion_prensa=texto, tono=entrevista.tono_de(delta), delta_reputacion=delta,
-        nuevo_gancho_narrativo=nuevo_gancho, eje=lectura.eje, cita=cita,
-        delta_carino=CARINO_PREVIA.get(lectura.eje, 0),
+        nuevo_gancho_narrativo=nuevo_gancho, eje=lectura.eje, cita=cita, delta_carino=carino,
     )
 
 

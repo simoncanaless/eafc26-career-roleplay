@@ -9,21 +9,48 @@ la sala tiene (partido, preguntas, respuestas, reaccion, noticias) y sus
 botones llaman a los de la sala. Asi hay una sola entrevista, que se puede
 seguir en cualquiera de las dos.
 
-Se muestra sin quitarle el foco al juego (WA_ShowWithoutActivating).
+Dos modos (bimodal):
+- HUD pasivo: deja pasar mouse y teclado al juego (WindowTransparentForInput)
+  y no le saca el foco; muestra los avisos (partido nuevo, noticias, el auto
+  que llego...) y "[Ctrl+Shift+F12] Interactuar". Si estaba escondida, un
+  aviso la muestra compacta (solo el aviso) y se vuelve a esconder sola.
+- Interactivo: el atajo le quita el "pasar los clicks", toma el foco para
+  escribir y, al volver a apretarlo (o "Volver al juego"), vuelve al HUD y le
+  devuelve el foco a la ventana que estaba al frente (el juego) con
+  SetForegroundWindow.
+Sin el atajo (otra app lo tomo) nunca deja pasar los clicks: si no, no
+habria como volver a usarla.
 """
 
-from PySide6.QtCore import QPoint, QRectF, Qt
+import ctypes
+import sys
+
+from PySide6.QtCore import QPoint, QRectF, Qt, QTimer
 from PySide6.QtGui import QColor, QGuiApplication, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QLabel, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget
 
 from roleplay.ui import estilos
 from roleplay.ui.atajo import ATAJO_TEXTO
 from roleplay.ui.comun import esc
-from roleplay.ui.componentes import boton, chip, chip_alternable, fila, icono, limpiar_layout, texto_suave
+from roleplay.ui.componentes import boton, chip_alternable, fila, icono, limpiar_layout, texto_suave
 from roleplay.ui.estilos import fuente_titulo
 
 ANCHO = 440
 MARGEN_PANTALLA = 24
+AVISO_MS = 9000  # cuanto dura un aviso en el HUD
+
+
+def _es_windows() -> bool:
+    return sys.platform == "win32" and QGuiApplication.platformName() == "windows"
+
+
+def _ventana_al_frente() -> int:
+    return int(ctypes.windll.user32.GetForegroundWindow() or 0) if _es_windows() else 0
+
+
+def _poner_al_frente(hwnd: int) -> None:
+    if hwnd and _es_windows() and ctypes.windll.user32.IsWindow(hwnd):
+        ctypes.windll.user32.SetForegroundWindow(hwnd)
 
 
 class SalaFlotante(QWidget):
@@ -44,6 +71,13 @@ class SalaFlotante(QWidget):
         self._copiando = False  # evita el eco al copiar texto entre la sala y el panel
         self._arrastre: QPoint | None = None
         self._ubicado = False
+        self.click_a_traves = True  # el menu lo apaga si no pudo registrar el atajo
+        self.interactivo = False
+        self._ventana_juego = 0  # la que estaba al frente antes de interactuar
+        self._solo_aviso = False  # se mostro solo por un aviso: compacta y se esconde sola
+        self._timer_aviso = QTimer(self)
+        self._timer_aviso.setSingleShot(True)
+        self._timer_aviso.timeout.connect(self._fin_aviso)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(22, 18, 22, 20)
@@ -59,8 +93,23 @@ class SalaFlotante(QWidget):
             f"QPushButton#cerrarFlotante {{ background: transparent; border: none; color: {estilos.TEXTO_SUAVE};"
             f" font-size: 16px; padding: 0; }} QPushButton#cerrarFlotante:hover {{ color: {estilos.TEXTO}; }}"
         )
-        cerrar.clicked.connect(self.hide)
-        layout.addLayout(fila(titulo, None, chip(ATAJO_TEXTO, estilos.TEXTO_SUAVE), cerrar))
+        cerrar.clicked.connect(self._cerrar)
+        self.modo_label = QLabel()
+        self.modo_label.setStyleSheet(f"color: {estilos.TEXTO_SUAVE};")
+        layout.addLayout(fila(titulo, None, self.modo_label, cerrar))
+
+        self.aviso_label = QLabel()
+        self.aviso_label.setWordWrap(True)
+        self.aviso_label.setTextFormat(Qt.TextFormat.RichText)
+        self.aviso_label.hide()
+        layout.addWidget(self.aviso_label)
+
+        # todo lo de la entrevista (en un aviso suelto queda escondido)
+        self.cuerpo = QWidget()
+        principal, layout = layout, QVBoxLayout(self.cuerpo)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+        principal.addWidget(self.cuerpo)
 
         # despues del partido / previa del proximo: los mismos modos de la sala
         self.modo_post_btn = chip_alternable("Post-partido")
@@ -94,7 +143,12 @@ class SalaFlotante(QWidget):
         self.noticias_label.setWordWrap(True)
         layout.addWidget(self.noticias_label)
 
+        self.volver_btn = boton("Volver al juego", icono_nombre="jugar")
+        self.volver_btn.clicked.connect(self.modo_hud)
+        layout.addLayout(fila(None, self.volver_btn))
+
         sala.cambio.connect(self.refrescar)
+        self._aplicar_modo(False)
         self.refrescar()
 
     # ---- aspecto y arrastre ----
@@ -131,18 +185,99 @@ class SalaFlotante(QWidget):
             self.move(zona.right() - ANCHO - MARGEN_PANTALLA, zona.top() + MARGEN_PANTALLA)
         self._ubicado = True
 
-    def mostrar(self):
+    # ---- los dos modos ----
+
+    def deja_pasar_clicks(self) -> bool:
+        return bool(self.windowFlags() & Qt.WindowType.WindowTransparentForInput)
+
+    def _aplicar_modo(self, interactivo: bool):
+        self.interactivo = interactivo
+        pasar = not interactivo and self.click_a_traves
+        if self.deja_pasar_clicks() != pasar:
+            visible = self.isVisible()
+            self.setWindowFlag(Qt.WindowType.WindowTransparentForInput, pasar)  # (esconde la ventana)
+            if visible:
+                self.show()
+        if not self.click_a_traves:
+            self.modo_label.setText("")
+        else:
+            self.modo_label.setText(f"[{ATAJO_TEXTO}] " + ("Volver al juego" if interactivo else "Interactuar"))
+        self.volver_btn.setVisible(interactivo)
+
+    def _preparar(self):
         if not self._ubicado:
             self._ubicar()
+        self._solo_aviso = False
+        self.cuerpo.show()
         self.refrescar()
+
+    def mostrar(self):
+        """En HUD (modo en vivo, al terminar un partido): sin quitarle el foco al juego."""
+        if not self.isVisible():
+            self._aplicar_modo(False)
+        self._preparar()
         self.show()
         self.raise_()
 
-    def alternar(self):
-        if self.isVisible():
-            self.hide()
+    def modo_interactivo(self):
+        if not (self.isVisible() and self.interactivo):
+            al_frente = _ventana_al_frente()
+            if al_frente and al_frente != int(self.winId()):
+                self._ventana_juego = al_frente
+        self._aplicar_modo(True)
+        self._preparar()
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        _poner_al_frente(int(self.winId()))
+
+    def modo_hud(self):
+        """Vuelve a dejar pasar los clicks y le devuelve el foco al juego."""
+        self._aplicar_modo(False)
+        _poner_al_frente(self._ventana_juego)
+
+    def atajo_presionado(self):
+        if self.isVisible() and self.interactivo:
+            self.modo_hud()
         else:
+            self.modo_interactivo()
+
+    def alternar(self):
+        """Desde la bandeja: la abre para usarla, o la esconde."""
+        if self.isVisible():
+            self._cerrar()
+        else:
+            self.modo_interactivo()
+
+    def _cerrar(self):
+        volver = self.interactivo
+        self.hide()
+        self._aplicar_modo(False)
+        if volver:
+            _poner_al_frente(self._ventana_juego)
+
+    def avisar(self, titulo: str, texto: str = ""):
+        """Un aviso en el HUD. Si estaba escondida, se muestra compacta (solo
+        el aviso, sin quitarle el foco al juego) y se esconde sola."""
+        self.aviso_label.setText(
+            f"<span style='color:{estilos.ACENTO}'><b>{esc(titulo.upper())}</b></span>"
+            + (f"<br>{esc(texto)}" if texto else "")
+        )
+        self.aviso_label.show()
+        if not self.isVisible():
             self.mostrar()
+            self._solo_aviso = True
+            self.cuerpo.hide()
+        self.adjustSize()
+        self._timer_aviso.start(AVISO_MS)
+
+    def _fin_aviso(self):
+        self.aviso_label.hide()
+        if self._solo_aviso and not self.interactivo:
+            self.hide()
+        self._solo_aviso = False
+        self.cuerpo.show()
+        self.adjustSize()
 
     # ---- espejo de la sala ----
 

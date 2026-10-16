@@ -1,7 +1,8 @@
 """
 Ajustes: como se abre el juego, la partida que se lee, el modo en vivo,
-los dos iconos del escritorio y el diagnostico. (No hay clave que pedir: la
-app no usa IA, funciona de fabrica y sin internet.)
+el motor narrativo (claves opcionales de la IA hibrida: sin ellas, o con
+"solo motor local", la app funciona igual y sin internet), los dos iconos
+del escritorio y el diagnostico.
 """
 
 import os
@@ -11,6 +12,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
     QFileDialog,
+    QLineEdit,
     QMessageBox,
     QPlainTextEdit,
     QVBoxLayout,
@@ -22,7 +24,7 @@ from roleplay.partida import lector
 from roleplay.ui.atajo import ATAJO_TEXTO
 from roleplay.servicios.accesos import crear_accesos
 from roleplay.servicios.juego import abrir_juego, elegir_a_mano, juego_configurado, olvidar_eleccion
-from roleplay.ui.comun import esc
+from roleplay.ui.comun import ejecutar_en_hilo, esc
 from roleplay.ui.componentes import Tarjeta, boton, fila, texto_suave, titulo_pagina
 
 FILTRO_JUEGO = "El juego o su acceso directo (*.exe *.lnk *.url)"
@@ -119,6 +121,33 @@ class DialogoAjustes(QDialog):
         )
         layout.addWidget(en_vivo)
 
+        motor = Tarjeta("Motor narrativo e IA hibrida")
+        motor.cuerpo.addWidget(
+            texto_suave(
+                "El motor local escribe todo al instante y sin internet. Con una clave, la IA reescribe las "
+                "preguntas, la reaccion de la prensa y los comentarios contestando a lo que vos dijiste "
+                "(los numeros y los hechos los sigue poniendo la app). Lo que escribis se manda al proveedor."
+            )
+        )
+        guardados = ajustes.leer()
+        self.groq_edit = QLineEdit(guardados.get("groq_api_key", ""))
+        self.groq_edit.setPlaceholderText("Clave de Groq (recomendado: gratis y ~0,3 s, en console.groq.com)")
+        self.gemini_edit = QLineEdit(guardados.get("gemini_api_key", ""))
+        self.gemini_edit.setPlaceholderText("Clave de Gemini (opcional, de respaldo)")
+        for edit in (self.groq_edit, self.gemini_edit):
+            edit.setEchoMode(QLineEdit.EchoMode.Password)
+            edit.editingFinished.connect(self._on_claves)
+            motor.cuerpo.addWidget(edit)
+        self.sin_ia_check = QCheckBox("Usar solo motor local sin IA (0 ms, offline)")
+        self.sin_ia_check.setChecked(bool(guardados.get("sin_ia")))
+        self.sin_ia_check.toggled.connect(self._on_sin_ia)
+        self.prueba_label = texto_suave()
+        self.probar_btn = boton("Probar IA")
+        self.probar_btn.clicked.connect(self._on_probar_ia)
+        motor.cuerpo.addWidget(self.sin_ia_check)
+        motor.cuerpo.addLayout(fila(self.prueba_label, None, self.probar_btn))
+        layout.addWidget(motor)
+
         iconos = Tarjeta("Iconos del escritorio")
         iconos.cuerpo.addWidget(
             texto_suave(
@@ -184,6 +213,25 @@ class DialogoAjustes(QDialog):
         })
         self.preguntas_check.setEnabled(self.vigilar_check.isChecked())
         self.flotante_check.setEnabled(self.vigilar_check.isChecked())
+
+    def _on_claves(self):
+        ajustes.guardar(groq_api_key=self.groq_edit.text().strip() or None,
+                        gemini_api_key=self.gemini_edit.text().strip() or None)
+
+    def _on_sin_ia(self, activado: bool):
+        ajustes.guardar(sin_ia=True if activado else None)
+
+    def _on_probar_ia(self):
+        from roleplay.servicios import ia
+
+        self._on_claves()
+        self.probar_btn.setEnabled(False)
+        self.prueba_label.setText("Probando...")
+        ejecutar_en_hilo(ia.probar, al_completar=self._on_prueba_ia, al_fallar=self._on_prueba_ia)
+
+    def _on_prueba_ia(self, mensaje):
+        self.probar_btn.setEnabled(True)
+        self.prueba_label.setText(esc(str(mensaje)))
 
     def _on_elegir_partida(self):
         ruta, _ = QFileDialog.getOpenFileName(

@@ -702,8 +702,10 @@ class MainMenuWindow(QMainWindow):
         # ---- sala flotante (encima del juego) y su atajo global ----
         self.sala_flotante = SalaFlotante(self.pagina_entrevistas)
         self.atajo = AtajoGlobal(self)
-        if self.atajo.registrar():
-            self.atajo.presionado.connect(self.sala_flotante.alternar)
+        if self.atajo.registrar():  # HUD <-> interactivo
+            self.atajo.presionado.connect(self.sala_flotante.atajo_presionado)
+        else:
+            self.sala_flotante.click_a_traves = False  # sin atajo no habria como volver a usarla
 
         # ---- modo en vivo: avisos de partidos nuevos ----
         self.bandeja = None
@@ -785,10 +787,11 @@ class MainMenuWindow(QMainWindow):
             sala._iniciar_revision_prensa(manual=False)  # la prensa reacciona al partido
         if self.stack.currentIndex() != self.PAGINA_ENTREVISTAS:
             self._marcar_entrevistas(True)
-        if mostrar_flotante_sola():
-            self.sala_flotante.mostrar()  # encima del juego, sin quitarle el foco
-        self.pagina_instagram.revisar_hinchada()  # los hinchas reaccionan al partido
         mensaje = lectura.ultimo.resumen + (". Tu entrevista te espera." if cargado else ".")
+        if mostrar_flotante_sola():
+            self.sala_flotante.mostrar()  # encima del juego (HUD), sin quitarle el foco
+            self.sala_flotante.avisar("Partido nuevo", mensaje)
+        self.pagina_instagram.revisar_hinchada()  # los hinchas reaccionan al partido
         if self.bandeja is not None:
             self.bandeja.showMessage("Partido nuevo", mensaje, QSystemTrayIcon.MessageIcon.Information, 10000)
         QApplication.alert(self)
@@ -801,8 +804,16 @@ class MainMenuWindow(QMainWindow):
         if sala.perfil is not None:
             sala._iniciar_revision_prensa(manual=False, solo_hechos=True)
         self.pagina_instagram.revisar_hinchada()
+        if self.sala_flotante.isVisible():
+            self.sala_flotante.avisar("El juego avanzo", "La prensa revisa lo que paso en la fecha.")
+
+    def _avisar_encima(self, titulo: str, texto: str):
+        """Un aviso en el HUD encima del juego (si esta prendido y no estas en la app)."""
+        if mostrar_flotante_sola() and not self.isActiveWindow():
+            self.sala_flotante.avisar(titulo, texto)
 
     def _on_auto_entregado(self, nombre: str):
+        self._avisar_encima("Te llego tu auto", nombre)
         if self.bandeja is not None and not self.isActiveWindow():
             self.bandeja.showMessage(
                 "Te llego tu auto", f"{nombre}: la prensa y tus hinchas ya lo vieron.",
@@ -810,6 +821,7 @@ class MainMenuWindow(QMainWindow):
             )
 
     def _on_evento_inesperado(self, titulo: str, reto: str):
+        self._avisar_encima("Algo te paso", titulo + (f". Reto: {reto}" if reto else ""))
         if self.bandeja is not None and not self.isActiveWindow():
             self.bandeja.showMessage(
                 "Algo te paso", titulo + (f". Reto: {reto}" if reto else ". Mira la pagina Vida."),
@@ -828,6 +840,7 @@ class MainMenuWindow(QMainWindow):
         if manual or self.bandeja is None or self.isActiveWindow():
             return
         principal = next((n for n in noticias if n.categoria == "jugador"), noticias[0])
+        self._avisar_encima("Prensa", principal.titular)
         self.bandeja.showMessage("Prensa", principal.titular, QSystemTrayIcon.MessageIcon.Information, 8000)
 
     def _on_partida_actualizada(self, lectura):

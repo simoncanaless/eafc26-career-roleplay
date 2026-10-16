@@ -62,6 +62,45 @@ class TestSalaFlotante(ayuda.PruebaDeInterfaz):
         self.assertFalse(self.flotante.isVisible())
 
 
+    def test_hud_deja_pasar_los_clicks_y_el_atajo_lo_vuelve_interactivo(self):
+        self.flotante.mostrar()
+        self.assertTrue(self.flotante.deja_pasar_clicks())
+        self.assertFalse(self.flotante.interactivo)
+        self.assertIn("Interactuar", self.flotante.modo_label.text())
+        self.flotante.atajo_presionado()
+        self.assertTrue(self.flotante.isVisible())
+        self.assertTrue(self.flotante.interactivo)
+        self.assertFalse(self.flotante.deja_pasar_clicks())
+        self.assertTrue(self.flotante.volver_btn.isVisibleTo(self.flotante))
+        self.flotante.atajo_presionado()  # de vuelta al juego, sigue a la vista
+        self.assertTrue(self.flotante.isVisible())
+        self.assertTrue(self.flotante.deja_pasar_clicks())
+        self.flotante.atajo_presionado()
+        self.flotante.volver_btn.click()
+        self.assertFalse(self.flotante.interactivo)
+
+    def test_sin_atajo_nunca_deja_pasar_los_clicks(self):
+        self.flotante.click_a_traves = False
+        self.flotante.mostrar()
+        self.assertFalse(self.flotante.deja_pasar_clicks())
+
+    def test_un_aviso_la_muestra_compacta_y_se_esconde_sola(self):
+        self.flotante.avisar("Partido nuevo", "Man Utd 2-0 <Arsenal>")
+        self.assertTrue(self.flotante.isVisible())
+        self.assertTrue(self.flotante.deja_pasar_clicks())
+        self.assertFalse(self.flotante.cuerpo.isVisibleTo(self.flotante))
+        self.assertIn("&lt;Arsenal&gt;", self.flotante.aviso_label.text())
+        self.flotante._fin_aviso()
+        self.assertFalse(self.flotante.isVisible())
+        # abierta para usarla, el aviso pasa y la ventana queda
+        self.flotante.atajo_presionado()
+        self.flotante.avisar("Prensa", "Titular")
+        self.assertTrue(self.flotante.cuerpo.isVisibleTo(self.flotante))
+        self.flotante._fin_aviso()
+        self.assertTrue(self.flotante.isVisible())
+        self.assertFalse(self.flotante.aviso_label.isVisibleTo(self.flotante))
+
+
 class TestMenuConSalaFlotante(ayuda.PruebaDeInterfaz):
     def _ventana_y_lectura(self):
         import fabrica_partida as f
@@ -83,6 +122,7 @@ class TestMenuConSalaFlotante(ayuda.PruebaDeInterfaz):
                 mock.patch.object(ventana.pagina_entrevistas, "_iniciar_revision_prensa"):
             ventana._on_partido_nuevo(lectura)
         self.assertTrue(ventana.sala_flotante.isVisible())
+        self.assertIn("PARTIDO NUEVO", ventana.sala_flotante.aviso_label.text())
         ventana.close()
         self.assertFalse(ventana.sala_flotante.isVisible())
 

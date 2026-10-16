@@ -1,6 +1,7 @@
-"""El motor narrativo sin IA: la gramatica, la cola anti-repeticion, el
+"""El motor narrativo local: la gramatica, la cola anti-repeticion, el
 evaluador lexico, los cruces con el resto de la vida, la memoria de las
-entrevistas y el backstory."""
+entrevistas y el backstory. Y la IA hibrida (servicios/ia.py) con la red mockeada: la
+cascada Groq -> Gemini -> None y la caida limpia al motor local."""
 
 import json
 import random
@@ -370,6 +371,210 @@ class TestBackstory(unittest.TestCase):
         resultado = backstory.generar_backstory(PlayerProfile(nombre_jugador="Simon"), dado=random.Random(2))
         self.assertTrue(resultado.backstory)
         self.assertGreaterEqual(len(resultado.ganchos_narrativos), 3)
+
+
+# ---- la IA hibrida (servicios/ia.py): la red siempre mockeada ----
+
+import os  # noqa: E402
+import tempfile  # noqa: E402
+import urllib.error  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+from roleplay import ajustes, config  # noqa: E402
+from roleplay.servicios import hinchada, ia, instagram  # noqa: E402
+
+
+class _Respuesta:
+    def __init__(self, datos):
+        self._cuerpo = json.dumps(datos).encode("utf-8")
+
+    def read(self):
+        return self._cuerpo
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+
+def _groq(contenido):
+    return _Respuesta({"choices": [{"message": {"content": json.dumps(contenido)}}]})
+
+
+def _gemini(contenido):
+    return _Respuesta({"candidates": [{"content": {"parts": [{"text": json.dumps(contenido)}]}}]})
+
+
+def _http(codigo):
+    return urllib.error.HTTPError("https://x", codigo, "error", {}, None)
+
+
+class ConIA(ayuda.PruebaConBase):
+    """IA prendida (EAFC_SIN_IA=0), ajustes y .env en una carpeta propia y
+    `self.red` en lugar de internet: lista de respuestas o excepciones, en orden."""
+
+    def setUp(self):
+        super().setUp()
+        carpeta = Path(tempfile.mkdtemp(prefix="eafc_ia_"))
+        for parche in (mock.patch.dict(os.environ, {"EAFC_SIN_IA": "0"}),
+                       mock.patch.object(config, "ARCHIVO_AJUSTES", carpeta / "ajustes.json"),
+                       mock.patch.object(config, "CARPETA_DATOS", carpeta)):
+            parche.start()
+            self.addCleanup(parche.stop)
+        self.carpeta = carpeta
+        self.red = []
+        self.pedidos = []
+        parche = mock.patch.object(ia.urllib.request, "urlopen", side_effect=self._urlopen)
+        parche.start()
+        self.addCleanup(parche.stop)
+
+    def _urlopen(self, pedido, timeout=None):
+        self.pedidos.append((pedido.full_url, json.loads(pedido.data)))
+        if not self.red:
+            raise AssertionError("la IA salio a la red sin que se esperara")
+        respuesta = self.red.pop(0)
+        if isinstance(respuesta, Exception):
+            raise respuesta
+        return respuesta
+
+
+class TestRouterIA(ConIA):
+    def test_sin_claves_no_sale_a_la_red(self):
+        self.assertIsNone(ia.pedir_json("s", "u", {"ok": True}))
+        self.assertEqual(self.pedidos, [])
+
+    def test_apagada_no_sale_aunque_haya_claves(self):
+        ajustes.guardar(groq_api_key="clave", sin_ia=True)
+        self.assertIsNone(ia.pedir_json("s", "u", {"ok": True}))
+        with mock.patch.dict(os.environ, {"EAFC_SIN_IA": "1"}):
+            ajustes.guardar(sin_ia=None)
+            self.assertIsNone(ia.pedir_json("s", "u", {"ok": True}))
+        self.assertEqual(self.pedidos, [])
+
+    def test_groq_con_cuota_agotada_rota_al_modelo_chico(self):
+        ajustes.guardar(groq_api_key="clave")
+        self.red = [_http(429), _groq({"ok": True})]
+        self.assertEqual(ia.pedir_json("s", "u", {"ok": True}), {"ok": True})
+        modelos = [cuerpo["model"] for _, cuerpo in self.pedidos]
+        self.assertEqual(modelos, list(ia.GROQ_MODELOS))
+        self.assertEqual(self.pedidos[0][1]["response_format"], {"type": "json_object"})
+        self.assertEqual((ia.ultimo["proveedor"], ia.ultimo["modelo"]), ("groq", "llama-3.1-8b-instant"))
+
+    def test_sin_groq_contesta_gemini(self):
+        (self.carpeta / ".env").write_text("GROQ_API_KEYS=mala1, mala2\nGEMINI_API_KEY=buena\n", encoding="utf-8")
+        self.assertEqual(ia.claves("groq"), ["mala1", "mala2"])
+        self.red = [_http(401), _http(401), _http(500), _gemini({"ok": 1})]
+        self.assertEqual(ia.pedir_json("s", "u", {"ok": 1}), {"ok": 1})
+        urls = [url for url, _ in self.pedidos]
+        self.assertTrue(all("groq" in u for u in urls[:2]))  # una clave mala no prueba el otro modelo
+        self.assertIn("gemini-2.5-flash:", urls[2])
+        self.assertIn("gemini-2.5-flash-lite:", urls[3])
+        self.assertEqual(self.pedidos[3][1]["generationConfig"]["responseMimeType"], "application/json")
+
+    def test_sin_internet_o_basura_cae_al_motor_local_sin_excepcion(self):
+        ajustes.guardar(groq_api_key="a", gemini_api_key="b")
+        self.red = [urllib.error.URLError("sin red"), _Respuesta({"choices": []}),
+                    _groq("no es un objeto"), TimeoutError()]
+        self.assertIsNone(ia.pedir_json("s", "u", {"ok": True}))
+        self.assertEqual(len(self.pedidos), 4)
+
+    def test_probar_dice_quien_contesto(self):
+        self.assertIn("motor local", ia.probar())
+        ajustes.guardar(groq_api_key="clave")
+        self.red = [_groq({"ok": True})]
+        self.assertIn("Groq", ia.probar())
+
+    def test_el_estado_no_muestra_las_claves(self):
+        ajustes.guardar(groq_api_key="secreta123")
+        self.assertNotIn("secreta123", ia.estado())
+        self.assertIn("Groq: 1 clave", ia.estado())
+
+
+class TestHibrido(ConIA):
+    def setUp(self):
+        super().setUp()
+        ajustes.guardar(groq_api_key="clave")
+        self.perfil = database.load_profile(database.save_profile(PlayerProfile(
+            nombre_jugador="Simon Canales", club_actual="Man Utd", personalidad="polemico")))
+        self.stats = MatchStats(goles_equipo=0, goles_rival=2, equipo_rival="Arsenal", rating_jugador=5.8,
+                                minutos_jugados=90)
+        self.respuestas = [("P1?", "El arbitro nos robo el partido, no hay otra explicacion."),
+                           ("P2?", "Yo hice lo mio, el equipo no me acompano.")]
+
+    def test_la_reaccion_contesta_lo_que_dijo_y_queda_acotada(self):
+        self.red = [_groq({"reaccion_prensa": "Canales culpo al arbitro tras el 0-2.", "delta_reputacion": 99,
+                           "delta_carino": -40, "cita": "una frase que nunca dijo",
+                           "nuevo_gancho_narrativo": "La prensa espera su revancha."})]
+        r = entrevista.evaluar_respuestas(self.perfil, self.stats, self.respuestas)
+        self.assertEqual(r.reaccion_prensa, "Canales culpo al arbitro tras el 0-2.")
+        self.assertEqual(r.delta_reputacion, entrevista.DELTA_REPUTACION_MAXIMO)
+        self.assertEqual(r.delta_carino, -6)
+        self.assertEqual(r.tono, "positiva")
+        self.assertNotIn("nunca dijo", r.cita)  # una cita inventada no vale: queda la del lexico
+        self.assertIn(r.cita.lower()[:20], " ".join(t for _, t in self.respuestas).lower())
+        self.assertIn("Yo hice lo mio", self.pedidos[0][1]["messages"][1]["content"])  # le llega lo que dijo
+
+    def test_sin_respuesta_de_la_ia_queda_el_motor_local(self):
+        self.red = [_http(500), _http(500)]
+        r = entrevista.evaluar_respuestas(self.perfil, self.stats, self.respuestas)
+        self.assertTrue(r.reaccion_prensa)
+        self.assertLessEqual(abs(r.delta_reputacion), entrevista.DELTA_REPUTACION_MAXIMO)
+        self.assertNotRegex(r.reaccion_prensa, SIN_EXPANDIR)
+
+    def test_las_preguntas_mantienen_periodista_y_si_falla_quedan_las_locales(self):
+        self.red = [_groq({"preguntas": ["Ignacio Ferrada (Pizarra Tactica): ¿Que paso atras?", "¿Y la hinchada?",
+                                         "¿Y el auto?"]})]
+        preguntas = entrevista.generar_entrevista(self.perfil, self.stats)
+        self.assertEqual(preguntas[0], "Ignacio Ferrada (Pizarra Tactica): ¿Que paso atras?")
+        self.assertTrue(preguntas[2].startswith("Rocco Salinas (El Picante): "))
+        self.red = [_groq({"preguntas": ["solo una"]})]  # no calza: las del motor local
+        locales = entrevista.generar_entrevista(self.perfil, self.stats)
+        self.assertEqual(len(locales), 3)
+        self.assertNotIn("solo una", " ".join(locales))
+
+    def test_comentarios_del_post_y_de_la_hinchada(self):
+        self.red = [_groq({"comentarios": [{"autor": "hincha_red", "texto": "Ese reloj no ataja penales", "tono": "gracioso"},
+                                           {"autor": "@rival", "texto": "Juga y despues presumi", "tono": "negativo"},
+                                           {"autor": "@meme", "texto": "jajaja", "tono": "inventado"}]})]
+        r = instagram.generar_reaccion_post(self.perfil, "Mi reloj nuevo", 50, 1000)
+        self.assertEqual([c.autor for c in r.comentarios], ["@hincha_red", "@rival", "@meme"])
+        self.assertEqual(r.comentarios[2].tono, "neutral")
+        self.assertIn("Mi reloj nuevo", self.pedidos[0][1]["messages"][1]["content"])
+
+        eventos = [hinchada.EventoHinchada("partido", "2026-01-01", "0-2 vs Arsenal", "Perdio 0-2.", -30),
+                   hinchada.EventoHinchada("noticia", "2026-01-01", "Polemica", "...", -10)]
+        self.red = [_groq({"eventos": [{"indice": 0, "comentarios": [
+            {"autor": "@a", "texto": "Ese 0-2 duele", "tono": "negativo"},
+            {"autor": "@b", "texto": "Vamos igual", "tono": "positivo"}]}]})]
+        dichos = hinchada.comentar_eventos(self.perfil, eventos)
+        self.assertEqual(dichos[0][0]["texto"], "Ese 0-2 duele")
+        self.assertTrue(dichos[1])  # el que la IA no comento sale del motor local
+
+
+class TestAjustesIA(ayuda.PruebaDeInterfaz):
+    def setUp(self):
+        super().setUp()
+        parche = mock.patch.object(config, "ARCHIVO_AJUSTES", config.DB_PATH.parent / "ajustes.json")
+        parche.start()
+        self.addCleanup(parche.stop)
+
+    def test_guarda_claves_y_modo_local_y_prueba(self):
+        from roleplay.ui.ajustes import DialogoAjustes
+
+        dialogo = DialogoAjustes()
+        dialogo.groq_edit.setText(" gsk_prueba ")
+        dialogo.groq_edit.editingFinished.emit()
+        dialogo.sin_ia_check.setChecked(True)
+        self.assertEqual(ajustes.leer().get("groq_api_key"), "gsk_prueba")
+        self.assertTrue(ajustes.leer().get("sin_ia"))
+        with mock.patch.object(ia, "probar", return_value="Respondio Groq en 300 ms."):
+            dialogo.probar_btn.click()
+            ayuda.esperar_tareas()
+        self.assertIn("300 ms", dialogo.prueba_label.text())
+        dialogo.sin_ia_check.setChecked(False)
+        self.assertNotIn("sin_ia", ajustes.leer())
+        dialogo.deleteLater()
 
 
 if __name__ == "__main__":

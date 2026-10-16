@@ -238,8 +238,34 @@ def noticia_de_entrevista(escritor, perfil: PlayerProfile, registro: MatchInterv
              "marcador": f"{registro.goles_equipo}-{registro.goles_rival}"}
     titular = escritor.decir(f"t_cita_{tono}", **datos)
     cuerpo = unir(escritor.elegir("n_cita", **datos), registro.reaccion_prensa)
+    titular, cuerpo = _nota_con_ia(perfil, registro, lectura.cita, tono) or (titular, cuerpo)
     return NoticiaPrensa(player_id=perfil.id, categoria="jugador", tono=tono, titular=titular, cuerpo=cuerpo,
                          hitos=[f"entrevista:{registro.id}"])
+
+
+SISTEMA_NOTA = (
+    "Sos un diario deportivo en un juego de roleplay de futbol. Con la entrevista post-partido de un jugador, "
+    "escribi `titular` (con gancho, que incluya su cita entre «») y `cuerpo` (un parrafo periodistico de 4 a 6 "
+    "oraciones en tercera persona que desarrolle lo que dijo, textual cuando sirva, y como lo leyo la prensa)."
+)
+
+
+def _nota_con_ia(perfil: PlayerProfile, registro: MatchInterviewRecord, cita: str, tono: str):
+    """(titular, cuerpo) de la IA, o None."""
+    from roleplay.servicios import ia
+
+    pares = "\n".join(f"P: {p}\nR: {r}" for p, r in zip(registro.preguntas_entrevista, registro.respuestas_jugador))
+    datos = ia.pedir_json(
+        SISTEMA_NOTA,
+        f"{ia.ficha(perfil)}\nPartido: {registro.goles_equipo}-{registro.goles_rival} vs "
+        f"{registro.equipo_rival or 'su rival'}, {registro.goles_jugador} goles, nota {registro.rating_jugador:.1f}.\n"
+        f"La entrevista:\n{pares}\nLa cita elegida: «{cita}»\nComo la leyo la prensa ({tono}): {registro.reaccion_prensa}",
+        {"titular": "...", "cuerpo": "..."},
+    )
+    if not datos:
+        return None
+    titular, cuerpo = ia.texto(datos.get("titular"), 180), ia.texto(datos.get("cuerpo"), 1500)
+    return (titular, cuerpo) if titular and cuerpo else None
 
 
 def noticia_del_mundo(escritor, perfil: PlayerProfile, hecho) -> NoticiaPrensa:
