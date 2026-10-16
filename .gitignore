@@ -21,3 +21,6 @@ diagnostico.txt
 files/navegador/
 files/garage/
 files/compras/
+
+# volcado local del codigo (de Simon): no va al repo
+files/CODIGO_TEXTO.txt
