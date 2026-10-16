@@ -259,6 +259,8 @@ Hecho tambien: iconos "EA FC 26" / "EA FC 26 + Roleplay", boton JUGAR, Ajustes c
 diagnostico, el paquete para amigos (cada uno con sus datos en APPDATA) y
 la lectura de la partida de FC 26 (ver arriba).
 
+**LO PRIMERO en la proxima sesion (pedido de Simon, 2026-10-15): NADA de noticias inventadas.** Sacar por completo `prensa.noticia_de_ambiente` (y `PROBABILIDAD_NOTICIA_GENERAL`, `incluir_general`, `t_general`/`c_general`/`#club_ficticio#`/`#jugador_ficticio#`/`#ciudad_ficticia#` del corpus): la prensa solo escribe sobre lo real (hitos, la cita de la entrevista, hechos/premios/mercado de la partida); si no paso nada, no hay noticia. Corregir la convencion de abajo que dice que las de ambiente usan clubes ficticios. Ofrecerle (solo con su si) borrar de su base las noticias inventadas que ya tiene.
+
 **Evolucion en 4 pilares (pedida por Simon el 2026-10-15, en orden; correr la bateria
 despues de cada uno y actualizar este archivo):**
 1. **Sin IA: HECHO el 2026-10-15.** Motor de gramaticas + cola de 40, cruces, memoria
