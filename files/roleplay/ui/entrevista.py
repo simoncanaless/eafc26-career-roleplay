@@ -83,6 +83,8 @@ TEXTO_GENERAR = "Generar entrevista"
 TEXTO_REGENERAR = "Regenerar entrevista"
 TEXTO_GENERAR_PREVIA = "Generar conferencia previa"
 TEXTO_REGENERAR_PREVIA = "Regenerar conferencia"
+TEXTO_YA_HECHA = "YA HICISTE ESTA ENTREVISTA"
+TEXTO_YA_HECHA_PREVIA = "YA DISTE ESTA CONFERENCIA"
 TEXTO_ENVIAR = "Enviar respuestas"
 TEXTO_PRENSA = "Revisar prensa ahora"
 TEXTO_VOZ = "Responder por voz"
@@ -121,6 +123,9 @@ class InterviewWindow(QWidget):
         # eso aunque se toque el formulario, o se cree otro personaje,
         # mientras se evaluan.
         self._generando = False
+        # las respuestas ya se mandaron y evaluaron: la entrevista esta HECHA
+        # (lo escrito queda a la vista, pero ya no la deja "a medias")
+        self._enviada = False
         self._evaluando: tuple[PlayerProfile, MatchStats, list[tuple[str, str]], str, str] | None = None
         self._prensa_en_curso = False
         self._prensa_manual = False
@@ -382,6 +387,13 @@ class InterviewWindow(QWidget):
         cambiar = hay_perfil and not self.ocupada()
         self.modo_post_btn.setEnabled(cambiar)
         self.modo_previa_btn.setEnabled(cambiar and self._previa() is not None)
+        # una entrevista (o previa) ya hecha no se vuelve a hacer: se espera al proximo partido
+        if self._ya_hecha():
+            self.generar_entrevista_btn.setEnabled(False)
+        if self._enviada:
+            self.enviar_respuestas_btn.setEnabled(False)
+        if not self._generando:
+            self.generar_entrevista_btn.setText(self._texto_generar())
 
         hay_microfono = self._sin_microfono is None
         self.microfono_combo.setEnabled(hay_microfono and self._grabacion is None)
@@ -427,6 +439,7 @@ class InterviewWindow(QWidget):
 
     def _mostrar_preguntas(self, preguntas: list[str]):
         limpiar_layout(self.qa_layout)
+        self._enviada = False
         self._preguntas = preguntas
         self._respuesta_edits = []
         self._botones_voz = []
@@ -477,7 +490,21 @@ class InterviewWindow(QWidget):
             al_fallar=self._on_entrevista_error,
         )
 
+    def _ya_hecha(self) -> bool:
+        """La previa del proximo partido ya se dio, o el partido cargado de la
+        partida ya tuvo su entrevista (las stats a mano no tienen limite)."""
+        if self._modo == "previa":
+            previa = self._previa()
+            return previa is not None and previa.ya_hecha
+        lectura = self._lectura
+        return bool(
+            self._origen == "partida" and lectura is not None and lectura.ultimo is not None
+            and lectura.ya_entrevistado and self._fecha_juego == lectura.ultimo.partido.fecha.isoformat()
+        )
+
     def _texto_generar(self) -> str:
+        if self._ya_hecha():
+            return TEXTO_YA_HECHA_PREVIA if self._modo == "previa" else TEXTO_YA_HECHA
         if self._modo == "previa":
             texto = TEXTO_REGENERAR_PREVIA if self._preguntas else TEXTO_GENERAR_PREVIA
         else:
@@ -632,6 +659,9 @@ class InterviewWindow(QWidget):
     def _on_evaluacion_completada(self, resultado):
         perfil, stats, pares, origen, fecha_juego = self._evaluando
         self._evaluando = None
+        self._enviada = True  # hecha: se puede pasar a la previa o recibir el proximo partido
+        for edit in self._respuesta_edits:
+            edit.setReadOnly(True)
         self._refrescar_botones()
         self.enviar_respuestas_btn.setText(TEXTO_ENVIAR.upper())
         if origen == "previa":
@@ -763,7 +793,7 @@ class InterviewWindow(QWidget):
         return bool(
             self._generando or self._evaluando is not None or self._grabacion is not None
             or self._transcribiendo is not None
-            or any(edit.toPlainText().strip() for edit in self._respuesta_edits)
+            or (not self._enviada and any(edit.toPlainText().strip() for edit in self._respuesta_edits))
         )
 
     def recibir_partido_nuevo(self, lectura, preparar_preguntas: bool) -> bool:
@@ -842,6 +872,7 @@ class InterviewWindow(QWidget):
         # las preguntas del otro modo se descartan (sin cargar los microfonos)
         limpiar_layout(self.qa_layout)
         self._preguntas, self._respuesta_edits, self._botones_voz = [], [], []
+        self._enviada = False
         self.reaccion_tarjeta.hide()
         self.tarjeta_partido.setVisible(modo == "post")
         # en la previa no esta la tarjeta del partido: se renumera

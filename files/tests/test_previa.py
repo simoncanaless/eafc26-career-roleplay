@@ -4,6 +4,7 @@ import unittest
 from unittest import mock
 
 import ayuda
+from roleplay.servicios.entrevista import ReaccionPrensa
 import fabrica_partida as f
 from roleplay import database
 from roleplay.models import PlayerProfile
@@ -157,6 +158,38 @@ class TestSalaConPrevia(ayuda.PruebaDeInterfaz):
         self.assertIn("Prometio ganar en Napoles", database.load_profile(self.pid).ganchos_narrativos)
         self.assertIn("ya diste esta conferencia", sala.previa_label.text())
         self.assertIn("Vamos a ganar alla", ayuda.texto_visible(sala.reaccion_label.text()))
+
+    def test_despues_de_la_entrevista_se_puede_pasar_a_la_previa_y_no_se_repite(self):
+        sala = self.sala
+        sala._on_cargar_partida_clicked()
+        with mock.patch.object(self.modulo, "generar_entrevista", return_value=["P1?"]):
+            sala.generar_entrevista_btn.click()
+            ayuda.esperar_tareas()
+        sala._respuesta_edits[0].setPlainText("Ganamos con el corazon")
+        self.assertFalse(sala.modo_previa_btn.isEnabled())  # a medias: no se pisa
+        reaccion = ReaccionPrensa(reaccion_prensa="Bien ahi", delta_reputacion=2)
+        self.lectura.ya_entrevistado = True  # lo que dira la partida al releerla
+        with mock.patch.object(self.modulo, "evaluar_respuestas", return_value=reaccion), \
+                mock.patch.object(self.modulo, "revisar_prensa_con_partida", return_value={"noticias": [], "hitos": [], "estado_prensa": {}}):
+            sala.enviar_respuestas_btn.click()
+            ayuda.esperar_tareas()
+            ayuda.esperar_tareas()
+        self.assertFalse(sala.ocupada())  # hecha, no a medias
+        self.assertTrue(sala._respuesta_edits[0].isReadOnly())
+        self.assertFalse(sala.enviar_respuestas_btn.isEnabled())
+        self.assertFalse(sala.generar_entrevista_btn.isEnabled())  # ese partido ya tuvo su entrevista
+        self.assertEqual(sala.generar_entrevista_btn.text(), self.modulo.TEXTO_YA_HECHA)
+        self.assertTrue(sala.modo_previa_btn.isEnabled())
+
+        sala.modo_previa_btn.click()
+        self.assertEqual(sala._modo, "previa")
+        self.assertTrue(sala.generar_entrevista_btn.isEnabled())
+        self.lectura.previa.ya_hecha = True  # la previa ya dada tampoco se repite
+        sala._refrescar_botones()
+        self.assertFalse(sala.generar_entrevista_btn.isEnabled())
+        self.assertEqual(sala.generar_entrevista_btn.text(), self.modulo.TEXTO_YA_HECHA_PREVIA)
+        sala.modo_post_btn.click()
+        self.assertFalse(sala.generar_entrevista_btn.isEnabled())
 
     def test_la_sala_flotante_muestra_la_previa(self):
         from roleplay.ui.overlay import SalaFlotante

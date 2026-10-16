@@ -189,6 +189,12 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
   `self.perfil` ni el formulario actual.
 - Botones de la entrevista: solo `_refrescar_botones()` decide cuales estan activos
   (incluye grabando/transcribiendo: mientras hay voz en curso no se regenera ni se envia).
+- Entrevista HECHA (`InterviewWindow._enviada`, desde 2026-10-16): al evaluarse, las respuestas quedan
+  de solo lectura y `ocupada()` ya no la cuenta como a medias (antes el texto escrito trababa el cambio a
+  la previa y el modo en vivo no cargaba el partido nuevo). `_ya_hecha()`: el partido de la partida que ya
+  tuvo entrevista (`lectura.ya_entrevistado` con la misma fecha) o la previa ya dada (`previa.ya_hecha`)
+  no se vuelven a generar (boton "YA HICISTE ESTA ENTREVISTA" / "YA DISTE ESTA CONFERENCIA"); las stats a
+  mano no tienen limite.
 - Todo texto del motor o del usuario que va a un QLabel con formato pasa por `esc()`;
   un `<3` sin escapar se comia el resto del comentario.
 - Numeros con separador de miles: `miles(n)`; contadores cortos: `compacto(n)` (1,5K).
