@@ -17,6 +17,10 @@ y la vida sentimental (servicios/amor.py), con sus decisiones: si esta
 soltero, puede buscar en el catalogo de famosas de Simon y mandar un DM
 (segun su fama: servicios/ecosistema.py), y un romance puede ser secreto.
 
+En cada categoria con tiendas oficiales (relojes, ropa, casas...), "COMPRAR EN
+LAS WEBS OFICIALES" abre la tienda real (ui/tienda.py: la web adentro de la
+app, como el configurador de autos); lo comprado guarda su web y su foto.
+
 Ademas: los patrocinios (servicios/patrocinios.py: ofertas de marcas que
 pagan por semana con el sueldo) y el marketplace de autos de culto
 (servicios/marketplace.py, categoria "Usados y de culto" de la tienda).
@@ -56,7 +60,8 @@ from roleplay.database import (
     set_estado_eventos,
     sumar_reputacion_y_seguidores,
 )
-from roleplay.servicios import amor, autos, clubes, economia, ecosistema, eventos, marketplace, patrocinios
+from roleplay import config as config_app
+from roleplay.servicios import amor, autos, clubes, economia, ecosistema, eventos, marketplace, patrocinios, tiendas
 from roleplay.servicios.hinchada import _escala
 from roleplay.servicios.economia import CATALOGO, CATEGORIAS, POR_ID, dinero
 from roleplay.ui import estilos
@@ -382,6 +387,15 @@ class PaginaVida(QWidget):
         if self._categoria == "usados":
             self._mostrar_marketplace(e)
             return
+        oficiales = tiendas.TIENDAS.get(self._categoria, [])
+        if oficiales:
+            nombres = ", ".join(t.nombre for t in oficiales)
+            entrar = boton("Comprar en las webs oficiales", primario=True)
+            entrar.setProperty("tienda_real", self._categoria)
+            entrar.clicked.connect(lambda _=False, c=self._categoria: self.abrir_tienda_real(c))
+            self.tienda_layout.addLayout(_fila_ancha(
+                texto_suave(f"Elegi algo de verdad en {esc(nombres)}, adentro de la app (como el configurador de autos)."),
+                entrar))
         for articulo in CATALOGO:
             if articulo.categoria == self._categoria:
                 self.tienda_layout.addLayout(self._linea_articulo(articulo, e, "Comprar"))
@@ -521,6 +535,36 @@ class PaginaVida(QWidget):
             self._contar_marca(perfil, novedad, hoy)
         self._mostrar()
 
+    def abrir_tienda_real(self, categoria: str):
+        from roleplay.ui.tienda import DialogoTiendaReal
+
+        if self.perfil is None or self._carrera is None or self._carrera.fecha_actual() is None:
+            return
+        dialogo = DialogoTiendaReal(categoria, get_economia(self.perfil.id).get("saldo", 0), self._moneda(), self)
+        if dialogo.exec() == QDialog.DialogCode.Accepted:
+            self.comprar_de_tienda(dialogo.articulo(), dialogo.url_actual(), dialogo.foto)
+        dialogo.deleteLater()
+
+    def comprar_de_tienda(self, articulo, url: str = "", foto=None):
+        """Lo elegido en una web oficial: se compra con su web y su foto (compras/)."""
+        from roleplay.ui.tienda import guardar_foto_compra
+
+        perfil, carrera = self.perfil, self._carrera
+        if perfil is None or carrera is None or carrera.fecha_actual() is None:
+            return
+        extra = {"url": url} if url else {}
+        try:
+            nueva = economia.comprar(get_economia(perfil.id), articulo, carrera.fecha_actual(), extra)
+        except economia.SinPlata as exc:
+            QMessageBox.information(self, "No te alcanza", str(exc))
+            return
+        if foto is not None and not foto.isNull():
+            posesion = nueva["posesiones"][-1]
+            posesion["foto"] = guardar_foto_compra(foto, posesion["id"])
+        set_economia(perfil.id, nueva)
+        self._aplicar_y_repercutir(perfil, carrera, articulo, "Compraste")
+        self._mostrar()
+
     def _mostrar_pedidos(self, e: dict):
         limpiar_layout(self.pedidos_layout)
         moneda = self._moneda()
@@ -568,6 +612,10 @@ class PaginaVida(QWidget):
             partes = [texto, None, vender_btn]
             if posesion.get("config"):  # los autos del concesionario, con su foto (o su dibujo)
                 partes.insert(0, miniatura(autos.Configuracion.desde_dict(posesion["config"]), posesion.get("foto", "")))
+            elif posesion.get("foto") and posesion["articulo"].startswith(economia.LIBRE):  # de una web oficial
+                foto = miniatura_de_archivo(str(config_app.CARPETA_COMPRAS / posesion["foto"]))
+                if foto is not None:
+                    partes.insert(0, foto)
             elif posesion.get("imagen"):  # los del marketplace, con la foto del catalogo
                 foto = miniatura_de_archivo(marketplace.ruta_imagen(posesion["imagen"]))
                 if foto is not None:

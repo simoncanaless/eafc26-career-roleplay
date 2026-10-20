@@ -69,7 +69,7 @@ CATEGORIAS = {
     "casa": "Casas",
     "auto": "Autos",
     "reloj": "Relojes y joyas",
-    "moda": "Moda",
+    "moda": "Ropa y moda",
     "yate": "Yates",
     "avion": "Aviones",
     "tecnologia": "Tecnologia",
