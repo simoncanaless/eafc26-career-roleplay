@@ -268,6 +268,12 @@ class PaginaVida(QWidget):
         self.marcas_layout = QVBoxLayout()
         self.marcas_layout.setSpacing(8)
         self.marcas.cuerpo.addLayout(self.marcas_layout)
+        self.buscar_marcas_btn = boton("Buscar marcas")
+        self.buscar_marcas_btn.setToolTip("Tu representante sale a buscar marcas (una vez por semana del juego)")
+        self.buscar_marcas_btn.clicked.connect(self.buscar_marcas)
+        self.marcas_mensaje = texto_suave()
+        self.marcas.cuerpo.addLayout(fila(self.marcas_mensaje, None, self.buscar_marcas_btn))
+        self._post_promo = None
         contenido.addWidget(self.marcas)
 
         tienda = Tarjeta("Tienda")
@@ -539,11 +545,26 @@ class PaginaVida(QWidget):
         estado = e.get("patrocinios") or {}
         for contrato in estado.get("contratos", []):
             hasta = contrato["hasta"]
-            self.marcas_layout.addWidget(QLabel(
-                f"<b>{esc(contrato['nombre'])}</b> <span style='color:{estilos.TEXTO_SUAVE}'>· {esc(contrato['rubro'])}"
-                f" · {dinero(contrato['semanal'], moneda)} por semana (bruto) · hasta el "
-                f"{hasta[8:10]}/{hasta[5:7]}/{hasta[:4]}</span>"
-            ))
+            texto = QLabel(
+                f"<b>{esc(contrato['nombre'])}</b> <span style='color:{estilos.TEXTO_SUAVE}'>· "
+                f"{esc(patrocinios._rubro(contrato))} · {dinero(contrato['semanal'], moneda)} por semana (bruto) · "
+                f"hasta el {hasta[8:10]}/{hasta[5:7]}/{hasta[:4]}"
+                + (f" · faltas: {contrato['faltas']}/{patrocinios.FALTAS_PARA_RESCINDIR}" if contrato.get("faltas") else "")
+                + "</span>"
+            )
+            texto.setWordWrap(True)
+            promo = contrato.get("promo")
+            if not promo:
+                self.marcas_layout.addWidget(texto)
+                continue
+            vence = promo["vence"]
+            texto.setText(texto.text() + f"<br><span style='color:{estilos.ACENTO}'>Te piden:</span> "
+                          f"{esc(promo['texto'])} <span style='color:{estilos.TEXTO_SUAVE}'>(hasta el "
+                          f"{vence[8:10]}/{vence[5:7]}; cumplir paga {dinero(contrato['semanal'], moneda)} de bono)</span>")
+            hacer = boton("Publicar la promo" if promo["tipo"] == "post" else "Hecho", primario=True)
+            hacer.setProperty("promo", contrato["id"])
+            hacer.clicked.connect(lambda _=False, i=contrato["id"]: self.hacer_promo(i))
+            self.marcas_layout.addLayout(_fila_ancha(texto, hacer))
         oferta = estado.get("oferta")
         if oferta:
             texto = QLabel(
@@ -561,8 +582,78 @@ class PaginaVida(QWidget):
             self.marcas_layout.addLayout(_fila_ancha(texto, firmar, rechazar))
         if not estado.get("contratos") and not oferta:
             self.marcas_layout.addWidget(texto_suave(
-                "Con mas seguidores y reputacion, las marcas te van a buscar. Un escandalo puede hacer que te dejen."
+                "Con mas seguidores y reputacion, las marcas te van a buscar (botines, bebidas, tecnologia, "
+                "electrodomesticos, relojes, autos...). Cada una te pide promos: si no cumplis, se va. Un "
+                "escandalo tambien puede hacer que te dejen."
             ))
+        hoy = self._hoy(e)
+        puede, motivo = patrocinios.puede_buscar(e, hoy) if hoy is not None else (False, "")
+        self.buscar_marcas_btn.setEnabled(puede)
+        self.buscar_marcas_btn.setToolTip(motivo or "Tu representante sale a buscar marcas (una vez por semana del juego)")
+
+    def buscar_marcas(self):
+        perfil = self.perfil
+        e = get_economia(perfil.id) if perfil is not None else {}
+        hoy = self._hoy(e)
+        if perfil is None or hoy is None:
+            return
+        e, oferta, mensaje = patrocinios.buscar(e, perfil.id, get_seguidores(perfil.id),
+                                                get_reputacion_actual(perfil.id), hoy)
+        set_economia(perfil.id, e)
+        self.marcas_mensaje.setText(esc(mensaje))
+        if oferta is not None:
+            self.decision_pendiente.emit(f"Oferta de {oferta['nombre']}")
+        self._mostrar()
+
+    def hacer_promo(self, contrato_id: str):
+        perfil = self.perfil
+        e = get_economia(perfil.id) if perfil is not None else {}
+        hoy = self._hoy(e)
+        par = next(((c, p) for c, p in patrocinios.promos_pendientes(e) if c["id"] == contrato_id), None)
+        if perfil is None or hoy is None or par is None:
+            return
+        contrato, promo = par
+        if promo["tipo"] != "post":
+            self._cumplir_promo(perfil, contrato_id, hoy)
+            return
+        from roleplay.servicios import instagram
+
+        texto = self._texto_del_post(instagram.post_promo(perfil, contrato["nombre"]))
+        if texto is None:
+            return
+        self._post_promo = (perfil, texto, contrato_id, hoy)
+        ejecutar_en_hilo(
+            instagram.generar_reaccion_post, perfil, texto, get_reputacion_actual(perfil.id), get_seguidores(perfil.id),
+            al_completar=self._on_post_promo, al_fallar=self._on_repercusion_error,
+        )
+
+    def _on_post_promo(self, reaccion):
+        from roleplay.database import save_instagram_post, sumar_seguidores
+        from roleplay.models import InstagramPost
+
+        if self._post_promo is None:
+            return
+        perfil, texto, contrato_id, hoy = self._post_promo
+        self._post_promo = None
+        sumar_seguidores(perfil.id, reaccion.crecimiento_seguidores)
+        save_instagram_post(InstagramPost(
+            player_id=perfil.id, texto=texto, likes=reaccion.likes_estimados,
+            crecimiento_seguidores=reaccion.crecimiento_seguidores,
+            comentarios=[c.model_dump() for c in reaccion.comentarios],
+        ))
+        self._cumplir_promo(perfil, contrato_id, hoy)
+
+    def _cumplir_promo(self, perfil, contrato_id: str, hoy):
+        try:
+            e, novedad = patrocinios.cumplir(get_economia(perfil.id), contrato_id, hoy)
+        except ValueError:
+            return
+        set_economia(perfil.id, e)
+        self._contar_marca(perfil, novedad, hoy)
+        self.compra_hecha.emit()
+        if self.perfil is not None and self.perfil.id == perfil.id:
+            self.marcas_mensaje.setText(f"Promo cumplida: {dinero(novedad.dinero, self._moneda())} de bono (neto).")
+            self._mostrar()
 
     def responder_patrocinio(self, aceptar: bool):
         perfil = self.perfil

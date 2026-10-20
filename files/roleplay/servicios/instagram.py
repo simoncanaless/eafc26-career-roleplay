@@ -178,6 +178,16 @@ def post_con_pareja(perfil: PlayerProfile, pareja: str, boda: bool = False, fami
         return escritor.decir(f"post_{tipo}_{personalidad}", **datos)
 
 
+def post_promo(perfil: PlayerProfile, marca: str) -> str:
+    """El post de una promo con una marca (servicios/patrocinios.py), con su voz y el #publi. Queda editable."""
+    from roleplay.servicios.hinchada import datos_de_redes
+
+    datos = {**datos_de_redes(perfil), "marca": marca.strip()}
+    personalidad = perfil.personalidad if perfil.personalidad in ("reservado", "carismatico", "polemico", "humilde") else "reservado"
+    with narrador(perfil.id, "redes") as escritor:
+        return escritor.decir(f"post_promo_{personalidad}", **datos)
+
+
 def reaccion_post_con_pareja(perfil: PlayerProfile, texto: str, reputacion: int, seguidores: int,
                              famosa: bool) -> InstagramReaccionIA:
     """Corre en un hilo: la reaccion de un post con la pareja (mas seguidores y likes)."""
