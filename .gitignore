@@ -17,6 +17,7 @@ __pycache__/
 build/
 dist/
 errores.log
+overlay.log
 diagnostico.txt
 files/navegador/
 files/garage/

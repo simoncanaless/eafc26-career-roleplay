@@ -23,12 +23,13 @@ sala flotante chica de antes, ui/overlay.py).
 """
 
 import ctypes
+from datetime import datetime
 from typing import Optional
 
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
 
-from roleplay import ajustes
+from roleplay import ajustes, config
 from roleplay.ui.overlay import _es_windows, _poner_al_frente, _soltar_mouse, _ventana_al_frente
 
 OPACIDAD = 0.95
@@ -37,6 +38,27 @@ REINTENTOS_FOCO = 6  # si el juego no suelta el foco al toque, se insiste cada I
 INTERVALO_FOCO_MS = 120
 ESPERA_DESACTIVADA_MS = 300  # al perder el foco, cuanto esperar para ver quien lo tomo
 MODOS = ("completo", "sala")
+MAXIMO_REGISTRO = 300  # lineas de overlay.log
+
+
+def anotar(texto: str) -> None:
+    """overlay.log en la carpeta de datos: que paso al abrir y cerrar (para
+    entender un problema encima del juego, que las pruebas no ven). Nunca falla."""
+    try:
+        ruta = config.CARPETA_DATOS / "overlay.log"
+        lineas = ruta.read_text(encoding="utf-8").splitlines()[-MAXIMO_REGISTRO:] if ruta.exists() else []
+        lineas.append(f"{datetime.now().isoformat(timespec='milliseconds')} {texto}")
+        ruta.write_text("\n".join(lineas) + "\n", encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _describir(hwnd: int) -> str:
+    if not hwnd or not _es_windows():
+        return str(hwnd)
+    titulo = ctypes.create_unicode_buffer(60)
+    ctypes.windll.user32.GetWindowTextW(hwnd, titulo, 60)
+    return f"{hwnd} {titulo.value!r}"
 
 
 def configuracion() -> dict:
@@ -101,13 +123,16 @@ class OverlayCompleto(QObject):
         if self.abierto and objeto is self.ventana:
             if (evento.type() == QEvent.Type.WindowStateChange and self.ventana.isMinimized()
                     and not evento.oldState() & Qt.WindowState.WindowMinimized):  # (no al abrirse desde minimizada)
+                anotar("se minimizo")
                 QTimer.singleShot(0, self._cerrar_sin_devolver)
             elif evento.type() == QEvent.Type.WindowDeactivate:
+                anotar(f"perdio el foco; al frente: {_describir(_ventana_al_frente())}")
                 QTimer.singleShot(ESPERA_DESACTIVADA_MS, self._si_volvio_el_juego)
         return False
 
     def _si_volvio_el_juego(self):
         if self.abierto and self._juego and _ventana_al_frente() == self._juego:
+            anotar("el juego volvio al frente: se cierra")
             self.cerrar(devolver_foco=False)
 
     def _cerrar_sin_devolver(self):
@@ -128,6 +153,7 @@ class OverlayCompleto(QObject):
             self._juego = al_frente
         self._antes = {"visible": v.isVisible() and not v.isMinimized(), "geometria": v.saveGeometry(),
                        "flags": v.windowFlags()}
+        anotar(f"abrir: al frente {_describir(al_frente)}, ventana {'minimizada' if v.isMinimized() else 'visible' if v.isVisible() else 'escondida'}")
         pantalla = pantalla_de_la_ventana(self._juego) or v.screen() or QGuiApplication.primaryScreen()
         v.setWindowFlags(self._antes["flags"] | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
         v.setWindowOpacity(configuracion()["opacidad"])
@@ -148,7 +174,9 @@ class OverlayCompleto(QObject):
         if not self.abierto:
             return
         _soltar_mouse()
-        if not _poner_al_frente(int(self.ventana.winId())) and _es_windows():
+        tomado = _poner_al_frente(int(self.ventana.winId()))
+        anotar(f"tomar el foco (intento {self._intentos + 1}): {'si' if tomado else 'no'}")
+        if not tomado and _es_windows():
             self._intentos += 1
             if self._intentos < REINTENTOS_FOCO:
                 QTimer.singleShot(INTERVALO_FOCO_MS, self._tomar_el_foco)
@@ -158,6 +186,7 @@ class OverlayCompleto(QObject):
             return
         v = self.ventana
         antes = self._antes or {}
+        anotar(f"cerrar (devolver el foco: {'si' if devolver_foco else 'no'})")
         self.abierto = False
         self._esc.setEnabled(False)
         v.hide()
