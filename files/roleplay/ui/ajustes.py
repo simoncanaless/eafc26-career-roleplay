@@ -60,7 +60,10 @@ def reiniciar_app() -> None:
 
     argumentos = [sys.executable] + ([] if config.EMPAQUETADA else [str(config.RAIZ_PROYECTO / "app.py")])
     banderas = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-    subprocess.Popen(argumentos, env=carreras.entorno_para_reiniciar(), cwd=str(config.RAIZ_PROYECTO),
+    from roleplay.ui.instancia import VARIABLE_REINICIO
+
+    entorno = carreras.entorno_para_reiniciar() | {VARIABLE_REINICIO: "1"}  # (espera a que esta se cierre)
+    subprocess.Popen(argumentos, env=entorno, cwd=str(config.RAIZ_PROYECTO),
                      creationflags=banderas)
     QApplication.quit()
 

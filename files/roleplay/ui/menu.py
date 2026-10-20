@@ -76,7 +76,7 @@ from roleplay.ui.vida import PaginaVida
 from roleplay.ui.ajustes import DialogoAjustes, abrir_juego_o_preguntar
 from roleplay.ui.personaje import CharacterWizard
 from roleplay.ui.atajo import ATAJO_TEXTO, AtajoGlobal
-from roleplay.ui.overlay import SalaFlotante
+from roleplay.ui.overlay import SalaFlotante, _poner_al_frente
 from roleplay.ui.overlay_completo import OverlayCompleto, configuracion as configuracion_overlay
 from roleplay.ui.vigilante import VigilantePartida, mostrar_flotante_sola, preparar_entrevista_sola
 
@@ -866,6 +866,13 @@ class MainMenuWindow(QMainWindow):
         self.showNormal()
         self.raise_()
         self.activateWindow()
+
+    def traer_desde_otra(self):
+        """Alguien quiso abrir la app de nuevo: se muestra esta (ui/instancia.py)."""
+        if self.overlay.abierto:
+            return
+        self._traer_al_frente()
+        _poner_al_frente(int(self.winId()))
 
     def _abrir_sala_de_prensa(self):
         self._traer_al_frente()

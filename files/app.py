@@ -129,10 +129,22 @@ def main(argv=None) -> int:
         app.setWindowIcon(QIcon(str(config.ICONO_APP)))
     aplicar_estilo(app)
 
+    una_sola = None
+    if args.modulo == "menu":  # (el atajo y el overlay son del menu: con dos abiertas, el atajo es de la vieja)
+        from roleplay.ui.instancia import UnaSola
+
+        una_sola = UnaSola()
+        if not una_sola.tomar():
+            if args.jugar:
+                abrir_juego_o_preguntar(None)
+            return 0  # ya estaba abierta: se muestra esa
+
     if args.jugar:
         abrir_juego_o_preguntar(None)  # primero el juego: Steam tarda en levantarlo
 
     ventana = _crear_ventana(args.modulo, jugar=args.jugar)
+    if una_sola is not None:
+        una_sola.mostrar.connect(ventana.traer_desde_otra)
     ventana.show()
     return app.exec()
 
