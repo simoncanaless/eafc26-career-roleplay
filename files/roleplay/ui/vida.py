@@ -205,6 +205,10 @@ class PaginaVida(QWidget):
         self.amor_pasos = QHBoxLayout()
         self.amor_pasos.setSpacing(8)
         self.amor.cuerpo.addLayout(self.amor_pasos)
+        # la familia: los hijos, armar una familia y el parto (sigue aunque terminen)
+        self.amor_familia = QHBoxLayout()
+        self.amor_familia.setSpacing(8)
+        self.amor.cuerpo.addLayout(self.amor_familia)
         self._post_pareja = None
         self.amor_historial = QVBoxLayout()
         self.amor_historial.setSpacing(6)
@@ -723,6 +727,8 @@ class PaginaVida(QWidget):
         if nueva and nueva != antes.get("decision"):
             decision, pareja = amor.decision_pendiente(estado)
             self.decision_pendiente.emit(decision.titulo.format(pareja=pareja))
+        if amor.puede_nacer(estado, hoy) and not amor.puede_nacer(antes, date.fromisoformat(antes.get("hasta", hoy.isoformat()))):
+            self.decision_pendiente.emit("Llego el dia: nace tu bebe")
 
     def _contar_amor(self, perfil, suceso, estado: dict) -> int:
         if suceso.privado:  # un secreto (o un DM sin respuesta): queda en su historial, sin prensa
@@ -805,6 +811,7 @@ class PaginaVida(QWidget):
             self.amor_historial.addWidget(linea)
         self.oficializar_btn.setVisible(estado.get("estado") == "secreto" and bool(estado.get("pareja")))
         self._mostrar_acciones_amor(estado)
+        self._mostrar_familia(estado)
         self._mostrar_dm(estado)
         self.amor.show()
 
@@ -891,7 +898,7 @@ class PaginaVida(QWidget):
         moneda = self._moneda()
         if estado["estado"] != "conociendo":
             for accion in amor.ACCIONES.values():
-                if accion.solo_casados and estado["estado"] != "casado":
+                if (accion.solo_casados and estado["estado"] != "casado") or (accion.con_hijos and not amor.hijos(estado)):
                     continue
                 puede, motivo = amor.puede_interactuar(estado, accion.id, hoy)
                 costo = amor.costo_de(accion.id, e)
@@ -927,6 +934,73 @@ class PaginaVida(QWidget):
         fin.setProperty("paso_amor", "terminar")
         fin.clicked.connect(self.terminar_relacion)
         self.amor_pasos.addWidget(fin)
+
+    # ---- la familia ----
+
+    def _mostrar_familia(self, estado: dict):
+        limpiar_layout(self.amor_familia)
+        e = get_economia(self.perfil.id)
+        hoy = self._hoy(e)
+        if hoy is None:
+            return
+        partes = []
+        chicos = amor.hijos(estado)
+        if chicos:
+            partes.append("Hijos: " + ", ".join(
+                f"<b>{esc(h['nombre'])}</b> ({amor.edad(h, hoy) or 'bebe'})"
+                for h in chicos))
+        if estado.get("embarazo") and not amor.puede_nacer(estado, hoy):
+            partes.append(f"Bebe en camino con {esc(estado['embarazo']['con'])}: faltan "
+                          f"{amor.dias_para_el_parto(estado, hoy)} dias del juego")
+        texto = QLabel(" · ".join(partes))
+        texto.setWordWrap(True)
+        self.amor_familia.addWidget(texto, 1)
+        if amor.puede_nacer(estado, hoy):
+            nacer = boton("Llego el dia: ir al hospital", primario=True)
+            nacer.setProperty("paso_amor", "parto")
+            nacer.clicked.connect(self.ir_al_hospital)
+            self.amor_familia.addWidget(nacer)
+        elif estado.get("estado") in ("pareja", "comprometido", "casado") and estado.get("pareja"):
+            puede, motivo = amor.puede_hablar_de_hijos(estado, hoy)
+            familia = boton("Armar una familia")
+            familia.setProperty("paso_amor", "hijos")
+            familia.setEnabled(puede)
+            familia.setToolTip(motivo or "Hablarlo con tu pareja: puede que todavia no quiera, o que no quiera nunca")
+            familia.clicked.connect(self.hablar_de_hijos)
+            self.amor_familia.addWidget(familia)
+
+    def hablar_de_hijos(self):
+        perfil = self.perfil
+        if perfil is None:
+            return
+        e = get_economia(perfil.id)
+        hoy = self._hoy(e)
+        try:
+            estado, e, suceso = amor.hablar_de_hijos(get_estado_amor(perfil.id), e, hoy)
+        except (ValueError, TypeError) as exc:
+            QMessageBox.information(self, "Ahora no", str(exc))
+            return
+        self._resultado_amor(suceso, self._aplicar_amor(perfil, estado, e, suceso))
+
+    def _nombre_del_bebe(self, sexo: str, sugerido: str) -> str:
+        from PySide6.QtWidgets import QInputDialog
+
+        nombre, ok = QInputDialog.getText(self, "Nacio tu bebe", f"Es {'un nene' if sexo == 'nene' else 'una nena'}! "
+                                          "Como se va a llamar?", text=sugerido)
+        return nombre.strip() if ok else ""
+
+    def ir_al_hospital(self):
+        perfil = self.perfil
+        if perfil is None:
+            return
+        e = get_economia(perfil.id)
+        hoy = self._hoy(e)
+        try:
+            estado, e, suceso = amor.parto(get_estado_amor(perfil.id), e, hoy, self._nombre_del_bebe)
+        except (ValueError, TypeError) as exc:
+            QMessageBox.information(self, "Todavia no", str(exc))
+            return
+        self._resultado_amor(suceso, self._aplicar_amor(perfil, estado, e, suceso))
 
     def _aplicar_amor(self, perfil, estado: dict, e: dict, suceso) -> int:
         set_estado_amor(perfil.id, estado)
@@ -969,7 +1043,7 @@ class PaginaVida(QWidget):
             from roleplay.servicios import instagram
 
             texto = self._texto_del_post(instagram.post_con_pareja(perfil, estado["pareja"]["nombre"],
-                                                                    boda=accion.solo_casados))
+                                                                    boda=accion.solo_casados, familia=accion.con_hijos))
             if texto is None:
                 return
         try:

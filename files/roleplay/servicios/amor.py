@@ -460,6 +460,7 @@ class Accion:
     seguidores: float  # veces la escala de la hinchada (x3 con una pareja famosa)
     publica: bool = False  # se publica en redes: con un romance secreto no se puede
     solo_casados: bool = False  # y una sola vez (la foto de la boda)
+    con_hijos: bool = False  # la foto en familia
 
 
 ACCIONES = {
@@ -473,6 +474,9 @@ ACCIONES = {
                    "subio una foto con {pareja} y las redes explotaron", 5, 0.0, 2.5, publica=True),
     "foto_boda": Accion("foto_boda", "Subir la boda a Instagram", "Las fotos de la boda con {pareja}",
                         "subio las fotos de su boda con {pareja}", 5, 0.0, 4.0, publica=True, solo_casados=True),
+    "foto_familia": Accion("foto_familia", "Foto en familia", "En familia, con {pareja}",
+                           "subio una foto en familia con {pareja} y los chicos", 4, 0.0, 3.0, publica=True,
+                           con_hijos=True),
 }
 PAREJA_ACTIVA = ("pareja", "secreto", "comprometido", "casado")
 
@@ -497,6 +501,8 @@ def puede_interactuar(estado: Optional[dict], accion_id: str, hoy: date) -> tupl
     if accion.publica and estado["estado"] == "secreto":
         return False, "Es un romance secreto: para publicar juntos, primero hacelo oficial."
     ultima = (estado.get("interacciones") or {}).get(accion_id)
+    if accion.con_hijos and not hijos(estado):
+        return False, "Todavia no tienen hijos."
     if accion.solo_casados:
         if estado["estado"] != "casado":
             return False, "Primero, la boda."
@@ -592,6 +598,142 @@ def terminar(estado: dict, e: dict, hoy: date) -> tuple[dict, dict, Suceso]:
     estado.update(estado="soltero", pareja=None, decision=None)
     _cobrar(e, suceso)
     _anotar(estado, suceso, {"fin": True})
+    return estado, e, suceso
+
+
+# ---- armar una familia ----
+
+HIJOS_DESDE_RELACION = 50  # para hablar del tema
+HIJOS_VOLVER_A_HABLAR_DIAS = 120  # despues de un "todavia no"
+HIJOS_DESPUES_DE_UNO_DIAS = 180  # para pensar en otro
+EMBARAZO_DIAS = 270
+GEMELOS = 0.03
+COSTO_PARTO_SEMANAS = 3.0
+# la chance de que diga que no: (todavia no, nunca). Una famosa piensa mas en su carrera
+NO_FAMOSA = (0.20, 0.07)
+NO_PAREJA = (0.08, 0.04)
+NOMBRES_BEBE = {
+    "nene": ["Mateo", "Santiago", "Benjamin", "Thiago", "Lucas", "Joaquin", "Tomas", "Agustin", "Bruno", "Gael",
+             "Lorenzo", "Facundo", "Vicente", "Maximo", "Leon"],
+    "nena": ["Emma", "Isabella", "Olivia", "Sofia", "Mia", "Julieta", "Florencia", "Agustina", "Amanda", "Josefa",
+             "Alma", "Antonia", "Elena", "Paz", "Luz"],
+}
+
+
+def hijos(estado: Optional[dict]) -> list[dict]:
+    return list((estado or {}).get("hijos") or [])
+
+
+def edad(hijo: dict, hoy: date) -> int:
+    return max(0, _dias_desde(hijo.get("nacimiento", ""), hoy) // 365)
+
+
+def chance_de_no(estado: dict) -> tuple[float, float]:
+    """(todavia no, nunca): con una famosa es mas probable que no quiera todavia por su carrera."""
+    pareja = estado.get("pareja") or {}
+    todavia, nunca = NO_PAREJA if pareja.get("real") else NO_FAMOSA
+    if pareja.get("relacion", 50) < 65:
+        todavia += 0.10  # todavia no esta segura de la relacion
+    return todavia, nunca
+
+
+def puede_hablar_de_hijos(estado: Optional[dict], hoy: date) -> tuple[bool, str]:
+    estado = estado or {}
+    pareja = estado.get("pareja") or {}
+    if estado.get("estado") not in ("pareja", "comprometido", "casado") or not pareja:
+        return False, "Para armar una familia tienen que estar en pareja (y no en secreto)."
+    if estado.get("embarazo"):
+        return False, "Ya viene un bebe en camino."
+    if pareja.get("no_quiere_hijos"):
+        return False, f"{pareja['nombre']} no quiere tener hijos."
+    if pareja.get("relacion", 0) < HIJOS_DESDE_RELACION:
+        return False, f"La relacion tiene que estar en {HIJOS_DESDE_RELACION} o mas."
+    if _sin_espera():
+        return True, ""
+    hablado = pareja.get("hijos_hablado")
+    if hablado and _dias_desde(hablado, hoy) < HIJOS_VOLVER_A_HABLAR_DIAS:
+        return False, "Ya lo hablaron hace poco: dale tiempo."
+    ultimo = max((h.get("nacimiento", "") for h in hijos(estado)), default="")
+    if ultimo and _dias_desde(ultimo, hoy) < HIJOS_DESPUES_DE_UNO_DIAS:
+        return False, "El bebe es muy chico todavia."
+    return True, ""
+
+
+def hablar_de_hijos(estado: dict, e: dict, hoy: date,
+                    dado: Optional[random.Random] = None) -> tuple[dict, dict, Suceso]:
+    """Proponerle armar una familia. Casi siempre dice que si; a veces todavia no (su carrera) o nunca.
+    Es una charla privada: no sale en la prensa (el nacimiento si)."""
+    ok, motivo = puede_hablar_de_hijos(estado, hoy)
+    if not ok:
+        raise ValueError(motivo)
+    estado, e = copy.deepcopy(estado), copy.deepcopy(e or {})
+    pareja = estado["pareja"]
+    nombre = pareja["nombre"]
+    dado = dado or random.Random(f"hijos:{nombre}:{hoy.isoformat()}:{len(hijos(estado))}")
+    todavia, nunca = chance_de_no(estado)
+    tirada = dado.random()
+    pareja["hijos_hablado"] = hoy.isoformat()
+    if tirada < nunca:
+        pareja["no_quiere_hijos"] = True
+        suceso = Suceso(f"{nombre} no quiere tener hijos", f"hablo con {nombre} de armar una familia y ella no quiere "
+                        "tener hijos", "neutral", 0, -5, fecha=hoy, clave="amor:hijos:nunca", privado=True)
+        respuesta = "nunca"
+    elif tirada < nunca + todavia:
+        motivo = "por su carrera" if not pareja.get("real") else "por ahora"
+        suceso = Suceso(f"{nombre} todavia no quiere hijos", f"hablo con {nombre} de armar una familia y ella prefiere "
+                        f"esperar {motivo}", "neutral", 0, -2, fecha=hoy, clave="amor:hijos:todavia", privado=True)
+        respuesta = "todavia"
+    else:
+        estado["embarazo"] = {"desde": hoy.isoformat(), "con": nombre, "real": bool(pareja.get("real")),
+                              "gemelos": dado.random() < GEMELOS}
+        suceso = Suceso(f"Viene un bebe con {nombre}", f"va a ser padre con {nombre}", "positiva", 0, 8, fecha=hoy,
+                        clave="amor:hijos:si", privado=True)
+        respuesta = "si"
+    pareja["relacion"] = max(0, min(100, pareja.get("relacion", 50) + suceso.relacion))
+    _anotar(estado, suceso, {"hijos": respuesta})
+    return estado, e, suceso
+
+
+def puede_nacer(estado: Optional[dict], hoy: date) -> bool:
+    embarazo = (estado or {}).get("embarazo")
+    return bool(embarazo) and (_sin_espera() or _dias_desde(embarazo["desde"], hoy) >= EMBARAZO_DIAS)
+
+
+def dias_para_el_parto(estado: Optional[dict], hoy: date) -> int:
+    embarazo = (estado or {}).get("embarazo") or {}
+    return max(0, EMBARAZO_DIAS - _dias_desde(embarazo.get("desde", ""), hoy)) if embarazo else 0
+
+
+def parto(estado: dict, e: dict, hoy: date, nombre_para=None,
+          dado: Optional[random.Random] = None) -> tuple[dict, dict, Suceso]:
+    """Nace el bebe (o los gemelos). `nombre_para(sexo, sugerido) -> str`: el nombre que elige el usuario."""
+    if not puede_nacer(estado, hoy):
+        raise ValueError("Todavia no es el momento.")
+    estado, e = copy.deepcopy(estado), copy.deepcopy(e or {})
+    embarazo = estado.pop("embarazo")
+    dado = dado or random.Random(f"parto:{embarazo['desde']}:{embarazo['con']}")
+    nuevos = []
+    for _ in range(2 if embarazo.get("gemelos") else 1):
+        sexo = dado.choice(("nene", "nena"))
+        usados = {h["nombre"] for h in hijos(estado) + nuevos}
+        sugerido = dado.choice([n for n in NOMBRES_BEBE[sexo] if n not in usados] or NOMBRES_BEBE[sexo])
+        nombre = (nombre_para(sexo, sugerido) if nombre_para else "") or sugerido
+        nuevos.append({"nombre": nombre.strip()[:30] or sugerido, "sexo": sexo, "nacimiento": hoy.isoformat(),
+                       "con": embarazo["con"]})
+    estado["hijos"] = hijos(estado) + nuevos
+    quien = " y ".join(h["nombre"] for h in nuevos)
+    detalle = (f"fue padre de mellizos: nacieron {quien}, sus hijos con {embarazo['con']}" if len(nuevos) > 1 else
+               f"fue padre: nacio {quien}, su {'hijo' if nuevos[0]['sexo'] == 'nene' else 'hija'} con {embarazo['con']}")
+    suceso = Suceso(f"Nacio {quien}", detalle, "positiva", 3.0 if not embarazo.get("real") else 1.5, 10,
+                    -round(COSTO_PARTO_SEMANAS * e.get("sueldo", 0) * economia.NETO), fecha=hoy,
+                    clave="amor:nacimiento")
+    pareja = estado.get("pareja")
+    if pareja and pareja.get("nombre") == embarazo["con"]:
+        pareja["relacion"] = max(0, min(100, pareja.get("relacion", 50) + suceso.relacion))
+    else:
+        suceso.relacion = 0
+    _cobrar(e, suceso)
+    _anotar(estado, suceso, {"nacimiento": quien})
     return estado, e, suceso
 
 

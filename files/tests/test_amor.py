@@ -148,6 +148,53 @@ class TestConTuPareja(ayuda.PruebaConBase):
             amor.terminar(estado, self.e, HOY)
 
 
+class TestFamilia(ayuda.PruebaConBase):
+    """Armar una familia: si, todavia no (su carrera) o nunca; el parto y los hijos."""
+
+    def setUp(self):
+        super().setUp()
+        self.estado = amor.inicial(perfil(), HOY)
+        self.e = plata()
+
+    def test_dice_que_si_y_nace_el_bebe(self):
+        estado, e, suceso = amor.hablar_de_hijos(self.estado, self.e, HOY, dado=_dado(0.99, 0.5))
+        self.assertTrue(suceso.privado)  # la charla no es noticia
+        self.assertTrue(estado["embarazo"])
+        self.assertFalse(amor.puede_hablar_de_hijos(estado, HOY)[0])  # ya viene uno
+        self.assertFalse(amor.puede_nacer(estado, HOY + timedelta(days=100)))
+        dia = HOY + timedelta(days=amor.EMBARAZO_DIAS)
+        estado, e, suceso = amor.parto(estado, e, dia, lambda sexo, sugerido: "Ramon")
+        self.assertEqual([h["nombre"] for h in amor.hijos(estado)], ["Ramon"])
+        self.assertNotIn("embarazo", estado)
+        self.assertIn("Ramon", suceso.detalle)
+        self.assertFalse(suceso.privado)  # el nacimiento si sale
+        self.assertLess(suceso.dinero, 0)
+        self.assertTrue(amor.puede_interactuar(estado, "foto_familia", dia)[0])
+
+    def test_todavia_no_o_nunca(self):
+        estado, _, suceso = amor.hablar_de_hijos(self.estado, self.e, HOY, dado=_dado(amor.chance_de_no(self.estado)[1] + 0.01))
+        self.assertNotIn("embarazo", estado)
+        self.assertEqual(suceso.clave, "amor:hijos:todavia")
+        self.assertFalse(amor.puede_hablar_de_hijos(estado, HOY + timedelta(days=30))[0])
+        self.assertTrue(amor.puede_hablar_de_hijos(estado, HOY + timedelta(days=amor.HIJOS_VOLVER_A_HABLAR_DIAS))[0])
+        estado, _, suceso = amor.hablar_de_hijos(self.estado, self.e, HOY, dado=_dado(0.0))
+        self.assertEqual(suceso.clave, "amor:hijos:nunca")
+        self.assertFalse(amor.puede_hablar_de_hijos(estado, HOY + timedelta(days=999))[0])  # nunca es nunca
+
+    def test_una_famosa_piensa_mas_en_su_carrera(self):
+        famosa = {**self.estado, "pareja": {**self.estado["pareja"], "real": False}}
+        self.assertGreater(sum(amor.chance_de_no(famosa)), sum(amor.chance_de_no(self.estado)))
+        self.assertLess(sum(amor.chance_de_no(famosa)), 0.5)  # no muy alta
+
+    def test_los_hijos_quedan_aunque_terminen(self):
+        estado, e, _ = amor.hablar_de_hijos(self.estado, self.e, HOY, dado=_dado(0.99, 0.0))  # mellizos
+        estado, e, _ = amor.terminar(estado, e, HOY)
+        estado, _, suceso = amor.parto(estado, e, HOY + timedelta(days=amor.EMBARAZO_DIAS))
+        self.assertEqual(len(amor.hijos(estado)), 2)
+        self.assertIn("mellizos", suceso.detalle)
+        self.assertEqual(estado["estado"], "soltero")
+
+
 class TestConUnaFamosa(ayuda.PruebaConBase):
     def test_lo_ven_con_una_famosa_inventada_y_lo_hace_oficial(self):
         estado = amor.inicial(perfil("celebridad", ""), HOY)
@@ -254,6 +301,23 @@ class TestTarjetaEnVida(ayuda.PruebaDeInterfaz):
             ayuda.esperar_tareas()
         self.assertEqual(database.get_estado_amor(self.pid)["estado"], "soltero")
         self.assertIn("<b>Soltero</b>", self.pagina.amor_label.text())
+
+    def test_armar_una_familia_y_el_parto(self):
+        from roleplay.ui.vida import PaginaVida
+
+        estado = database.get_estado_amor(self.pid)
+        estado["embarazo"] = {"desde": "2020-01-01", "con": "Denisse", "real": True, "gemelos": False}
+        database.set_estado_amor(self.pid, estado)
+        self.pagina.actualizar()
+        ayuda.esperar_tareas()
+        with mock.patch.object(PaginaVida, "_nombre_del_bebe", return_value="Ramon"):
+            self.pagina.ir_al_hospital()
+            ayuda.esperar_tareas()
+        self.assertEqual(amor.hijos(database.get_estado_amor(self.pid))[0]["nombre"], "Ramon")
+        self.assertEqual(database.load_noticias_prensa(self.pid)[0].hitos, ["amor:nacimiento"])
+        botones = {b.property("paso_amor") for b in self.pagina.findChildren(type(self.pagina.oficializar_btn))
+                   if b.isVisibleTo(self.pagina)}
+        self.assertIn("hijos", botones)
 
 
 # ---- parejas del catalogo, DMs y romance secreto (datos de prueba: tests/datos_ecosistema.py) ----

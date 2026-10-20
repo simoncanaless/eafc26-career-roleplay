@@ -167,14 +167,15 @@ def post_de_compra(perfil: PlayerProfile, objeto: str, tienda: str = "") -> str:
 FACTOR_PAREJA = 2.0  # un post con la pareja mueve mas que uno comun (x2 mas con una famosa)
 
 
-def post_con_pareja(perfil: PlayerProfile, pareja: str, boda: bool = False) -> str:
+def post_con_pareja(perfil: PlayerProfile, pareja: str, boda: bool = False, familia: bool = False) -> str:
     """El texto del post con su pareja (o de la boda), con su voz. Queda editable."""
     from roleplay.servicios.hinchada import datos_de_redes
 
     datos = {**datos_de_redes(perfil), "pareja": pareja.strip()}
     personalidad = perfil.personalidad if perfil.personalidad in ("reservado", "carismatico", "polemico", "humilde") else "reservado"
     with narrador(perfil.id, "redes") as escritor:
-        return escritor.decir(f"post_{'boda' if boda else 'pareja'}_{personalidad}", **datos)
+        tipo = "boda" if boda else "familia" if familia else "pareja"
+        return escritor.decir(f"post_{tipo}_{personalidad}", **datos)
 
 
 def reaccion_post_con_pareja(perfil: PlayerProfile, texto: str, reputacion: int, seguidores: int,
