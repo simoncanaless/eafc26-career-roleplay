@@ -29,7 +29,9 @@ class TestEtapas(unittest.TestCase):
         self.assertEqual(arsenal.titulos, [f.LIGA])
         self.assertEqual(united.titulos, [])
         self.assertEqual(arsenal.nota, 8.8)
-        self.assertEqual(arsenal.premios, {"equipo_de_la_semana": 21, "jugador_del_mes": 7})  # el tipo 2, sin confirmar
+        # el juego guarda uno menos (en la partida: 21 y 7); el tipo 2, sin confirmar, no se muestra
+        self.assertEqual(arsenal.premios, {"equipo_de_la_semana": 22, "jugador_del_mes": 8})
+        self.assertEqual((arsenal.figura, united.figura), (34, 29))
 
     def test_sin_las_tablas_no_hay_etapas(self):
         self.assertEqual(construir(f.construir_bytes()).etapas, [])
@@ -86,7 +88,7 @@ class TestJugadorDelMesDelJuego(ayuda.PruebaConBase):
     def test_la_primera_vez_solo_cuenta_desde_ahi(self):
         hitos, estado = partida_real.premios_del_juego(carrera())
         self.assertEqual(hitos, [])
-        self.assertEqual(estado, {"etapa": 2, "equipo_de_la_semana": 15, "jugador_del_mes": 5})
+        self.assertEqual(estado, {"etapa": 2, "equipo_de_la_semana": 16, "jugador_del_mes": 6})
 
     def test_si_el_contador_sube_lo_gano(self):
         _, estado = partida_real.premios_del_juego(carrera())
@@ -95,12 +97,12 @@ class TestJugadorDelMesDelJuego(ayuda.PruebaConBase):
         self.assertEqual(hitos[0]["liga"], "Premier League")
 
     def test_en_la_prensa_y_la_vitrina_con_el_nombre_de_su_liga(self):
-        estado = {"premios_juego": {"etapa": 2, "jugador_del_mes": 5, "equipo_de_la_semana": 15}}
+        estado = {"premios_juego": {"etapa": 2, "jugador_del_mes": 6, "equipo_de_la_semana": 16}}
         resultado = partida_real.revisar_prensa_con_partida(self.perfil, [], estado, carrera(jugador_del_mes=6))
         vitrina = resultado["estado_prensa"]["vitrina"]
         self.assertEqual([p["premio"] for p in vitrina], ["Jugador del Mes de la Premier League"])
         self.assertEqual(vitrina[0]["tipo"], "jugador_del_mes")
-        self.assertEqual(resultado["estado_prensa"]["premios_juego"]["jugador_del_mes"], 6)
+        self.assertEqual(resultado["estado_prensa"]["premios_juego"]["jugador_del_mes"], 7)
 
 
 class TestPrimasConLaVitrina(unittest.TestCase):
@@ -133,7 +135,8 @@ class TestResumen(ayuda.PruebaDeInterfaz):
             pagina._mostrar_carrera(partida_real.carrera_completa(carrera()))
         texto = pagina.carrera_label.text()
         self.assertIn("264 goles", texto)
-        self.assertIn("Equipo de la semana: <b>36</b>", texto)
+        self.assertIn("Equipo de la semana: <b>38</b>", texto)  # 22 + 16, como el juego
+        self.assertIn("Futbolista del partido: <b>63</b>", texto)
         self.assertFalse(pagina.carrera_completa.isHidden())
 
 

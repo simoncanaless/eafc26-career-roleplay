@@ -460,6 +460,7 @@ class PaginaResumen(QWidget):
         total = {k: sum(e[k] for e in etapas) for k in ("partidos", "ganados", "empatados", "perdidos", "goles",
                                                          "asistencias", "amarillas")}
         semana = sum(e["premios"].get("equipo_de_la_semana", 0) for e in etapas)
+        figura = sum(e.get("figura", 0) for e in etapas)
         mes = sum(e["premios"].get("jugador_del_mes", 0) for e in etapas)
         titulos = [t for e in etapas for t in e["titulos"]]
         lineas = [
@@ -467,7 +468,8 @@ class PaginaResumen(QWidget):
             f"({total['ganados']}G {total['empatados']}E {total['perdidos']}P) · <b>{total['goles']} goles</b> · "
             f"{total['asistencias']} asistencias · {total['amarillas']} amarillas",
             f"Titulos: <b>{len(titulos)}</b>" + (f" ({esc(', '.join(titulos))})" if titulos else "")
-            + f" · Equipo de la semana: <b>{semana}</b> · Jugador del mes: <b>{mes}</b>",
+            + f" · Futbolista del partido: <b>{figura}</b> · Equipo de la semana: <b>{semana}</b> · "
+              f"Jugador del mes: <b>{mes}</b>",
         ]
         for e in etapas:
             nota = f" · nota {e['nota']:.1f}" if e.get("nota") else ""
@@ -476,7 +478,8 @@ class PaginaResumen(QWidget):
                 f"<span style='color:{suave}'> ({esc(e['liga'])})</span>: {e['partidos']} PJ, {e['goles']} goles, "
                 f"{e['asistencias']} asist.{nota}"
                 + (f" · <span style='color:{estilos.MIXTO}'>★ {esc(', '.join(e['titulos']))}</span>" if e["titulos"] else "")
-                + f"<span style='color:{suave}'> · equipo de la semana {e['premios'].get('equipo_de_la_semana', 0)}, "
+                + f"<span style='color:{suave}'> · figura {e.get('figura', 0)}, "
+                  f"equipo de la semana {e['premios'].get('equipo_de_la_semana', 0)}, "
                   f"jugador del mes {e['premios'].get('jugador_del_mes', 0)}</span>"
             )
         self.carrera_label.setText("<br>".join(lineas))

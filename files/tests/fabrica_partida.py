@@ -171,13 +171,13 @@ def construir_bytes(
                                      [{"HdeP": "Simon", "rREd": "Canales", "XGBd": LIGA, "cmGX": SUELDO}])}
     if etapas:  # la carrera entera: primero el Arsenal (salio campeon de la liga), despues el Man Utd
         campos = [("vojK", 3, 4), ("mCXg", 3, 18), ("aQrQ", 3, 12), ("nVWT", 3, 12), ("zjtP", 3, 12), ("EBvI", 3, 12),
-                  ("BsgO", 3, 12), ("MERA", 3, 12), ("xEsZ", 3, 12), ("isoi", 3, 8), ("cmGX", 3, 31), ("SbfX", 3, 31),
+                  ("BsgO", 3, 12), ("MERA", 3, 12), ("xEsZ", 3, 12), ("isoi", 3, 8), ("OcFS", 3, 12), ("cmGX", 3, 31), ("SbfX", 3, 31),
                   ("qnUa", 3, 8)]
         tablas_carrera["YMgA"] = _tabla(campos, [  # club y liga corridos en 1, como en el juego
             {"vojK": 1, "mCXg": ARSENAL + 1, "aQrQ": 14, "nVWT": 42, "zjtP": 33, "EBvI": 7, "BsgO": 2, "MERA": 152,
-             "xEsZ": 35, "isoi": 0, "cmGX": 4100, "SbfX": 7_500_000, "qnUa": 88},
+             "xEsZ": 35, "isoi": 0, "OcFS": 34, "cmGX": 4100, "SbfX": 7_500_000, "qnUa": 88},
             {"vojK": 2, "mCXg": MAN_UTD + 1, "aQrQ": 14, "nVWT": 36, "zjtP": 30, "EBvI": 1, "BsgO": 5, "MERA": 112,
-             "xEsZ": 26, "isoi": 3, "cmGX": SUELDO, "SbfX": 44_000_000, "qnUa": 87}])
+             "xEsZ": 26, "isoi": 3, "OcFS": 29, "cmGX": SUELDO, "SbfX": 44_000_000, "qnUa": 87}])
         tablas_carrera["NgwF"] = _tabla([("vojK", 3, 4), ("mCXg", 3, 18), ("OvfW", 3, 12), ("SDel", 3, 1)], [
             {"vojK": 1, "mCXg": ARSENAL, "OvfW": LIGA, "SDel": 1},
             {"vojK": 2, "mCXg": MAN_UTD, "OvfW": LIGA, "SDel": 0}, {"vojK": 2, "mCXg": MAN_UTD, "OvfW": CHAMPIONS}])

@@ -508,7 +508,7 @@ def carrera_completa(carrera: Carrera) -> list[dict]:
         resultado.append({
             "club": carrera.equipo(e.equipo), "liga": e.liga or "", "partidos": e.partidos, "ganados": e.ganados,
             "empatados": e.empatados, "perdidos": e.perdidos, "goles": e.goles, "asistencias": e.asistencias,
-            "amarillas": e.amarillas, "nota": e.nota, "traspaso": e.traspaso, "sueldo": e.sueldo,
+            "amarillas": e.amarillas, "figura": e.figura, "nota": e.nota, "traspaso": e.traspaso, "sueldo": e.sueldo,
             "titulos": [carrera.nombres_competiciones.get(t) or copas.get(t) or "un titulo" for t in e.titulos],
             "premios": dict(e.premios),
         })

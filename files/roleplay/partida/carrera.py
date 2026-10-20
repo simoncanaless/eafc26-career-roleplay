@@ -36,14 +36,16 @@ T_ETAPAS = "YMgA"
 C_ETAPA, C_ETAPA_CLUB, C_ETAPA_LIGA = "vojK", "mCXg", "aQrQ"  # club + 1, liga (id + 1) + 1
 C_ETAPA_PJ, C_ETAPA_G, C_ETAPA_E, C_ETAPA_P = "nVWT", "zjtP", "EBvI", "BsgO"
 C_ETAPA_GOLES, C_ETAPA_ASIST, C_ETAPA_AMARILLAS = "MERA", "xEsZ", "isoi"
+C_ETAPA_FIGURA = "OcFS"  # futbolista del partido: 34 en el Palermo y 29 en el Man Utd, igual que el juego
 C_ETAPA_SUELDO, C_ETAPA_TRASPASO, C_ETAPA_MEDIA, C_ETAPA_NOTA = "cmGX", "SbfX", "VvuV", "qnUa"  # nota x10
 # competiciones que jugo en cada etapa: `OvfW` la competicion, `SDel` 1 = salio campeon (el titulo del Palermo)
 T_COMPETICIONES_ETAPA, C_CE_COMPETICION, C_CE_CAMPEON = "NgwF", "OvfW", "SDel"
-# premios del juego por etapa: `Bwgx` el tipo, `ytjZ` cuantos. 0 = equipo de la semana (en el Man Utd: 15, las
-# mismas 15 filas suyas de TtHG, que es el equipo de cada semana), 1 = jugador del mes (5 en el Man Utd; la
-# pantalla del juego dice 6 con un guardado posterior). 2-4 sin confirmar: no se muestran
+# premios del juego por etapa: `Bwgx` el tipo, `ytjZ` cuantos MENOS UNO: 0 = equipo de la semana, 1 = jugador del
+# mes. Verificado con las pantallas del juego de Simon (2026-10-20), club por club: Palermo 22 y 8 (la partida
+# dice 21 y 7), Man Utd 16 y 6 (15 y 5). 2-4 sin confirmar: no se muestran
 T_PREMIOS_ETAPA, C_PE_TIPO, C_PE_CANTIDAD = "cPet", "Bwgx", "ytjZ"
 PREMIOS_DEL_JUEGO = {0: "equipo_de_la_semana", 1: "jugador_del_mes"}
+AJUSTE_PREMIOS = 1
 T_USUARIO = "mPrV"  # el jugador de la carrera: mismos campos de nombre
 # su sueldo por semana (el mismo campo en los contratos del plantel, DvsP:
 # correlaciona 0,89 con la media; Bruno Fernandes 87 -> 220.000)
@@ -178,6 +180,7 @@ class Etapa:
     goles: int
     asistencias: int
     amarillas: int
+    figura: int  # futbolista del partido
     sueldo: int
     traspaso: int
     nota: Optional[float]
@@ -522,7 +525,7 @@ def _etapas(tablas: dict, nombres_ligas: dict[int, str]) -> list[Etapa]:
         for f in tablas[T_PREMIOS_ETAPA].registros:
             tipo = PREMIOS_DEL_JUEGO.get(f.get(C_PE_TIPO))
             if tipo:
-                premios[f[C_ETAPA]][tipo] = f.get(C_PE_CANTIDAD) or 0
+                premios[f[C_ETAPA]][tipo] = (f.get(C_PE_CANTIDAD) or 0) + AJUSTE_PREMIOS
     etapas = []
     for f in sorted(tablas[T_ETAPAS].registros, key=lambda f: f[C_ETAPA]):
         orden = f[C_ETAPA]
@@ -533,7 +536,7 @@ def _etapas(tablas: dict, nombres_ligas: dict[int, str]) -> list[Etapa]:
             liga=nombres_ligas.get(f.get(C_ETAPA_LIGA, 0) - 1), partidos=f.get(C_ETAPA_PJ) or 0,
             ganados=f.get(C_ETAPA_G) or 0, empatados=f.get(C_ETAPA_E) or 0, perdidos=f.get(C_ETAPA_P) or 0,
             goles=f.get(C_ETAPA_GOLES) or 0, asistencias=f.get(C_ETAPA_ASIST) or 0,
-            amarillas=f.get(C_ETAPA_AMARILLAS) or 0, sueldo=f.get(C_ETAPA_SUELDO) or 0,
+            amarillas=f.get(C_ETAPA_AMARILLAS) or 0, figura=f.get(C_ETAPA_FIGURA) or 0, sueldo=f.get(C_ETAPA_SUELDO) or 0,
             traspaso=f.get(C_ETAPA_TRASPASO) or 0, nota=nota / 10 if nota else None,
             titulos=[c for c, campeon in jugadas if campeon], competiciones=[c for c, _ in jugadas],
             premios=dict(premios.get(orden, {})),
