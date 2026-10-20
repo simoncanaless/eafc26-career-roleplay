@@ -273,6 +273,9 @@ class MandoOverlay(QObject):
             if accion[0] == "volver":
                 for soltar in self.traductor.soltar_todo():
                     self.raton.hacer(soltar)
+                from roleplay.ui.overlay_completo import anotar
+
+                anotar(f"circulo del mando ({getattr(self.lector, 'nombre', '') or 'mando'})")
                 self.overlay.cerrar()
                 return
             if accion[0] == "seccion":

@@ -116,7 +116,7 @@ class OverlayCompleto(QObject):
         self._esc = QShortcut(QKeySequence(Qt.Key.Key_Escape), ventana)
         self._esc.setContext(Qt.ShortcutContext.WindowShortcut)
         self._esc.setEnabled(False)
-        self._esc.activated.connect(self.cerrar)
+        self._esc.activated.connect(self._on_esc)
         ventana.installEventFilter(self)
 
     def eventFilter(self, objeto, evento):
@@ -134,6 +134,10 @@ class OverlayCompleto(QObject):
         if self.abierto and self._juego and _ventana_al_frente() == self._juego:
             anotar("el juego volvio al frente: se cierra")
             self.cerrar(devolver_foco=False)
+
+    def _on_esc(self):
+        anotar("Esc")
+        self.cerrar()
 
     def _cerrar_sin_devolver(self):
         self.cerrar(devolver_foco=False)

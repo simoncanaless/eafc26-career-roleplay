@@ -77,7 +77,7 @@ from roleplay.ui.ajustes import DialogoAjustes, abrir_juego_o_preguntar
 from roleplay.ui.personaje import CharacterWizard
 from roleplay.ui.atajo import ATAJO_TEXTO, AtajoGlobal
 from roleplay.ui.overlay import SalaFlotante, _poner_al_frente
-from roleplay.ui.overlay_completo import OverlayCompleto, configuracion as configuracion_overlay
+from roleplay.ui.overlay_completo import OverlayCompleto, anotar as anotar_overlay, configuracion as configuracion_overlay
 from roleplay.ui.mando import MandoOverlay
 from roleplay.ui.vigilante import VigilantePartida, mostrar_flotante_sola, preparar_entrevista_sola
 
@@ -772,7 +772,7 @@ class MainMenuWindow(QMainWindow):
         # el overlay completo (como Overwolf): la app entera encima del juego (ui/overlay_completo.py)
         self.overlay = OverlayCompleto(self)
         self.overlay.cambio.connect(self._on_overlay)
-        self.volver_al_juego_btn.clicked.connect(self.overlay.cerrar)
+        self.volver_al_juego_btn.clicked.connect(self._on_volver_al_juego)
         self.mando = MandoOverlay(self, self.overlay)  # el mando de PS5/Xbox con el overlay abierto
         self.atajo = AtajoGlobal(self)
         if self.atajo.registrar():  # overlay completo (o la sala flotante, segun Ajustes)
@@ -810,7 +810,12 @@ class MainMenuWindow(QMainWindow):
 
     # ---- el overlay ----
 
+    def _on_volver_al_juego(self):
+        anotar_overlay("boton VOLVER AL JUEGO")
+        self.overlay.cerrar()
+
     def _on_atajo(self):
+        anotar_overlay("atajo")
         if configuracion_overlay()["modo"] == "sala":
             self.sala_flotante.atajo_presionado()
         else:
@@ -859,6 +864,7 @@ class MainMenuWindow(QMainWindow):
 
     def closeEvent(self, evento):
         if self.overlay.abierto:  # cerrar la ventana en el overlay = volver al juego (la app sigue en la bandeja)
+            anotar_overlay("cerrar la ventana")
             evento.ignore()
             self.overlay.cerrar()
             return
