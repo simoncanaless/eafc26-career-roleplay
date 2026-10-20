@@ -1,4 +1,14 @@
 {
+  "_neg": "Negociacion de las primas del contrato (servicios/contratos.py): lo que dice la directiva y tu representante. {club}",
+  "neg_abre": ["La directiva de {club} te recibe en la oficina. Ponen un papel sobre la mesa: esta es su primera oferta.", "El director deportivo de {club} abre la carpeta: 'Esto es lo que podemos ofrecerte'.", "Reunion en las oficinas de {club}. El presidente saluda, se sienta y deja hablar a los numeros."],
+  "neg_acepta": ["La directiva se mira, asiente y te da la mano: 'Trato hecho'. Solo falta firmar.", "'Es justo', dice el director deportivo. Hay acuerdo: cuando quieras, firmas.", "Despues de un silencio largo, el presidente sonrie: 'Aceptamos'."],
+  "neg_sube": ["La directiva acepta parte de lo que pedis y sube en lo demas, hasta donde puede. Se nota la incomodidad.", "'Podemos acercarnos, pero no tanto', dice el director deportivo, y corrige la oferta.", "Hay un paso hacia vos. Pero el presidente ya mira el reloj."],
+  "neg_ofendida": ["El presidente cierra la carpeta: 'Con esos numeros no podemos seguir hablando'. La oferta queda igual.", "Silencio incomodo. 'Eso esta muy lejos de la realidad del club', te dicen, sin mover un numero.", "La directiva se ofende con el pedido. Tu representante te pide calma."],
+  "neg_rompe": ["La directiva se levanta de la mesa: 'Cuando quieras volver a hablar en serio, sera la temporada que viene'.", "Se terminaron las reuniones. En {club} dicen que no van a seguir negociando por ahora."],
+  "neg_te_vas": ["Te levantas de la mesa. Tu representante junta los papeles: 'Ya volveran a llamar'.", "Te vas de la reunion sin firmar. En {club} no les gusta nada."],
+  "rep_margen": ["Tu representante: 'Aca hay margen, pedi mas'.", "Tu representante: 'En esto pueden subir tranquilo'."],
+  "rep_justo": ["Tu representante: 'Esto esta en el limite de lo que pueden'.", "Tu representante: 'Asi esta bien, no lo estires'."],
+  "rep_pasado": ["Tu representante: 'Te estas pasando, esto los va a molestar'.", "Tu representante: 'Esto no te lo van a dar'."],
   "_que_es": "Backstory del personaje y sus ganchos narrativos (servicios/backstory.py), a partir de las respuestas del asistente. Sin tildes. Sin nombres de personas reales.",
 
   "b_origen_humilde": [

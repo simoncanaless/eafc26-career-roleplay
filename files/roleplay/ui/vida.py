@@ -234,6 +234,19 @@ class PaginaVida(QWidget):
         self.vip.cuerpo.addWidget(self.dm)
         self.vip.hide()
         self.amor.hide()
+        # las primas del contrato con el club (servicios/contratos.py)
+        self.contrato = Tarjeta("Tu contrato: primas")
+        self.contrato_label = QLabel()
+        self.contrato_label.setWordWrap(True)
+        self.contrato.cuerpo.addWidget(self.contrato_label)
+        self.negociar_btn = boton("Negociar con la directiva", primario=True)
+        self.negociar_btn.clicked.connect(self.negociar_contrato)
+        self.balon_btn = boton("Gane el Balon de Oro")
+        self.balon_btn.setToolTip("La partida no lo guarda: si lo ganaste en el juego, anotalo aca (una vez por temporada)")
+        self.balon_btn.clicked.connect(self.anotar_balon_de_oro)
+        self.contrato.cuerpo.addLayout(fila(self.balon_btn, None, self.negociar_btn))
+        self.contrato.hide()
+        contenido.addWidget(self.contrato)
         contenido.addWidget(self.amor)
         contenido.addWidget(self.vip)
 
@@ -329,6 +342,7 @@ class PaginaVida(QWidget):
             self._revisar_eventos(carrera, hoy)
             self._revisar_amor(carrera, hoy)
             self._revisar_patrocinios(hoy)
+            self._cobrar_primas(carrera, hoy)
         self._mostrar()
 
     # ---- dibujo ----
@@ -362,6 +376,7 @@ class PaginaVida(QWidget):
         self.mosaico_gastos.poner(dinero(economia.mantenimiento_semanal(e), moneda))
         self.mosaico_patrimonio.poner(dinero(economia.patrimonio(e), moneda))
         self._mostrar_eventos()
+        self._mostrar_contrato()
         self._mostrar_amor()
         self._mostrar_patrocinios(e)
         self._mostrar_tienda(e)
@@ -711,6 +726,140 @@ class PaginaVida(QWidget):
             etiqueta.setWordWrap(True)
             self.eventos_layout.addWidget(etiqueta)
         self.eventos.setVisible(bool(historial))
+
+    # ---- las primas del contrato ----
+
+    def _club(self) -> str:
+        club_id = ecosistema.club_del_usuario(self._carrera)
+        return self._carrera.equipo(club_id) if self._carrera is not None and club_id is not None else ""
+
+    def _cobrar_primas(self, carrera, hoy):
+        from roleplay.database import get_estado_prensa
+        from roleplay.servicios import contratos
+
+        perfil = self.perfil
+        e, cobros = contratos.cobrar(get_economia(perfil.id), self._club(), hoy,
+                                     ecosistema.goles_de_la_temporada(carrera),
+                                     get_estado_prensa(perfil.id).get("vitrina", []))
+        set_economia(perfil.id, e)
+        if cobros:
+            self.compra_hecha.emit()
+
+    def _noticia(self, perfil, titulo: str, detalle: str, tono: str, veces: float, reputacion: int, clave: str) -> int:
+        """Una noticia de la vida del jugador (el detalle, en tercera persona despues del nombre)."""
+        seguidores = round(_escala(get_seguidores(perfil.id), get_reputacion_actual(perfil.id)) * veces)
+        sumar_reputacion_y_seguidores(perfil.id, reputacion, seguidores, motivo=titulo)
+        ejecutar_en_hilo(
+            eventos.contar, perfil, titulo, f"{perfil.nombre_jugador} {detalle}", tono, seguidores,
+            self._hoy(get_economia(perfil.id)).isoformat(), clave, "contrato",
+            al_completar=self._on_repercusion_amor, al_fallar=self._on_repercusion_error,
+        )
+        return seguidores
+
+    def _mostrar_contrato(self):
+        from roleplay.servicios import contratos
+
+        e = get_economia(self.perfil.id)
+        hoy, club = self._hoy(e), self._club()
+        if hoy is None or not club or not e.get("sueldo"):
+            self.contrato.hide()
+            return
+        moneda = self._moneda()
+        contrato = contratos.vigente(e, club, hoy)
+        if contrato is None:
+            texto = (f"Sin primas acordadas con <b>{esc(club)}</b>. Tu sueldo base es el del juego; las primas por "
+                     "goles, premios, fidelidad e imagen se negocian con la directiva.")
+            if (e.get("negociacion") or {}).get("club") == club and e["negociacion"]["estado"] == "abierta":
+                texto += f" <span style='color:{estilos.ACENTO}'>Tenes una negociacion abierta.</span>"
+        else:
+            filas = [f"<b>{esc(club)}</b> · hasta la temporada {esc(contrato['hasta_temporada'])}"]
+            for c in contratos.CLAUSULAS:
+                valor = contrato["condiciones"].get(c.id, 0)
+                if valor:
+                    filas.append(f"{esc(c.nombre)}: " + esc(contratos.rotulo(c, valor, e["sueldo"], moneda,
+                                                                             contrato.get("meta_goles", 0))))
+            texto = "<br>".join(filas)
+        self.contrato_label.setText(texto)
+        puede, motivo = contratos.puede_negociar(e, club, hoy, self._fama())
+        self.negociar_btn.setEnabled(puede)
+        self.negociar_btn.setToolTip(motivo)
+        self.negociar_btn.setText(("Pedir una mejora" if contrato is not None else "Negociar con la directiva").upper())
+        self.balon_btn.setEnabled(contratos._temporada(hoy) not in e.get("balones_de_oro", []))
+        self.contrato.show()
+
+    def negociar_contrato(self):
+        from roleplay.servicios import contratos
+        from roleplay.ui.contrato import DialogoNegociacion
+
+        perfil = self.perfil
+        e = get_economia(perfil.id)
+        hoy, club = self._hoy(e), self._club()
+        if hoy is None or not club:
+            return
+        ctx = contratos.contexto(self._carrera, perfil.id)
+        negociacion = e.get("negociacion")
+        if not negociacion or negociacion.get("club") != club or negociacion["estado"] != "abierta":
+            negociacion = contratos.abrir(club, ctx["tier"], ctx["fama"], hoy, ctx["posicion"], ctx["carino"],
+                                          ctx["goles"], ctx["partidos"])
+        dialogo = DialogoNegociacion(negociacion, e["sueldo"], self._moneda(), perfil.id, self)
+        dialogo.exec()
+        final, firmado, temporadas = dialogo.negociacion, dialogo.firmado, dialogo.duracion()
+        dialogo.deleteLater()
+        self._cerrar_negociacion(perfil, final, firmado, temporadas, ctx)
+
+    def _cerrar_negociacion(self, perfil, negociacion: dict, firmado: bool, temporadas: int, ctx: dict):
+        from roleplay.servicios import clubes, contratos
+
+        e = get_economia(perfil.id)
+        hoy = self._hoy(e)
+        apellido = (perfil.nombre_jugador.split() or [""])[-1]
+        club = negociacion["club"]
+        if firmado:
+            mejora = (e.get("contrato") or {}).get("club") == club
+            e, cobrado = contratos.firmar(e, negociacion, temporadas, hoy, ctx["fama"], ctx["goles"])
+            if mejora:
+                e["contrato"]["mejora_pedida"] = contratos._temporada(hoy)
+            set_economia(perfil.id, e)
+            self._noticia(perfil, f"{apellido} cerro sus primas con {club}",
+                          f"acordo con {club} las primas de su contrato por {temporadas} temporada"
+                          f"{'s' if temporadas > 1 else ''}: por gol, por premios, de fidelidad y por su imagen",
+                          "positiva", 0.5, 1, "contrato:firma")
+            QMessageBox.information(self, "Firmado", "Firmaste. Cobraste la primera cuota de la prima de firma "
+                                    f"(menos la comision de tu representante): {dinero(cobrado, self._moneda())}.")
+        elif negociacion["estado"] == "rota":
+            e.pop("negociacion", None)
+            e["negociacion_rota"] = {"club": club, "temporada": contratos._temporada(hoy)}
+            set_economia(perfil.id, e)
+            set_estado_clubes(perfil.id, clubes.sumar_carino(get_estado_clubes(perfil.id), -2))
+            self._noticia(perfil, f"Se rompe la negociacion entre {apellido} y {club}",
+                          f"no llego a un acuerdo con la directiva de {club} por las primas de su contrato",
+                          "mixta", 0.3, -1, "contrato:rota")
+        else:
+            e["negociacion"] = negociacion  # la directiva se acuerda de todo
+            set_economia(perfil.id, e)
+        self._mostrar()
+
+    def anotar_balon_de_oro(self):
+        from roleplay.servicios import contratos
+
+        perfil = self.perfil
+        e = get_economia(perfil.id)
+        hoy = self._hoy(e)
+        if hoy is None or not self._confirmar("Balon de Oro", "Ganaste el Balon de Oro en tu partida de FC 26?"):
+            return
+        try:
+            e, prima = contratos.balon_de_oro(e, self._club(), hoy)
+        except ValueError as exc:
+            QMessageBox.information(self, "Ya esta", str(exc))
+            return
+        set_economia(perfil.id, e)
+        self._noticia(perfil, f"{(perfil.nombre_jugador.split() or [''])[-1]}, Balon de Oro",
+                      "gano el Balon de Oro: el premio individual mas grande del futbol", "positiva", 6.0, 6,
+                      "contrato:balon_de_oro")
+        if prima:
+            QMessageBox.information(self, "Balon de Oro", "Tu contrato tenia prima por el Balon de Oro: "
+                                    f"{dinero(prima, self._moneda())}.")
+        self._mostrar()
 
     # ---- vida sentimental ----
 

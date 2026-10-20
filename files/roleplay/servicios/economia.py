@@ -202,13 +202,16 @@ def acreditar(economia: Optional[dict], hoy: date, sueldo: int) -> dict:
     semanas = dias / 7
     ingreso = round(sueldo * NETO * semanas)
     gastos = round(mantenimiento_semanal(e) * semanas)
-    from roleplay.servicios import patrocinios
+    from roleplay.servicios import contratos, patrocinios
 
     marcas = round(patrocinios.ingreso_semanal(e, hoy) * NETO * semanas)
-    e["saldo"] += ingreso + marcas - gastos
+    imagen = round(contratos.ingreso_semanal(e, hoy) * NETO * semanas)
+    e["saldo"] += ingreso + marcas + imagen - gastos
     _movimiento(e, hoy, f"Sueldo de {dias} dias (neto)", ingreso)
     if marcas:
         _movimiento(e, hoy, f"Patrocinios de {dias} dias (neto)", marcas)
+    if imagen:
+        _movimiento(e, hoy, f"Derechos de imagen de {dias} dias (neto)", imagen)
     if gastos:
         _movimiento(e, hoy, "Mantenimiento de lo que tenes", -gastos)
     e["hasta"] = hoy.isoformat()
