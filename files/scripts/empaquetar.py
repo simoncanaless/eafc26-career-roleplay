@@ -50,6 +50,8 @@ def construir() -> Path:
         "--add-data", f"{DATOS}{';'}roleplay/datos",
         # dxcam carga sus procesadores con import_module: el analisis no los ve
         "--collect-submodules", "dxcam",
+        # el mando del overlay: SDL2.dll viene adentro de sdl2dll (ui/mando.py)
+        "--collect-all", "sdl2dll",
         "--exclude-module", "cv2",
         "--exclude-module", "tkinter",
         "--distpath", str(DIST),

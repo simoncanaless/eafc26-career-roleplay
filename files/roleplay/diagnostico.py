@@ -99,6 +99,9 @@ def revisar() -> list[tuple[bool, str]]:
     except ImportError as exc:
         anotar(False, f"Navegador del configurador: no esta ({exc}); se ve el dibujo en lugar de la web de la marca")
 
+    from roleplay.ui.mando import describir_mando
+
+    anotar(True, f"Mando para el overlay: {describir_mando()}")
     return resultados
 
 

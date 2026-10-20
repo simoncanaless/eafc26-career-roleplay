@@ -5,3 +5,6 @@ pydantic>=2.0
 dxcam>=0.0.5; sys_platform == "win32"
 # respuestas por voz (microfono)
 sounddevice>=0.4.6
+# el mando (PS5, PS4, Xbox) en el overlay: SDL, con su DLL
+pysdl2>=0.9.16
+pysdl2-dll>=2.30

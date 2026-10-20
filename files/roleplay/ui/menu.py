@@ -78,6 +78,7 @@ from roleplay.ui.personaje import CharacterWizard
 from roleplay.ui.atajo import ATAJO_TEXTO, AtajoGlobal
 from roleplay.ui.overlay import SalaFlotante, _poner_al_frente
 from roleplay.ui.overlay_completo import OverlayCompleto, configuracion as configuracion_overlay
+from roleplay.ui.mando import MandoOverlay
 from roleplay.ui.vigilante import VigilantePartida, mostrar_flotante_sola, preparar_entrevista_sola
 
 NOTICIAS_EN_RESUMEN = 5
@@ -772,6 +773,7 @@ class MainMenuWindow(QMainWindow):
         self.overlay = OverlayCompleto(self)
         self.overlay.cambio.connect(self._on_overlay)
         self.volver_al_juego_btn.clicked.connect(self.overlay.cerrar)
+        self.mando = MandoOverlay(self, self.overlay)  # el mando de PS5/Xbox con el overlay abierto
         self.atajo = AtajoGlobal(self)
         if self.atajo.registrar():  # overlay completo (o la sala flotante, segun Ajustes)
             self.atajo.presionado.connect(self._on_atajo)
@@ -820,6 +822,10 @@ class MainMenuWindow(QMainWindow):
             if self.sala_flotante.isVisible():
                 self.sala_flotante.hide()  # el overlay ya muestra todo
             self._paginas[self.stack.currentIndex()][2].actualizar()
+
+    def cambiar_seccion(self, paso: int):
+        """L1 / R1 del mando: la seccion anterior o la siguiente del menu."""
+        self._ir_a((self.stack.currentIndex() + paso) % len(self._paginas))
 
     def _ir_a(self, indice: int):
         if indice == self.PAGINA_ENTREVISTAS:

@@ -27,6 +27,7 @@ os.environ["EAFC_ROLEPLAY_BASE"] = os.environ["EAFC_ROLEPLAY_DATOS"]
 os.environ["EAFC_FC26_GUARDADOS"] = tempfile.mkdtemp(prefix="eafc_guardados_")
 # ...y la IA hibrida apagada: las pruebas nunca salen a internet (test_ia.py la prende con mocks)
 os.environ["EAFC_SIN_IA"] = "1"
+os.environ["EAFC_SIN_MANDO"] = "1"  # nunca el mando de verdad (ui/mando.py)
 os.environ["EAFC_SIN_OFERTAS"] = "1"  # la partida de prueba cae en enero (ventana de pases): test_ofertas las prende
 # ...y sin el catalogo de EA del PC (solo local): los nombres dependen de lo que arme cada prueba
 # ...y sin los datos del ecosistema de Simon (famosas, paginas, periodistas, autos de nicho)

@@ -110,7 +110,7 @@ class TestOverlayCompleto(ayuda.PruebaDeInterfaz):
         dialogo = DialogoAjustes()
         dialogo.overlay_modo.setCurrentIndex(1)
         dialogo.overlay_opacidad.setValue(85)
-        self.assertEqual(ajustes.leer()["overlay"], {"modo": "sala", "opacidad": 0.85})
+        self.assertEqual(ajustes.leer()["overlay"], {"modo": "sala", "opacidad": 0.85, "mando": True})
         dialogo.deleteLater()
 
 

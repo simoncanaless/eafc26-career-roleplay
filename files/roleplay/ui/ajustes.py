@@ -167,6 +167,11 @@ class DialogoAjustes(QDialog):
         self.overlay_opacidad.valueChanged.connect(self._on_overlay)
         overlay.cuerpo.addLayout(fila(etiqueta_campo("El atajo abre"), self.overlay_modo, None,
                                       etiqueta_campo("Transparencia"), self.overlay_opacidad))
+        self.overlay_mando = QCheckBox("Usar el mando en el overlay (PS5, PS4 o Xbox): stick = cursor, "
+                                       "X = apretar, circulo = volver al juego, stick derecho = bajar, L1/R1 = secciones")
+        self.overlay_mando.setChecked(ajustes.leer().get("overlay", {}).get("mando", True))
+        self.overlay_mando.toggled.connect(self._on_overlay)
+        overlay.cuerpo.addWidget(self.overlay_mando)
         layout.addWidget(overlay)
 
         motor = Tarjeta("Motor narrativo e IA hibrida")
@@ -275,7 +280,8 @@ class DialogoAjustes(QDialog):
 
     def _on_overlay(self, *_):
         ajustes.guardar(overlay={"modo": self.overlay_modo.currentData(),
-                                 "opacidad": self.overlay_opacidad.value() / 100})
+                                 "opacidad": self.overlay_opacidad.value() / 100,
+                                 "mando": self.overlay_mando.isChecked()})
 
     def _on_en_vivo(self, *_):
         ajustes.guardar(en_vivo={
