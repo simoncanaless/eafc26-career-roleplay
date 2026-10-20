@@ -10,10 +10,11 @@ Sale en dist\\:
     dist\\EAFC Roleplay (amigos).zip     lo que se comparte
 
 Lo que NO va en el paquete: tu career_roleplay.db, tus ajustes ni las fotos
-de tu garage. La app no usa IA ni pide ninguna clave: cada amigo la abre y
-listo, y sus datos quedan en su %APPDATA%\\EAFC26 Roleplay (ver
-roleplay/config.py). Lo que SI va: roleplay/datos (los textos del motor
-narrativo y las bases de nombres).
+de tu garage, ni tus claves de IA (la IA es opcional: cada amigo pone la suya
+si quiere). Cada amigo la abre y listo, y sus datos quedan en su
+%APPDATA%\\EAFC26 Roleplay (ver roleplay/config.py). Lo que SI va:
+roleplay/datos (los textos del motor narrativo, las bases de nombres, el
+catalogo de EA y los datos del ecosistema con las fotos de los autos).
 """
 
 import shutil
@@ -29,7 +30,7 @@ TRABAJO = RAIZ / "build"
 ZIP = DIST / f"{NOMBRE} (amigos).zip"
 ICONOS = RAIZ / "roleplay" / "ui" / "iconos"
 DATOS = RAIZ / "roleplay" / "datos"  # corpus del motor narrativo y bases de nombres (servicios/narrador.py)
-NO_VA = (".env", "career_roleplay.db", "ajustes.json", "errores.log")
+NO_VA = (".env", "career_roleplay.db", "ajustes.json", "errores.log", "carreras.json")
 # El navegador del configurador (QtWebEngine) trae ~125 MB que no se usan:
 # los recursos de depuracion, las herramientas de desarrollador y los
 # idiomas de Chromium (quedan ingles y espanol). Probado: sin esto la web
@@ -69,6 +70,10 @@ def construir() -> Path:
     faltan = [r.name for r in DATOS.glob("*.json") if not (carpeta / "_internal" / "roleplay" / "datos" / r.name).exists()]
     if faltan:  # sin los corpus, la app no tendria que decir
         raise SystemExit(f"Faltan los datos del motor narrativo en el paquete: {faltan}")
+    if (DATOS / "img_autos").exists() and not any((carpeta / "_internal" / "roleplay" / "datos" / "img_autos").glob("*")):
+        raise SystemExit("Faltan las fotos de los autos (roleplay/datos/img_autos) en el paquete")
+    if not list(carpeta.rglob("qtbase_es.qm")):  # los botones de los pop-ups en espanol (ui/estilos.py)
+        print("OJO: no va la traduccion qtbase_es.qm: los botones de los pop-ups saldrian en ingles")
     return carpeta
 
 

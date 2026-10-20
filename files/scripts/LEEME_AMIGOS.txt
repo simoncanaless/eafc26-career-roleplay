@@ -1,17 +1,23 @@
 EAFC 26 ROLEPLAY
 ================
 
-Una capa de roleplay para el Modo Carrera Jugador de EA FC 26: tu jugador
-con historia, entrevistas despues de cada partido (escritas o por voz),
-prensa que reacciona a tus rachas e Instagram con seguidores.
+Una capa de roleplay para el Modo Carrera Jugador de EA FC 26: tu jugador con
+historia, conferencias de prensa antes y despues de cada partido (escritas o
+por voz), prensa que escribe sobre lo que pasa de verdad en tu partida,
+Instagram con hinchas y famosos, plata, marcas, contratos, pareja y familia.
 
 NO MODIFICA EL JUEGO. Corre al lado, como Discord u OBS: lee tu partida
 guardada (solo la lee), no toca archivos ni memoria de FC 26. Podes seguir
 jugando online igual.
 
-NO USA IA NI PIDE CLAVES: los textos (preguntas, prensa, comentarios) los
-arma la app sola, al instante y sin internet. Solo la web de las marcas en
-Autos necesita conexion.
+
+QUE NECESITAS
+-------------
+- Windows 10 u 11.
+- EA FC 26 en la PC (Steam, EA app o Epic) jugando CARRERA JUGADOR: la app lee
+  tu partida de la PC. Si jugas en consola, la partida queda en la consola: la
+  app funciona igual, pero los numeros de cada partido los escribis a mano.
+- Internet solo para la IA (opcional) y para las webs de marcas y tiendas.
 
 
 INSTALAR
@@ -23,56 +29,70 @@ INSTALAR
    firmado: "Mas informacion" > "Ejecutar de todas formas". Algunos antivirus
    desconfian de los programas hechos en Python; si te lo borra, agregalo
    como excepcion (o pregunta).
-3. En AJUSTES > "Crear los dos iconos" te aparecen en el escritorio:
+3. Crea tu personaje (el quiz de 8 pasos): nombre, personalidad, historia.
+4. En AJUSTES > "Crear los dos iconos" te aparecen en el escritorio:
      - EA FC 26              el juego normal
      - EA FC 26 + Roleplay   el mismo juego, y ademas esta app
+5. En FC 26 deja el AUTOGUARDADO activado y pone la pantalla en "Ventana sin
+   bordes" (para que el overlay se vea encima del juego).
+
+La app encuentra sola tu partida (la mas reciente de Carrera Jugador). Si
+tenes varias, en AJUSTES > Partida elegis cual.
 
 
-SI JUGAS CARRERA JUGADOR
-------------------------
-La app lee tu partida guardada de FC 26 (solo la lee, no la cambia): tu ultimo
-partido se carga solo en la Sala de prensa, la prensa escribe sobre lo que paso de
-verdad (resultados, quien hizo los goles), el Resumen muestra tu temporada real y
-TEMPORADA la tabla, los goleadores y tus proximos partidos de cada competicion.
+IA (OPCIONAL, GRATIS)
+---------------------
+Sin IA todo funciona: los textos los arma la app sola, al instante y sin
+internet. Con IA, las preguntas, la prensa y los comentarios contestan a lo
+que vos escribiste. Para activarla:
+1. Crea una clave gratis en https://console.groq.com/keys (con tu cuenta).
+2. AJUSTES > "Motor narrativo e IA hibrida" > pegala en Groq > "Probar IA".
+Tu clave es tuya: no la compartas con nadie.
 
 
 JUGAR
 -----
-- Abri "EA FC 26 + Roleplay". La app se queda en la Sala de prensa.
-- Al terminar un partido (y que el juego guarde): "Cargar de mi partida",
-  "Generar entrevista" y responde, escribiendo o por voz. Tres periodistas
-  (uno tactico, una de la hinchada y uno picante) se acuerdan de tus partidos
-  y de lo que dijiste antes. Si no jugas Carrera Jugador, escribi los numeros
-  del partido a mano.
+- Abri "EA FC 26 + Roleplay". Mientras jugas, la app mira tu partida: al
+  terminar un partido te avisa y deja la conferencia lista.
+- OVERLAY: Ctrl+Shift+F12 abre la app entera encima del juego (como
+  Overwolf). La usas, y con Ctrl+Shift+F12 o Esc volves al juego.
+- SALA DE PRENSA: despues del partido, o "Previa del proximo" antes de jugar.
+  Tres periodistas preguntan con los datos reales (la tabla, tus goles, tus
+  premios, tus marcas, tu vida) y se acuerdan de lo que dijiste antes. Responde
+  escribiendo o por voz.
 - La voz usa el reconocimiento de voz de Windows en espanol (sin internet).
   Si no lo tenes: Configuracion > Hora e idioma > Idioma y region > Espanol >
   Opciones > Voz. Sin eso, escribi las respuestas.
-- En VIDA cobras tu sueldo real y te compras lo que quieras (o donas):
-  la prensa y tus hinchas reaccionan. En Autos configuras y pedis tu auto
-  (Ferrari, Porsche, Lamborghini...) y llega unos dias despues en el juego.
-  Al configurar se abre la web oficial de la marca adentro de la app (hace
-  falta internet): arma el auto ahi y apreta "Capturar vista" para tu garage (o se saca sola al PEDIR).
-- En el RESUMEN esta "Tu hinchada": el carino de los hinchas de tu club y,
-  cuando la historia lo pide, una decision que tomas vos (te avisa la bandeja).
-- En VIDA tambien esta tu vida sentimental: tu pareja, los rumores con una
-  famosa (inventada) y decisiones como proponer casamiento.
-- Con los dias del juego te pasan cosas (una multa, una gripe, una campana
-  publicitaria...): mira "Lo que te paso" en VIDA. Algunas traen un reto
-  para el proximo partido, como arrancar en el banco. Cumplirlo es cosa tuya.
-- Deja el AUTOGUARDADO de FC 26 activado: con cada guardado la prensa y tu
-  Instagram se mueven solos (tambien al simular dias sin jugar).
-- Antes de un partido: en la Sala de prensa, "Previa del proximo" para la
-  conferencia previa (rival, tabla, rachas).
-- Ctrl+Shift+F12 abre la SALA FLOTANTE encima del juego: responde por voz
-  y envia sin salir del partido. Tambien aparece sola al terminar un partido.
-- Para que la sala flotante se vea con el juego abierto, usa el juego en
-  "Ventana sin bordes" (Ajustes de pantalla del FC 26).
+- RESUMEN: tu carta, tu temporada, TODA tu carrera club por club (como el
+  "Resumen de carrera" del juego), tus metas, tu hinchada y tu vitrina.
+- TEMPORADA: tablas, goleadores y tus partidos de cada competicion.
+- Premios: el jugador del mes te lo da el juego; al terminar la liga hay una
+  gala con el Balon de Oro, The Best, el Kopa, el Gerd Muller, el Golden Boy
+  y la Bota de Oro, decididos con los numeros de toda tu partida.
+- INSTAGRAM: publica y mira las reacciones; tus hinchas comentan solos tus
+  partidos y noticias, y hay un feed con las paginas de futbol.
+- VIDA:
+    * Cobras tu sueldo real del juego (y te gastas la plata como quieras).
+    * Tu contrato: negocias las primas con la directiva (firma, por gol,
+      metas, premios, imagen). Tu representante te dice si hay margen.
+    * Ofertas de otros clubes en las ventanas de pases. Mirarlas no es irte:
+      las podes usar para negociar con tu club. Si aceptas una, el traspaso lo
+      haces en el juego.
+    * Marcas (botines, bebidas, tecnologia, autos...): "Buscar marcas", una
+      por rubro. Te piden promos con plazo: si no cumplis, se van.
+    * Autos y tiendas: configuras tu auto o compras en las webs oficiales
+      adentro de la app (hace falta internet), y llega con los dias del juego.
+    * Vida sentimental: pareja, DMs a famosos, citas, regalos, casamiento,
+      hijos. Y eventos que te pasan solos ("Lo que te paso"), algunos con un
+      reto para el proximo partido (cumplirlo es cosa tuya).
+- AJUSTES > "Tus carreras": si tenes mas de un modo carrera, cada uno con su
+  propia historia (la app se reinicia al cambiar).
 
 
 TUS DATOS
 ---------
-Tu carrera, tus ajustes y las fotos de tu garage quedan en %APPDATA%\EAFC26 Roleplay
-(no en esta carpeta): si te llega una version nueva, borras esta carpeta,
+Tu carrera, tus ajustes y tus fotos quedan en %APPDATA%\EAFC26 Roleplay (no en
+esta carpeta): si te llega una version nueva, borras esta carpeta,
 descomprimis la nueva y no pierdes nada.
 
 
