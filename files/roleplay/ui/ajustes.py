@@ -6,12 +6,15 @@ del escritorio y el diagnostico.
 """
 
 import os
+import subprocess
+import sys
 
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
     QFileDialog,
+    QInputDialog,
     QLineEdit,
     QMessageBox,
     QPlainTextEdit,
@@ -19,7 +22,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from roleplay import ajustes
+from roleplay import ajustes, carreras, config
 from roleplay.partida import lector
 from roleplay.ui.atajo import ATAJO_TEXTO
 from roleplay.servicios.accesos import crear_accesos
@@ -35,6 +38,17 @@ def elegir_juego_a_mano(padre: QWidget):
         padre, "Elegi el juego (FC26.exe) o su acceso directo", os.path.expanduser("~/Desktop"), FILTRO_JUEGO
     )
     return elegir_a_mano(ruta) if ruta else None
+
+
+def reiniciar_app() -> None:
+    """Cierra y vuelve a abrir la app (para cambiar de carrera: la carpeta se elige al arrancar)."""
+    from PySide6.QtWidgets import QApplication
+
+    argumentos = [sys.executable] + ([] if config.EMPAQUETADA else [str(config.RAIZ_PROYECTO / "app.py")])
+    banderas = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    subprocess.Popen(argumentos, env=carreras.entorno_para_reiniciar(), cwd=str(config.RAIZ_PROYECTO),
+                     creationflags=banderas)
+    QApplication.quit()
 
 
 def abrir_juego_o_preguntar(padre: QWidget) -> bool:
@@ -148,6 +162,20 @@ class DialogoAjustes(QDialog):
         motor.cuerpo.addLayout(fila(self.prueba_label, None, self.probar_btn))
         layout.addWidget(motor)
 
+        perfiles = Tarjeta("Tus carreras")
+        perfiles.cuerpo.addWidget(texto_suave(
+            "Cada carrera tiene su propia base: su personaje, su prensa, su plata y la partida de FC 26 que lee. "
+            "Sirve para la de prueba o si tenes mas de un modo carrera. Cambiar reinicia la app."
+        ))
+        self.carreras_layout = QVBoxLayout()
+        self.carreras_layout.setSpacing(6)
+        perfiles.cuerpo.addLayout(self.carreras_layout)
+        nueva = boton("Nueva carrera...")
+        nueva.clicked.connect(self._on_nueva_carrera)
+        perfiles.cuerpo.addLayout(fila(None, nueva))
+        layout.addWidget(perfiles)
+        self._mostrar_carreras()
+
         iconos = Tarjeta("Iconos del escritorio")
         iconos.cuerpo.addWidget(
             texto_suave(
@@ -258,6 +286,42 @@ class DialogoAjustes(QDialog):
         QMessageBox.information(
             self, "Iconos creados", "Listo, en tu escritorio:\n\n" + "\n".join(f"• {ruta.stem}" for ruta in creados)
         )
+
+    # ---- perfiles de carrera ----
+
+    def _mostrar_carreras(self):
+        from roleplay.ui import estilos
+        from roleplay.ui.componentes import chip, limpiar_layout
+
+        limpiar_layout(self.carreras_layout)
+        actual = carreras.actual()["id"]
+        for carrera in carreras.listar():
+            detalle = "la carpeta de siempre" if carrera["id"] == carreras.PRINCIPAL else carrera["carpeta"]
+            texto = texto_suave(f"<b>{esc(carrera['nombre'])}</b> · {esc(detalle)}")
+            if carrera["id"] == actual:
+                accion = chip("En uso", estilos.ACENTO)
+            else:
+                accion = boton("Cambiar a esta")
+                accion.setProperty("carrera", carrera["id"])
+                accion.clicked.connect(lambda _=False, i=carrera["id"]: self.cambiar_carrera(i))
+            self.carreras_layout.addLayout(fila(texto, None, accion))
+
+    def cambiar_carrera(self, id_: str):
+        carreras.activar(id_)
+        reiniciar_app()
+
+    def _on_nueva_carrera(self):
+        nombre, ok = QInputDialog.getText(self, "Nueva carrera", "Como se llama esta carrera?")
+        if not ok or not nombre.strip():
+            return
+        partida, _ = QFileDialog.getOpenFileName(
+            self, "Elegi la partida de Carrera Jugador de esta carrera (o cancela: la mas reciente)",
+            str(lector.CARPETA_GUARDADOS), "Carrera jugador (CmPlr*)"
+        )
+        carreras.crear(nombre, partida)
+        self._mostrar_carreras()
+        QMessageBox.information(self, "Carrera creada", f"Listo: \"{nombre.strip()}\". Usa \"Cambiar a esta\" para "
+                                "abrirla (la app se reinicia y te pide crear su personaje).")
 
     def _on_diagnostico(self):
         from roleplay.diagnostico import como_texto, revisar

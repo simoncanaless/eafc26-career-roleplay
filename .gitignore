@@ -36,3 +36,7 @@ files/roleplay/datos/img_autos/
 
 # la partida de prueba (scripts/partida_de_prueba.py): su base y su partida falsa
 files/prueba/
+
+# perfiles de carrera (roleplay/carreras.py): la lista y las carpetas de las otras carreras
+files/carreras.json
+files/carreras/

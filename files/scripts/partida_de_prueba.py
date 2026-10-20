@@ -68,6 +68,12 @@ print(pid)
         raise SystemExit(f"No se pudo armar la partida de prueba:\n{resultado.stderr}")
     if (RAIZ / ".env").exists():
         shutil.copy2(RAIZ / ".env", carpeta / ".env")  # (la clave vieja de Gemini, si esta)
+    # y queda en "Tus carreras" (Ajustes): se puede cambiar a ella desde la app
+    sys.path.insert(0, str(RAIZ))
+    from roleplay import carreras
+
+    carreras.crear("Partida de prueba (parejas)", carpeta=str(carpeta), guardados=str(carpeta / "guardados"),
+                   dm_sin_espera=True, id_="prueba")
 
 
 def abrir(carpeta: Path) -> None:

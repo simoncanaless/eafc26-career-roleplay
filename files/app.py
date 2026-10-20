@@ -17,7 +17,11 @@ import sys
 import traceback
 from datetime import datetime
 
-from roleplay import config
+from roleplay import carreras  # (antes que config: elige la carpeta de datos de la carrera activa)
+
+carreras.preparar_entorno()
+
+from roleplay import config  # noqa: E402
 
 MODULOS = ["menu", "personaje", "entrevistas", "instagram"]
 

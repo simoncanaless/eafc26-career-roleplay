@@ -29,7 +29,7 @@ configurada solo en este repo).
   publico: nunca subir claves, la base, fotos ni datos personales.
 - **Uso**: Simon tiene plan Pro y pide **parar al 90% del uso semanal** (mirarlo con la herramienta de uso antes de
   tareas largas y avisarle). Trabajar con pocas llamadas.
-- **Estado al 2026-10-20** (374 pruebas en verde, todo en GitHub):
+- **Estado al 2026-10-20** (379 pruebas en verde, todo en GitHub):
   00. Ecosistema de Simon (2026-10-20): conferencias con 8 tematicas y periodistas reales, parejas del catalogo
      con DM y romance secreto, seguidores por tier y exposicion, patrocinios, tienda de lujo, hiperautos,
      marketplace de nicho, comentarios de colegas/famosas y feed global (ver `ecosistema.py`). Los datos estan
@@ -69,7 +69,7 @@ oleplay\datos\`.
 .venv\Scripts\python.exe app.py --jugar          # abre EA FC 26 (Steam) + la app en la sala de prensa
 .venv\Scripts\python.exe app.py --diagnostico    # revisa todo y sale (diagnostico.txt)
 .venv\Scripts\python.exe scripts\empaquetar.py   # paquete para amigos (requirements-dev.txt)
-.venv\Scripts\python.exe scripts\partida_de_prueba.py [--reiniciar] [--reputacion 95] [--seguidores N]   # partida imaginaria (files/prueba, .gitignore): personaje soltero + partida falsa, para probar las parejas sin tocar la real; sin espera entre DMs (EAFC_DM_SIN_ESPERA=1)
+.venv\Scripts\python.exe scripts\partida_de_prueba.py [--reiniciar] [--reputacion 95] [--seguidores N]   # partida imaginaria (files/prueba, .gitignore): personaje soltero + partida falsa, para probar las parejas sin tocar la real; sin espera entre DMs (EAFC_DM_SIN_ESPERA=1). Queda registrada en "Tus carreras" (id `prueba`): tambien se abre desde Ajustes
 ```
 
 **Iconos del escritorio** (`servicios/accesos.py`, tambien desde Ajustes en la app):
@@ -103,6 +103,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 |---|---|
 | `app.py` | Unico entry point; argumento opcional para abrir un modulo suelto. Icono de ventana, AppUserModelID (barra de tareas) y `sys.excepthook` -> `errores.log` + QMessageBox (con pythonw no hay consola) |
 | `roleplay/config.py` | Rutas. Recursos desde la carpeta del codigo; DATOS (`DB_PATH`, `ajustes.json`, `errores.log`, `garage/`, `navegador/`) en `CARPETA_DATOS`: raiz del proyecto corriendo desde codigo, `%APPDATA%\EAFC26 Roleplay` empaquetada, o `EAFC_ROLEPLAY_DATOS` si esta en el entorno |
+| `roleplay/carreras.py` | **Perfiles de carrera** (2026-10-20, pedido de Simon): mas de una carrera (la principal, la de prueba, otro modo carrera de FC 26), cada una con su carpeta de datos (base, ajustes con su `partida`, fotos). La principal es la carpeta de siempre; las demas, `<principal>/carreras/<id>/`; la lista y la activa en `<principal>/carreras.json` (`.gitignore`). `app.py` llama a `preparar_entorno()` ANTES de importar `config` (pone `EAFC_ROLEPLAY_DATOS` y, si la carrera los trae, `EAFC_FC26_GUARDADOS` / `EAFC_DM_SIN_ESPERA`); si `EAFC_ROLEPLAY_DATOS` ya viene en el entorno no toca nada. `crear()` copia las claves de IA de la principal; `activar()` + `ui.ajustes.reiniciar_app()` (relanza con `entorno_para_reiniciar()`, sin esas variables) = cambiar de carrera. `actual()`: la de este proceso (el titulo de la ventana la muestra). NO importa `roleplay.config`. `EAFC_ROLEPLAY_BASE` cambia la principal (las pruebas: una temporal) |
 | `roleplay/ajustes.py` | `ajustes.json` de cada persona (`juego` elegido a mano, `en_vivo`...); leer nunca falla |
 | `roleplay/diagnostico.py` | `revisar()`: modo, motor narrativo (cuantos archivos en `roleplay/datos`), IA hibrida (`ia.estado()`: cuantas claves, sin mostrarlas), base, juego, microfonos, una captura de prueba (solo el tamano), navegador |
 | `roleplay/datos/` | **Los datos del motor narrativo** (JSON, sin tildes; los emojis si van): `corpus_entrevista.json` (preguntas de los 3 periodistas, reacciones, previa), `corpus_prensa.json` (titulares/cuerpos por hito, cruces `x_*`, mundo: solo hechos reales), `corpus_redes.json` (comentarios por tipo y tono, autores, posts sugeridos por personalidad), `corpus_vida.json` (backstory y ganchos), `lexico.json` (5 ejes con pesos por palabra/frase, negaciones, promesas), `jugadores_fc26.json` / `competiciones_fc26.json` (nombres por id de EA CON fecha de nacimiento: si la de la partida no calza, es otra persona y queda sin nombre; se suman con `scripts/nombres_faltantes.py --agregar`). Claves que empiezan con `_` son comentarios |
@@ -152,7 +153,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 | `roleplay/servicios/temporada.py` | `vista_temporada(carrera, competicion)`: lo que muestra la pagina Temporada (tabla con el club marcado, goleadores con el jugador del usuario marcado, resultados y proximos del club, la ultima fecha). Liga primero; una competicion ajena cae en la del club |
 | `roleplay/ui/temporada.py` | `PaginaTemporada`: chips para elegir competicion, tabla (QGridLayout de QLabel; la fila del club lleva un QFrame resaltado DEBAJO, en la misma celda), goleadores, tus partidos y la ultima fecha. Si se cambia de competicion mientras lee, vuelve a leer al terminar |
 | `roleplay/ui/menu.py` | `MainMenuWindow(pagina_inicial)` (lateral con JUGAR FC 26 y AJUSTES + `FondoEstadio`) + `PaginaResumen` (carta, mosaicos, historia, tramas, central de noticias) |
-| `roleplay/ui/ajustes.py` | `DialogoAjustes` (juego, partida, modo en vivo, "Motor narrativo e IA hibrida": claves de Groq y Gemini en modo password, "Usar solo motor local", "Probar IA" en un hilo con proveedor y ms; iconos, diagnostico), `abrir_juego_o_preguntar`. Ya no hay bienvenida |
+| `roleplay/ui/ajustes.py` | `DialogoAjustes` (juego, partida, modo en vivo, "Tus carreras" (lista, "Cambiar a esta" reinicia, "Nueva carrera..." con nombre y su partida CmPlr), "Motor narrativo e IA hibrida": claves de Groq y Gemini en modo password, "Usar solo motor local", "Probar IA" en un hilo con proveedor y ms; iconos, diagnostico), `abrir_juego_o_preguntar`. Ya no hay bienvenida |
 | `roleplay/ui/personaje.py` | `CharacterWizard` (ClassicStyle; titulos en rich text con "PASO n/8"; backstory editable o escrito a mano) |
 | `roleplay/ui/entrevista.py` | `InterviewWindow` "Sala de prensa": marcador ("Cargar de mi partida" o a mano; no hay captura) -> preguntas de los 3 periodistas (cada una con boton de voz) -> reaccion -> prensa. Despues de evaluar, `_mover_carino()` aplica `delta_carino` a la hinchada del club |
 | `roleplay/ui/instagram.py` | `InstagramWindow`: perfil (avatar + mosaicos), nuevo post, resultado, "Tus hinchas" (actividad sin publicar) y feed en tarjetas. `revisar_hinchada()`: una a la vez; si se pide otra mientras corre, se hace al terminar **Desde el 2026-10-20**: tarjeta "Feed global" (`estado_json.hinchada.feed`). En los posts, `servicios/instagram.comentarios_del_ambiente`: colegas de `futbolistas_ig` si la fama supera su `fama_minima_para_comentar`, la pareja del catalogo (un guino si es secreto, y los hinchas lo notan), una celebridad de su nivel y hasta 3 likes verificados (comentario con tono "like"). Esos comentarios los arma el codigo con el corpus, nunca la IA |
@@ -248,7 +249,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 
 ## Testing
 
-`.venv\Scripts\python.exe -m unittest discover -s tests` (374 pruebas, ~25 s). `tests/ayuda.py`:
+`.venv\Scripts\python.exe -m unittest discover -s tests` (379 pruebas, ~25 s). `tests/ayuda.py`:
 - Fija `EAFC_FC26_GUARDADOS` a una carpeta vacia: las pruebas no leen la partida real.
 - Fija `EAFC_ECOSISTEMA` a una carpeta vacia: sin famosas, paginas, periodistas ni autos de nicho.
   `tests/datos_ecosistema.py` (datos chicos + `ConEcosistema`) los arma para `test_ecosistema` (base y pantallas),

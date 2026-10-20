@@ -608,7 +608,10 @@ class MainMenuWindow(QMainWindow):
 
     def __init__(self, pagina_inicial: int = 0):
         super().__init__()
-        self.setWindowTitle("EAFC 26 Roleplay")
+        from roleplay import carreras
+
+        carrera = carreras.actual()
+        self.setWindowTitle("EAFC 26 Roleplay" + ("" if carrera["id"] == carreras.PRINCIPAL else f" - {carrera['nombre']}"))
         self.setMinimumSize(1100, 720)
 
         # ---- barra lateral ----
