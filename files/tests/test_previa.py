@@ -73,10 +73,10 @@ class TestPreguntasYEvaluacion(ayuda.PruebaConBase):
 
     def test_tres_periodistas_con_los_datos_reales(self):
         preguntas = previa.generar_previa(self.perfil, self.previa)
-        self.assertEqual([p.split(" (")[0] for p in preguntas], [nombre for nombre, _ in entrevista.PERIODISTAS])
+        self.assertEqual(sorted(p.split(" (")[0] for p in preguntas), sorted(n for n, _ in entrevista.PERIODISTAS))
         for pregunta in preguntas:
             self.assertNotRegex(pregunta, r"[{}]|#\w+#")
-        self.assertTrue(any(dato in preguntas[0] for dato in ("2°", "G G E", "Spurs")), preguntas[0])  # la tactica usa la partida
+        self.assertTrue(any(dato in p for p in preguntas for dato in ("2°", "GGE", "G G E", "Spurs")), preguntas)  # usa la partida
 
     def test_la_evaluacion_se_acota(self):
         humilde = "El equipo, el grupo, mis companeros, todos juntos, gracias al cuerpo tecnico y al grupo. " * 6

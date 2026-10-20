@@ -26,6 +26,8 @@ os.environ["EAFC_FC26_GUARDADOS"] = tempfile.mkdtemp(prefix="eafc_guardados_")
 # ...y la IA hibrida apagada: las pruebas nunca salen a internet (test_ia.py la prende con mocks)
 os.environ["EAFC_SIN_IA"] = "1"
 # ...y sin el catalogo de EA del PC (solo local): los nombres dependen de lo que arme cada prueba
+# ...y sin los datos del ecosistema de Simon (famosas, paginas, periodistas, autos de nicho)
+os.environ["EAFC_ECOSISTEMA"] = tempfile.mkdtemp(prefix="eafc_ecosistema_")
 os.environ["EAFC_CATALOGO_EA"] = str(Path(tempfile.gettempdir()) / "eafc_sin_catalogo.json")
 RAIZ = Path(__file__).resolve().parent.parent
 if str(RAIZ) not in sys.path:

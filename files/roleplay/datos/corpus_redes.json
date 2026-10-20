@@ -48,5 +48,20 @@
   "post_humilde_empate": ["Un punto. Seguimos trabajando con humildad 🙏", "Gracias por el apoyo de siempre. Vamos por mas."],
   "post_humilde_neutro": ["Agradecido por cada dia 🙏", "Trabajo, humildad y familia. ⚽"],
 
-  "hashtag": ["#Vamos{club_tag_mayus}", "#SiempreJuntos", "#VamosPorMas", "#NuncaRendirse", "#PasionFutbol", "#OrgulloDeSerDe{club_tag_mayus}", "#Seguimos"]
+  "hashtag": ["#Vamos{club_tag_mayus}", "#SiempreJuntos", "#VamosPorMas", "#NuncaRendirse", "#PasionFutbol", "#OrgulloDeSerDe{club_tag_mayus}", "#Seguimos"],
+
+  "_feed": "Las paginas de futbol de Simon publican sobre el jugador (servicios/feed.py); {titulo} es lo que paso",
+  "feed_viral": ["🔥 {apellido} no para: {titulo}", "{apellido} esta en otro planeta 🪐 {titulo}", "LO DE {apellido} 🤯 {titulo}", "🎥 {titulo}. ¿Es el momento de {apellido}? 👀"],
+  "feed_medio": ["{titulo} | Lo que tenes que saber de {apellido} ({club})", "📰 {titulo}", "{club}: {titulo}"],
+  "feed_mercado": ["🚨 {apellido} y su futuro: {titulo}", "📲 Movimientos alrededor de {apellido}: {titulo}"],
+  "feed_polemica": ["🌶️ POLEMICA: {titulo}. ¿Tiene razon {apellido}? 👇", "{apellido} encendio el debate 🔥 {titulo}", "Se arma en el estudio: {titulo} 🗣️"],
+  "feed_farandula": ["👀 {titulo}", "EXCLUSIVO 📸 {titulo}", "Todo el mundo habla de {apellido}: {titulo} 💘"],
+  "feed_rumor": ["🚨 {interesado} sigue de cerca a {apellido}. Contactos iniciados... HERE WE GO? 🔴", "🚨 EXCLUSIVO: {interesado} pregunto por {apellido} ({club}). Atentos ⏳", "⚠️ {apellido} esta en la lista de {interesado} para el proximo mercado."],
+  "_colegas": "Comentarios de futbolistas y celebridades del catalogo de Simon (el codigo decide quien comenta)",
+  "com_colega": ["Crack 🔥", "Que locura hermano 🙌", "Bestia 💪", "Asi se juega 👏", "Imparable 🚀", "🔥🔥🔥", "Grande hermano!", "Que nivel 🐐"],
+  "com_famosa": ["🔥", "😍", "👏👏", "✨", "🙌", "💫"],
+  "com_pareja": ["❤️", "Mi amor 😍", "Orgullosa ❤️🔥", "💘💘", "Mi crack ❤️"],
+  "com_pareja_secreta": ["👀", "🙈", "😏", "🤫", "✨"],
+  "com_nota_famosa": ["Ojo que {famosa} le dejo un comentario 👀", "{famosa} comento... aca pasa algo 😏", "Nadie vio el comentario de {famosa}? 👀👀", "{famosa} en los comentarios, no es casualidad 🍿"],
+  "com_nota_colega": ["{colega} te banca 🔥", "Hasta {colega} comento, sos de otro nivel", "{colega} en los comentarios 🐐"]
 }

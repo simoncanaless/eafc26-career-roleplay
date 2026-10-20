@@ -12,6 +12,13 @@ Los autos se piden en el concesionario (servicios/autos.py, marcas reales):
 se pagan al pedir y llegan dias despues en el juego; lo que provocan
 (seguidores, reputacion, noticia) pasa cuando llegan y se muestran.
 
+Los autos de culto (JDM, Euro, Muscle) se compran al instante en el
+marketplace (servicios/marketplace.py): articulo "nicho:<id>", se valorizan
+con el tiempo segun su rareza y se revenden a ese valor.
+
+Los patrocinios (servicios/patrocinios.py) pagan por semana y se cobran con
+el sueldo (estado en economia.patrocinios).
+
 Lo demas tambien se puede comprar de verdad en las webs oficiales
 (servicios/tiendas.py, ui/tienda.py): un articulo "libre", con el nombre y
 el precio que uno eligio, que se guarda con su tienda y su foto.
@@ -67,17 +74,33 @@ CATEGORIAS = {
     "avion": "Aviones",
     "tecnologia": "Tecnologia",
     "muebles": "Muebles",
+    "usados": "Usados y de culto",
 }
 
-# Sin marcas: el roleplay no necesita nombres reales y asi nada parece publicidad.
+# Casas, ropa y muebles sin marca; los relojes y joyas de alta gama, con la marca
+# como texto (como los autos: decision de Simon, la app es entre amigos).
+# Precios aproximados de la vida real, en la moneda del club.
 CATALOGO = [
     Articulo("depto", "casa", "Departamento en el centro", 650_000, 1_500),
+    Articulo("loft", "casa", "Loft de diseno en un barrio de moda", 1_400_000, 2_500),
     Articulo("casa_jardin", "casa", "Casa con jardin en las afueras", 2_500_000, 4_000),
+    Articulo("penthouse", "casa", "Penthouse con vista a toda la ciudad", 6_500_000, 9_000, ostentoso=True),
     Articulo("mansion", "casa", "Mansion con pileta y cine", 9_000_000, 15_000, ostentoso=True),
+    Articulo("mansion_colinas", "casa", "Mansion en las colinas con cancha propia", 18_000_000, 25_000, ostentoso=True),
     Articulo("villa_mar", "casa", "Villa frente al mar", 22_000_000, 30_000, ostentoso=True),
     Articulo("reloj_suizo", "reloj", "Reloj suizo", 60_000),
+    Articulo("rolex_submariner", "reloj", "Rolex Submariner", 14_000),
+    Articulo("cartier_love", "reloj", "Pulsera Cartier Love de oro", 9_000),
+    Articulo("rolex_daytona", "reloj", "Rolex Daytona de oro", 55_000),
+    Articulo("ap_royal_oak", "reloj", "Audemars Piguet Royal Oak", 75_000),
+    Articulo("ap_royal_oak_diamantes", "reloj", "Audemars Piguet Royal Oak con diamantes", 320_000, ostentoso=True),
     Articulo("cadena", "reloj", "Cadena de oro y diamantes", 250_000, ostentoso=True),
+    Articulo("anillo_diamantes", "reloj", "Anillo de diamantes", 120_000),
+    Articulo("collar_diamantes", "reloj", "Collar de diamantes a medida", 450_000, ostentoso=True),
     Articulo("reloj_diamantes", "reloj", "Reloj de alta relojeria con diamantes", 900_000, ostentoso=True),
+    Articulo("zapatillas", "moda", "Zapatillas de edicion limitada", 6_000),
+    Articulo("outfit_alfombra", "moda", "Outfit de disenador para la alfombra roja", 25_000),
+    Articulo("abrigo_costura", "moda", "Abrigo de alta costura", 45_000),
     Articulo("guardarropa", "moda", "Guardarropa de disenador", 80_000, 500),
     Articulo("coleccion_moda", "moda", "Coleccion de alta costura", 400_000, 1_500, ostentoso=True),
     Articulo("yate", "yate", "Yate de 30 metros", 12_000_000, 40_000, ostentoso=True),
@@ -86,6 +109,9 @@ CATALOGO = [
     Articulo("home_cinema", "tecnologia", "Sala de cine en casa", 150_000, 500),
     Articulo("simulador", "tecnologia", "Simulador de carreras profesional", 400_000, 1_000, ostentoso=True),
     Articulo("living", "muebles", "Living de disenador", 60_000),
+    Articulo("sofa_italiano", "muebles", "Sofa de disenador italiano", 35_000),
+    Articulo("comedor_marmol", "muebles", "Comedor de marmol para doce", 90_000),
+    Articulo("bodega", "muebles", "Bodega de vinos climatizada", 250_000, 500, ostentoso=True),
     Articulo("cocina", "muebles", "Cocina a medida", 180_000),
     Articulo("arte", "muebles", "Coleccion de arte para la casa", 1_200_000, 2_000, ostentoso=True),
     Articulo("hospital", "donacion", "Donar a un hospital de ninos", 500_000),
@@ -176,8 +202,13 @@ def acreditar(economia: Optional[dict], hoy: date, sueldo: int) -> dict:
     semanas = dias / 7
     ingreso = round(sueldo * NETO * semanas)
     gastos = round(mantenimiento_semanal(e) * semanas)
-    e["saldo"] += ingreso - gastos
+    from roleplay.servicios import patrocinios
+
+    marcas = round(patrocinios.ingreso_semanal(e, hoy) * NETO * semanas)
+    e["saldo"] += ingreso + marcas - gastos
     _movimiento(e, hoy, f"Sueldo de {dias} dias (neto)", ingreso)
+    if marcas:
+        _movimiento(e, hoy, f"Patrocinios de {dias} dias (neto)", marcas)
     if gastos:
         _movimiento(e, hoy, "Mantenimiento de lo que tenes", -gastos)
     e["hasta"] = hoy.isoformat()
@@ -186,6 +217,10 @@ def acreditar(economia: Optional[dict], hoy: date, sueldo: int) -> dict:
 
 def articulo_de_posesion(posesion: dict) -> Optional[Articulo]:
     """El articulo de algo que tiene: del catalogo, un auto configurado o algo libre."""
+    if posesion["articulo"].startswith("nicho:"):
+        from roleplay.servicios import marketplace
+
+        return marketplace.articulo_de_posesion(posesion)
     if posesion["articulo"].startswith(LIBRE):
         return articulo_libre(posesion["articulo"][len(LIBRE):], posesion.get("nombre", "Algo"), posesion["precio"],
                               posesion.get("tienda", ""))
@@ -205,9 +240,20 @@ def mantenimiento_semanal(economia: dict) -> int:
     return sum(a.mantenimiento for p in economia.get("posesiones", []) if (a := articulo_de_posesion(p)))
 
 
+def valor_de_venta(posesion: dict, hoy: Optional[date] = None) -> int:
+    """Lo que se recupera vendiendolo: el 70%, salvo los autos de culto del
+    marketplace, que se revenden a lo que valen hoy (menos la comision)."""
+    if posesion["articulo"].startswith("nicho:"):
+        from roleplay.servicios import marketplace
+
+        return marketplace.valor_de_reventa(posesion, hoy or date.fromisoformat(posesion.get("desde") or "2000-01-01"))
+    return round(posesion["precio"] * VENTA)
+
+
 def patrimonio(economia: dict) -> int:
     """Lo que vale lo que tiene (lo que se recuperaria vendiendo)."""
-    return round(sum(p["precio"] * VENTA for p in economia.get("posesiones", [])))
+    hoy = date.fromisoformat(economia["hasta"]) if economia.get("hasta") else None
+    return round(sum(valor_de_venta(p, hoy) for p in economia.get("posesiones", [])))
 
 
 def tiene(economia: dict, articulo_id: str) -> bool:
@@ -232,7 +278,7 @@ def comprar(economia: dict, articulo: Articulo, hoy: date, extra: Optional[dict]
     else:
         posesion = {"id": uuid.uuid4().hex[:8], "articulo": articulo.id, "precio": articulo.precio,
                     "desde": hoy.isoformat()}
-        if articulo.id.startswith(LIBRE):
+        if articulo.id.startswith(LIBRE) or articulo.id.startswith("nicho:"):
             posesion.update({"nombre": articulo.nombre, "tienda": articulo.tienda})
         posesion.update(extra or {})
         e.setdefault("posesiones", []).append(posesion)
@@ -244,7 +290,7 @@ def vender(economia: dict, posesion_id: str, hoy: date) -> tuple[dict, int]:
     e = copy.deepcopy(economia)
     posesion = next(p for p in e.get("posesiones", []) if p["id"] == posesion_id)
     e["posesiones"].remove(posesion)
-    recuperado = round(posesion["precio"] * VENTA)
+    recuperado = valor_de_venta(posesion, hoy)
     e["saldo"] += recuperado
     articulo = articulo_de_posesion(posesion)
     _movimiento(e, hoy, f"Venta: {articulo.nombre if articulo else posesion['articulo']}", recuperado)

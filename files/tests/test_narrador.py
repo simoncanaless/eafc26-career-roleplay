@@ -225,9 +225,9 @@ class TestCruces(ayuda.PruebaConBase):
         perfil = database.load_profile(self.pid)
         stats = MatchStats(goles_equipo=0, goles_rival=2, equipo_rival="Arsenal", rating_jugador=5.8, minutos_jugados=90)
         with mock.patch.object(entrevista, "_carrera", return_value=None):
-            picante = entrevista.generar_entrevista(perfil, stats)[2]
-        self.assertTrue(picante.startswith("Rocco Salinas (El Picante): "))
-        self.assertIn("Porsche 911 Carrera", picante)
+            preguntas = entrevista.generar_entrevista(perfil, stats)
+        picante = next(p for p in preguntas if "Porsche 911 Carrera" in p)  # obligatoria: auto caro y mala nota
+        self.assertTrue(picante.startswith("Rocco Salinas (El Picante): "))  # la vida privada: el polemico
 
 
 class TestMemoriaDeLaEntrevista(ayuda.PruebaConBase):
@@ -250,15 +250,16 @@ class TestMemoriaDeLaEntrevista(ayuda.PruebaConBase):
     def test_la_sequia_que_se_corta(self):
         for rival in ("Everton", "Fulham", "Brentford"):
             self._jugado(rival)
-        tactica = self._preguntas(goles_equipo=1, goles_rival=0, equipo_rival="Leeds", goles_jugador=1, rating_jugador=7.4)[0]
-        self.assertTrue(tactica.startswith("Ignacio Ferrada (Pizarra Tactica): "))
+        preguntas = self._preguntas(goles_equipo=1, goles_rival=0, equipo_rival="Leeds", goles_jugador=1, rating_jugador=7.4)
+        tactica = next(p for p in preguntas if p.startswith("Ignacio Ferrada (Pizarra Tactica): "))  # la racha
         self.assertIn("3", tactica)
         self.assertRegex(tactica.lower(), r"sequia|sin gol|sin convertir|en blanco|volviste")
 
     def test_el_mismo_rival_de_antes(self):
         self._jugado("Liverpool", gf=2, gc=1)
-        tactica = self._preguntas(goles_equipo=0, goles_rival=0, equipo_rival="Liverpool", rating_jugador=6.9)[0]
-        self.assertIn("2-1", tactica)
+        with mock.patch.object(entrevista, "OBLIGATORIO_DESDE", 6):  # (con 6 no es obligatoria: sale a veces)
+            preguntas = self._preguntas(goles_equipo=0, goles_rival=0, equipo_rival="Liverpool", rating_jugador=6.9)
+        self.assertTrue(any("2-1" in p for p in preguntas), preguntas)
 
     def test_la_caida_despues_de_una_buena_racha(self):
         for rival in ("Everton", "Fulham", "Brentford"):
@@ -271,8 +272,8 @@ class TestMemoriaDeLaEntrevista(ayuda.PruebaConBase):
     def test_la_contradiccion_con_la_entrevista_anterior(self):
         self._jugado("Arsenal", goles=2, rating=8.5, gf=3, gc=0,
                      respuestas=["Soy el mejor de la liga, yo solo gano los partidos, soy imparable."])
-        picante = self._preguntas(goles_equipo=0, goles_rival=3, equipo_rival="Chelsea", rating_jugador=5.5)[2]
-        self.assertIn("Soy el mejor de la liga", picante)
+        preguntas = self._preguntas(goles_equipo=0, goles_rival=3, equipo_rival="Chelsea", rating_jugador=5.5)
+        self.assertTrue(any("Soy el mejor de la liga" in p for p in preguntas), preguntas)
         # si ganan, no hay contradiccion que sacarle en cara
         memoria = entrevista._memoria(MatchStats(goles_equipo=2, goles_rival=0, equipo_rival="Chelsea"),
                                       entrevista._historial(self.perfil))
@@ -534,9 +535,12 @@ class TestHibrido(ConIA):
     def test_las_preguntas_mantienen_periodista_y_si_falla_quedan_las_locales(self):
         self.red = [_groq({"preguntas": ["Ignacio Ferrada (Pizarra Tactica): ¿Que paso atras?", "¿Y la hinchada?",
                                          "¿Y el auto?"]})]
-        preguntas = entrevista.generar_entrevista(self.perfil, self.stats)
-        self.assertEqual(preguntas[0], "Ignacio Ferrada (Pizarra Tactica): ¿Que paso atras?")
+        orden = iter(entrevista.PERIODISTAS)  # (el orden fijo, solo para esta prueba)
+        with mock.patch.object(entrevista, "periodista_para", side_effect=lambda *_: next(orden)):
+            preguntas = entrevista.generar_entrevista(self.perfil, self.stats)
+        self.assertEqual(preguntas[0], "Ignacio Ferrada (Pizarra Tactica): ¿Que paso atras?")  # sin el nombre repetido
         self.assertTrue(preguntas[2].startswith("Rocco Salinas (El Picante): "))
+        self.assertIn("tema:", self.pedidos[0][1]["messages"][1]["content"])  # la IA sabe de que tema es cada una
         self.red = [_groq({"preguntas": ["solo una"]})]  # no calza: las del motor local
         locales = entrevista.generar_entrevista(self.perfil, self.stats)
         self.assertEqual(len(locales), 3)

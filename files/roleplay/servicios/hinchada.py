@@ -20,6 +20,13 @@ from roleplay.partida.carrera import Carrera
 from roleplay.servicios.narrador import narrador
 from roleplay.servicios.partida_real import cantidad, clave_partido, fecha_corta, marcador
 
+# la base de seguidores segun el club (servicios/ecosistema.tier_club): en un gigante se
+# arranca con cientos de miles; en un club chico, crecer depende de los goles y los titulos
+SEGUIDORES_BASE = {1: 400_000, 2: 25_000, 3: 2_000}
+# cuanto multiplica la exposicion: el tier del club y un promedio de gol absurdo
+MULTIPLICADOR_TIER = {1: 2.5, 2: 1.0, 3: 0.5}
+PROMEDIO_NORMAL = 0.4  # goles por partido desde los que el ruido crece
+TOPE_EXPOSICION = 40.0
 MAXIMO_EVENTOS = 5  # por revision: si la app estuvo cerrada mucho tiempo, solo lo ultimo
 ESCALA = 0.01  # un partido "normal" mueve ~1% de los seguidores
 MINIMO_ESCALA = 40  # ...y con pocos seguidores, al menos esto
@@ -40,6 +47,30 @@ def _escala(seguidores: int, reputacion: int) -> float:
     """Cuanto mueve un evento: mas seguidores y mas reputacion, mas gente
     mirando (y mas gente que se va si las cosas salen mal)."""
     return max(MINIMO_ESCALA, seguidores * ESCALA) * (0.5 + reputacion / 100)
+
+
+def base_de_seguidores(tier: int, reputacion: int) -> int:
+    return round(SEGUIDORES_BASE.get(tier, SEGUIDORES_BASE[2]) * (0.5 + reputacion / 100))
+
+
+def exposicion(tier: int, goles: int, partidos: int, premios: int = 0) -> float:
+    """Cuanto multiplica todo lo que mueve seguidores. 80 goles en 40 partidos
+    en un gigante, con premios: una estrella mundial."""
+    promedio = goles / max(partidos, 1)
+    rendimiento = 1 + max(0.0, promedio - PROMEDIO_NORMAL) * 3
+    valor = MULTIPLICADOR_TIER.get(tier, 1.0) * rendimiento * (1 + 0.25 * min(premios, 8))
+    return min(TOPE_EXPOSICION, valor)
+
+
+def exposicion_en(carrera: Carrera, premios: int = 0) -> tuple[int, float]:
+    """(tier del club del usuario, multiplicador de exposicion) con la partida."""
+    from roleplay.servicios import ecosistema
+
+    tier = ecosistema.tier_club(carrera, ecosistema.club_del_usuario(carrera))
+    estadisticas = carrera.estadisticas_de(carrera.usuario_id) if carrera.usuario_id is not None else []
+    goles = sum(e.goles for e in estadisticas)
+    partidos = sum(e.partidos for e in estadisticas)
+    return tier, exposicion(tier, goles, partidos, premios)
 
 
 def crecimiento_por_partido(
@@ -69,9 +100,10 @@ def eventos_nuevos(
     estado: Optional[dict],
     seguidores: int,
     reputacion: int,
+    multiplicador: float = 1.0,
 ) -> tuple[list[EventoHinchada], dict]:
     """Los partidos del jugador y las noticias sobre el que todavia no
-    tuvieron reaccion. `estado` (estado_json.hinchada) dice hasta donde se
+    tuvieron reaccion (los seguidores, por `multiplicador`: la exposicion). `estado` (estado_json.hinchada) dice hasta donde se
     llego: la primera vez solo se reacciona al ultimo partido y las
     noticias viejas quedan como estan. `noticias`: del mas nuevo al mas
     viejo, como las devuelve la base."""
@@ -98,7 +130,8 @@ def eventos_nuevos(
                 "partido", p.fecha.isoformat(), titulo,
                 f"Partido: {marcador(carrera, p)} ({carrera.competicion(p.competicion)}, {fecha_corta(p.fecha)}). "
                 f"Resultado para su club: {p.resultado_para(equipo)}. {rendimiento}.",
-                crecimiento_por_partido(seguidores, reputacion, p.resultado_para(equipo), suya is not None, goles, nota),
+                round(crecimiento_por_partido(seguidores, reputacion, p.resultado_para(equipo), suya is not None, goles,
+                                              nota) * multiplicador),
             ))
         if jugados:
             estado["hasta"] = max(estado.get("hasta") or "", jugados[-1].fecha.isoformat())
@@ -112,7 +145,7 @@ def eventos_nuevos(
             eventos.append(EventoHinchada(
                 "noticia", hoy.isoformat() if hoy else "", n.titular,
                 f"Noticia sobre el ({n.tono}): {n.titular}. {n.cuerpo}",
-                crecimiento_por_noticia(seguidores, reputacion, n.tono),
+                round(crecimiento_por_noticia(seguidores, reputacion, n.tono) * multiplicador),
             ))
     if sobre_el:
         estado["noticia"] = max([n.id for n in sobre_el] + ([ultima] if ultima is not None else []))
@@ -198,9 +231,13 @@ def procesar(
     estado: Optional[dict],
     seguidores: int,
     reputacion: int,
+    premios: int = 0,
 ) -> tuple[list[ActividadInstagram], dict]:
-    """La actividad nueva (sin guardar) y el estado nuevo."""
-    eventos, nuevo_estado = eventos_nuevos(carrera, noticias, estado, seguidores, reputacion)
+    """La actividad nueva (sin guardar) y el estado nuevo. Si el club del
+    usuario es de un tier mejor que el ultimo visto (o es la primera vez), los
+    seguidores suben a la base de ese club (una actividad "hinchada")."""
+    tier, multiplicador = exposicion_en(carrera, premios)
+    eventos, nuevo_estado = eventos_nuevos(carrera, noticias, estado, seguidores, reputacion, multiplicador)
     dichos = comentar_eventos(perfil, eventos) if eventos else {}
     actividad = [
         ActividadInstagram(
@@ -209,6 +246,24 @@ def procesar(
         )
         for i, e in enumerate(eventos)
     ]
+    visto = (estado or {}).get("base_tier")
+    if visto is None or tier < visto:
+        nuevo_estado["base_tier"] = tier
+        base = base_de_seguidores(tier, reputacion)
+        if seguidores < base:
+            from roleplay.servicios import ecosistema
+
+            club = carrera.equipo(ecosistema.club_del_usuario(carrera)) if ecosistema.club_del_usuario(carrera) else ""
+            hoy = carrera.fecha_actual()
+            actividad.append(ActividadInstagram(
+                player_id=perfil.id, fecha_juego=hoy.isoformat() if hoy else "", tipo="hinchada",
+                titulo=f"Jugar en {club or 'tu club'} te pone en la vidriera", crecimiento_seguidores=base - seguidores,
+                comentarios=[],
+            ))
+    from roleplay.servicios import feed
+
+    nuevo_estado["feed"] = feed.actualizar(perfil, eventos, (estado or {}).get("feed", []), seguidores, reputacion,
+                                           carrera)
     return actividad, nuevo_estado
 
 
@@ -229,4 +284,5 @@ def revisar_hinchada(player_id: int) -> Optional[tuple[list[ActividadInstagram],
         database.get_estado_hinchada(player_id),
         database.get_seguidores(player_id),
         database.get_reputacion_actual(player_id),
+        len(database.get_estado_prensa(player_id).get("vitrina", [])),
     )

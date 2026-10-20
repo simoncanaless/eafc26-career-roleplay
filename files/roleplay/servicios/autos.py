@@ -42,12 +42,14 @@ class Modelo:
 MODELOS = [
     Modelo("ferrari_296", "Ferrari", "296 GTB", "ferrari_super", 245_000, 28,
            url_configurador="https://carconfigurator.ferrari.com/en_EN/ferrari_car_configurator/296gtb"),
-    Modelo("ferrari_sf90", "Ferrari", "SF90 Stradale", "ferrari_super", 390_000, 35,
-           url_configurador="https://carconfigurator.ferrari.com/en_EN"),
-    Modelo("ferrari_roma", "Ferrari", "Roma", "gt_ferrari", 170_000, 28,
+    # hiperautos de reserva (pedido de Simon, 2026-10-20; precios que el paso, en libras)
+    Modelo("ferrari_f80", "Ferrari", "F80", "hiper_real", 3_735_000, 45,
            url_configurador="https://carconfigurator.ferrari.com/en_EN"),
     Modelo("ferrari_purosangue", "Ferrari", "Purosangue", "suv_deportivo", 315_000, 35,
            url_configurador="https://carconfigurator.ferrari.com/en_EN/ferrari_car_configurator/purosangue"),
+    # el Mission X es un prototipo de Porsche: Simon lo quiere igual, como reserva con su precio
+    Modelo("porsche_mission_x", "Porsche", "Mission X", "hiper_real", 2_800_000, 60,
+           url_configurador="https://configurator.porsche.com/en-WW/"),
     Modelo("porsche_911", "Porsche", "911 Carrera", "911_real", 95_000, 14,
            url_configurador="https://configurator.porsche.com/en-WW/mode/model/9921B2"),
     Modelo("porsche_911_turbo", "Porsche", "911 Turbo S", "911_real", 190_000, 21,
@@ -64,6 +66,8 @@ MODELOS = [
            url_configurador="https://configurator.lamborghini.com/configurator/"),
     Modelo("lambo_urus", "Lamborghini", "Urus", "suv_deportivo", 190_000, 21,
            url_configurador="https://configurator.lamborghini.com/configurator/"),
+    Modelo("mclaren_w1", "McLaren", "W1", "hiper_real", 2_100_000, 42,
+           url_configurador="https://www.mclaren.com/cars/gl_en/w1"),
     Modelo("mclaren_750s", "McLaren", "750S", "super_real", 240_000, 28,
            url_configurador="https://configurator.mclaren.com/mclaren-ui/?model/750s"),
     Modelo("mclaren_artura", "McLaren", "Artura", "super_real", 190_000, 21,
@@ -85,7 +89,15 @@ MODELOS = [
     Modelo("bugatti_tourbillon", "Bugatti", "Tourbillon", "hiper_real", 3_200_000, 90,
            url_configurador="https://www.bugatti.com/models/tourbillon"),
 ]
-POR_ID = {m.id: m for m in MODELOS}
+# ya no se venden (el SF90 y el Roma los reemplazaron Ferrari), pero si alguien los
+# pidio siguen en su garage
+DESCONTINUADOS = [
+    Modelo("ferrari_sf90", "Ferrari", "SF90 Stradale", "ferrari_super", 390_000, 35,
+           url_configurador="https://carconfigurator.ferrari.com/en_EN"),
+    Modelo("ferrari_roma", "Ferrari", "Roma", "gt_ferrari", 170_000, 28,
+           url_configurador="https://carconfigurator.ferrari.com/en_EN"),
+]
+POR_ID = {m.id: m for m in MODELOS + DESCONTINUADOS}
 MARCAS = list(dict.fromkeys(m.marca for m in MODELOS))
 
 

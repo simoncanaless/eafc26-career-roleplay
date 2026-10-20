@@ -125,8 +125,10 @@ class TestInstagramSeMueveSolo(ConPartida):
             ayuda.esperar_tareas()
         self.assertTrue(pagina.actividad_tarjeta.isVisibleTo(pagina))
         guardada = database.load_actividad_instagram(self.pid)
-        self.assertEqual([a.titulo for a in guardada], ["Man Utd 5-3 Sunderland · 5 goles tuyos"])
-        self.assertEqual(database.get_seguidores(self.pid), antes + guardada[0].crecimiento_seguidores)
+        # el partido y, la primera vez, la base de seguidores del club (servicios/ecosistema.tier_club)
+        self.assertEqual(sorted(a.titulo for a in guardada),
+                         ["Jugar en Man Utd te pone en la vidriera", "Man Utd 5-3 Sunderland · 5 goles tuyos"])
+        self.assertEqual(database.get_seguidores(self.pid), antes + sum(a.crecimiento_seguidores for a in guardada))
         self.assertEqual(database.get_estado_hinchada(self.pid)["hasta"], "2027-01-16")
         textos = " ".join(
             pagina.actividad_layout.itemAt(i).widget().text()
@@ -139,7 +141,7 @@ class TestInstagramSeMueveSolo(ConPartida):
             pagina.revisar_hinchada()
             ayuda.esperar_tareas()
         comentar.assert_not_called()
-        self.assertEqual(len(database.load_actividad_instagram(self.pid)), 1)
+        self.assertEqual(len(database.load_actividad_instagram(self.pid)), 2)
 
     def test_pedir_otra_mientras_corre_la_hace_despues(self):
         from roleplay.ui.instagram import InstagramWindow

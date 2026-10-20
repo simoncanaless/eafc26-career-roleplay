@@ -10,9 +10,22 @@ Arranca de lo que se eligio al crear el personaje (models.ESTADOS_RELACION):
 - "celebridad": soltero, y es probable que lo vean con una famosa.
 - "soltero": soltero; una famosa es posible, pero menos.
 
-Las famosas son INVENTADAS (nombre, apellido y oficio se arman con listas
-propias): nunca una persona real. Con ellas si hay prensa del corazon:
-rumores, alfombras rojas, crisis.
+Las famosas salen del catalogo de Simon (roleplay/datos/famosas_ig.json, via
+servicios/ecosistema.py): los datos son suyos y su responsabilidad (lo
+decidio el 2026-10-19); la app solo los lee. Sin el archivo, se inventan
+(NOMBRES x APELLIDOS x OFICIOS). Con ellas hay prensa del corazon: rumores,
+alfombras rojas, crisis.
+
+Fama (ecosistema.calcular_fama_jugador: reputacion + tier del club + goles
++ premios) contra la `exigencia` de cada celebridad:
+- soltero, puede buscar en el catalogo y mandar un DM (uno por semana del
+  juego). Si su fama alcanza, le contesta y elige: mantenerlo en SECRETO
+  (nada sale en la prensa, pero los periodistas preguntan por los rumores) o
+  hacerlo OFICIAL. Si no alcanza, visto; y si la diferencia es grande, la
+  captura se filtra (chisme publico, reputacion -1).
+- a los que lo "ven con una famosa" (sorteo semanal), solo les toca alguien
+  de su nivel.
+- un romance secreto, al mes, pide decidir si sale a la luz.
 
 El estado de la relacion (0-100) se mueve con lo que pasa, y cuando la
 historia lo pide aparece una decision: hacer oficial el romance con la
@@ -25,8 +38,10 @@ Como los eventos inesperados, se sortea una vez por semana del juego con
 una semilla propia (jugador + semana), a lo sumo una cosa por revision.
 
 Estado en estado_json.amor:
-{"estado": soltero | conociendo | pareja | comprometido | casado,
- "pareja": {"nombre", "real": bool, "oficio", "desde", "relacion"} o None,
+{"estado": soltero | conociendo | secreto | pareja | comprometido | casado,
+ "pareja": {"nombre", "real": bool, "oficio", "desde", "relacion",
+            ("usuario_ig", "categoria", "exigencia": las del catalogo)} o None,
+ "ultimo_dm": dia del juego del ultimo DM,
  "hasta": dia del juego hasta donde se sorteo,
  "decision": {"tipo", "fecha"} o None,
  "historial": [{"id", "fecha", "titulo", "tono", "relacion", "seguidores", "dinero", "reputacion"}]}
@@ -40,7 +55,7 @@ from datetime import date, timedelta
 from typing import Optional
 
 from roleplay.models import PlayerProfile
-from roleplay.servicios import economia
+from roleplay.servicios import ecosistema, economia
 
 PROBABILIDAD_POR_SEMANA = 0.25
 HISTORIAL_GUARDADO = 20
@@ -49,6 +64,9 @@ RELACION_INICIAL = 70
 CRISIS = 25
 PROPONER_DESDE_RELACION, PROPONER_DESDE_DIAS = 80, 180
 BODA_DESDE_DIAS = 120
+DM_CADA_DIAS = 7  # un DM por semana del juego
+CHISME_DESDE = 25  # tanta diferencia entre su fama y la exigencia: el visto se filtra
+SECRETO_DECIDIR_DIAS = 30
 
 NOMBRES = ["Valentina", "Camila", "Lucia", "Martina", "Renata", "Julieta", "Emilia", "Antonella", "Catalina",
            "Florencia", "Agustina", "Paloma", "Bianca", "Alma", "Ines", "Olivia"]
@@ -110,7 +128,15 @@ MOMENTOS = [
             para=("soltero",)),
     Momento("rumores", "Mas rumores con {pareja}", "fue visto otra vez con {pareja}, {oficio}", "mixta", 0, 0.8,
             para=("conociendo",)),
+    # romance secreto: lo de adentro no sale en la prensa (privado) y lo de afuera son rumores sin nombre
+    Momento("escapada", "Escapada secreta con {pareja}", "se escapo unos dias con {pareja} sin que nadie se entere",
+            "positiva", 6, 0.0, para=("secreto",)),
+    Momento("mensajes", "Mensajes a toda hora con {pareja}", "no suelta el telefono: habla todo el dia con {pareja}",
+            "positiva", 4, 0.0, para=("secreto",)),
+    Momento("casi_descubiertos", "Casi los descubren", "estuvo a punto de ser fotografiado con alguien famoso: "
+            "las redes sospechan de un romance secreto", "mixta", -2, 0.6, para=("secreto",)),
 ]
+PRIVADOS = {"escapada", "mensajes"}  # no salen en la prensa
 POR_ID = {m.id: m for m in MOMENTOS}
 
 
@@ -125,6 +151,7 @@ class Opcion:
     semanas: float = 0.0
     reputacion: int = 0
     estado: str = ""  # el estado nuevo ("" = igual)
+    privado: bool = False  # no sale en la prensa
 
 
 @dataclass(frozen=True)
@@ -139,6 +166,18 @@ DECISIONES = {
         "Todos preguntan por vos y {pareja}", "Los rumores no paran. Lo haces oficial?",
         (Opcion("oficializar", "Hacerlo oficial", "confirmo su romance con {pareja}", "positiva", 0, 3.0, estado="pareja"),
          Opcion("negar", "Negarlo todo", "nego cualquier romance con {pareja}", "neutral", 0, 0.3, estado="soltero")),
+    ),
+    "como_seguir": Decision(
+        "{pareja} te contesto", "Le gustaste. Lo mantienen en secreto o lo hacen oficial?",
+        (Opcion("secreto", "Mantenerlo en secreto", "empezo algo en secreto con {pareja}", "positiva", 5, 0,
+                estado="secreto", privado=True),
+         Opcion("oficial", "Hacerlo oficial", "confirmo su romance con {pareja}", "positiva", 0, 3.0, estado="pareja")),
+    ),
+    "salir_a_la_luz": Decision(
+        "Un mes en secreto con {pareja}", "Lo siguen escondiendo o lo hacen publico?",
+        (Opcion("publico", "Hacerlo publico", "hizo publico su romance con {pareja}", "positiva", 5, 3.0, estado="pareja"),
+         Opcion("seguir_secreto", "Seguir en secreto", "sigue escondiendo su romance con {pareja}", "neutral", -3, 0,
+                estado="secreto", privado=True)),
     ),
     "proponer": Decision(
         "Le propones casamiento a {pareja}?", "Llevan un buen tiempo juntos y todo anda muy bien.",
@@ -176,6 +215,7 @@ class Suceso:
     fecha: Optional[date] = None
     clave: str = ""  # para el hito de la prensa
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
+    privado: bool = False  # queda en su historial, sin prensa ni seguidores
 
 
 # ---- el arranque ----
@@ -194,10 +234,82 @@ def famosa_inventada(dado: random.Random) -> dict:
             "desde": "", "relacion": 50}
 
 
+def de_catalogo(celebridad: dict) -> dict:
+    """La pareja que sale de una entrada del catalogo de Simon."""
+    return {"nombre": str(celebridad.get("nombre", "")).strip(), "real": False,
+            "oficio": str(celebridad.get("oficio", "")).strip(), "usuario_ig": celebridad.get("usuario_ig", ""),
+            "categoria": celebridad.get("categoria", ""), "exigencia": exigencia(celebridad), "desde": "",
+            "relacion": 50}
+
+
+def exigencia(celebridad: dict) -> int:
+    return ecosistema.numero(celebridad.get("exigencia"), 50)
+
+
+def famosa_para(fama: int, dado: random.Random) -> dict:
+    """Alguien de su nivel (del catalogo; si no hay catalogo, inventada)."""
+    alcanzables = [c for c in ecosistema.celebridades() if exigencia(c) <= fama]
+    if not alcanzables:
+        return famosa_inventada(dado)
+    return de_catalogo(dado.choices(alcanzables, weights=[1 + exigencia(c) / 20 for c in alcanzables])[0])
+
+
+def buscar(texto: str = "", categoria: str = "", limite: int = 40) -> list[dict]:
+    """El catalogo filtrado por nombre o @usuario y por categoria (de mas a menos exigente)."""
+    texto = texto.strip().lower().lstrip("@")
+    encontradas = [
+        c for c in ecosistema.celebridades()
+        if (not categoria or c.get("categoria") == categoria)
+        and (not texto or texto in str(c.get("nombre", "")).lower() or texto in str(c.get("usuario_ig", "")).lower())
+    ]
+    return sorted(encontradas, key=exigencia, reverse=True)[:limite]
+
+
+def categorias() -> list[str]:
+    return sorted({c.get("categoria") for c in ecosistema.celebridades() if c.get("categoria")})
+
+
+def puede_mandar_dm(estado: Optional[dict], hoy: date) -> bool:
+    estado = estado or {}
+    if estado.get("estado", "soltero") != "soltero" or estado.get("decision"):
+        return False
+    ultimo = estado.get("ultimo_dm")
+    return not ultimo or (hoy - date.fromisoformat(ultimo)).days >= DM_CADA_DIAS
+
+
+def intentar(estado: dict, e: dict, celebridad: dict, fama: int, hoy: date) -> tuple[dict, dict, Suceso]:
+    """Mandarle un DM a alguien del catalogo. Si su fama alcanza la exigencia,
+    contesta (y hay que decidir: secreto u oficial); si no, visto, y con mucha
+    diferencia la captura se filtra."""
+    if not puede_mandar_dm(estado, hoy):
+        raise ValueError("Ahora no podes mandar otro DM.")
+    estado, e = copy.deepcopy(estado), copy.deepcopy(e or {})
+    estado["ultimo_dm"] = hoy.isoformat()
+    pareja = de_catalogo(celebridad)
+    nombre, oficio = pareja["nombre"], pareja["oficio"] or "celebridad"
+    falta = pareja["exigencia"] - fama
+    if falta <= 0:
+        estado["estado"], estado["pareja"] = "conociendo", pareja
+        estado["decision"] = {"tipo": "como_seguir", "fecha": hoy.isoformat()}
+        suceso = Suceso(f"{nombre} te contesto el DM", f"recibio respuesta de {nombre}, {oficio}", "positiva", 0,
+                        fecha=hoy, clave="amor:dm:si", privado=True)
+    elif falta >= CHISME_DESDE:
+        suceso = Suceso(f"{nombre} lo dejo en visto", f"le escribio a {nombre}, {oficio}, y lo dejo en visto: "
+                        "la captura ya circula en las redes", "negativa", 0.4, reputacion=-1, fecha=hoy,
+                        clave="amor:dm:visto")
+    else:
+        suceso = Suceso(f"{nombre} no contesto", f"le escribio a {nombre}, {oficio}, y no hubo respuesta", "neutral", 0,
+                        fecha=hoy, clave="amor:dm:no", privado=True)
+    _anotar(estado, suceso, {"dm": pareja.get("usuario_ig") or nombre})
+    return estado, e, suceso
+
+
 # ---- el sorteo semanal ----
 
 
 def _clase(estado: dict) -> str:
+    if estado["estado"] == "secreto":
+        return "secreto"
     if estado["estado"] in ("pareja", "comprometido", "casado"):
         return "pareja_famosa" if not estado["pareja"]["real"] else "pareja"
     return estado["estado"]  # soltero | conociendo
@@ -227,6 +339,10 @@ def _proponer(estado: dict, hoy: date) -> None:
         tipo = "oficial"
     elif pareja and pareja["relacion"] < CRISIS:
         tipo = "crisis"
+    elif estado["estado"] == "secreto" and pareja.get("desde") and \
+            (hoy - date.fromisoformat(pareja["desde"])).days >= SECRETO_DECIDIR_DIAS and \
+            (hoy - date.fromisoformat(estado.get("secreto_revisado", pareja["desde"]))).days >= SECRETO_DECIDIR_DIAS:
+        tipo = "salir_a_la_luz"
     elif estado["estado"] == "pareja" and pareja["relacion"] >= PROPONER_DESDE_RELACION and pareja.get("desde") and \
             (hoy - date.fromisoformat(pareja["desde"])).days >= PROPONER_DESDE_DIAS and \
             not any(h.get("decision") == "proponer" and (hoy - date.fromisoformat(h["fecha"])).days < 180
@@ -252,9 +368,11 @@ def _cobrar(e: dict, suceso: Suceso) -> None:
         economia._movimiento(e, suceso.fecha, suceso.titulo, suceso.dinero)
 
 
-def revisar(perfil: PlayerProfile, estado: Optional[dict], e: dict, hoy: date) -> tuple[dict, dict, list[Suceso]]:
+def revisar(perfil: PlayerProfile, estado: Optional[dict], e: dict, hoy: date,
+            fama: int = 50) -> tuple[dict, dict, list[Suceso]]:
     """(estado nuevo, economia nueva, lo que paso) al dia `hoy` del juego.
-    La primera vez arranca del personaje y solo marca desde donde contar."""
+    La primera vez arranca del personaje y solo marca desde donde contar.
+    `fama`: a quien le puede tocar "lo ven con" (servicios/ecosistema)."""
     if not estado:
         return inicial(perfil, hoy), copy.deepcopy(e or {}), []
     estado, e = copy.deepcopy(estado), copy.deepcopy(e or {})
@@ -275,15 +393,16 @@ def revisar(perfil: PlayerProfile, estado: Optional[dict], e: dict, hoy: date) -
             continue
         momento = dado.choices([m for m, _ in opciones], weights=[p for _, p in opciones])[0]
         if momento.id == "lo_ven":
-            estado["pareja"] = famosa_inventada(dado)
+            estado["pareja"] = famosa_para(fama, dado)
             estado["estado"] = "conociendo"
         pareja = estado["pareja"]
         datos = {"pareja": pareja["nombre"], "oficio": pareja.get("oficio", "")}
         suceso = Suceso(momento.titulo.format(**datos), momento.detalle.format(**datos), momento.tono,
                         momento.seguidores, momento.relacion,
                         round(momento.semanas * e.get("sueldo", 0) * economia.NETO), momento.reputacion,
-                        fecha=min(semana + timedelta(days=7), hoy), clave=f"amor:{momento.id}")
-        if estado["estado"] in ("pareja", "comprometido", "casado"):
+                        fecha=min(semana + timedelta(days=7), hoy), clave=f"amor:{momento.id}",
+                        privado=momento.id in PRIVADOS)
+        if estado["estado"] in ("pareja", "comprometido", "casado", "secreto"):
             pareja["relacion"] = max(0, min(100, pareja["relacion"] + momento.relacion))
         _cobrar(e, suceso)
         _anotar(estado, suceso, {"momento": momento.id})
@@ -312,14 +431,16 @@ def elegir(estado: dict, e: dict, opcion_id: str, hoy: date) -> tuple[dict, dict
     nombre = pareja["nombre"]
     suceso = Suceso(opcion.texto, opcion.noticia.format(pareja=nombre), opcion.tono, opcion.seguidores, opcion.relacion,
                     round(opcion.semanas * e.get("sueldo", 0) * economia.NETO), opcion.reputacion, fecha=hoy,
-                    clave=f"amor:{tipo}:{opcion.id}")
+                    clave=f"amor:{tipo}:{opcion.id}", privado=opcion.privado)
     pareja["relacion"] = max(0, min(100, pareja["relacion"] + opcion.relacion))
     if pareja["real"] and suceso.tono == "negativa":
         suceso.tono = "neutral"  # con una persona real, nada de drama en la prensa
     if opcion.estado == "soltero":
         estado["pareja"] = None
-    elif opcion.estado == "pareja" and estado["estado"] == "conociendo":
+    elif opcion.estado in ("pareja", "secreto") and estado["estado"] == "conociendo":
         pareja.update(desde=hoy.isoformat(), relacion=60)
+    if tipo == "salir_a_la_luz":
+        estado["secreto_revisado"] = hoy.isoformat()
     if opcion.estado == "comprometido":
         estado["comprometidos"] = hoy.isoformat()
     if opcion.estado:

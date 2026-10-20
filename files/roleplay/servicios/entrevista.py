@@ -188,8 +188,141 @@ def _elegir(candidatas: list[tuple[float, str, dict]], escritor, reserva: list) 
     return simbolo, datos
 
 
+# ---- las 8 tematicas y los periodistas ----
+
+TEMAS = {
+    "vestuario": "companeros y vestuario (el nivel de un companero, liderazgos, internas)",
+    "mercado": "el mercado de pases del club (los que se fueron, los que llegaron, su futuro)",
+    "tactica": "tactica y relacion con el DT",
+    "racha": "racha goleadora o sequia, estadisticas y metas",
+    "arbitraje": "polemicas arbitrales y cruces con rivales",
+    "vida_privada": "vida privada, redes, lo que publican las paginas de futbol y los rumores",
+    "contratos": "contratos, patrocinios con marcas y futuro",
+    "hinchada": "la presion de la hinchada",
+}
+# que estilo de periodista (ecosistema_ig.json, datos de Simon) pregunta cada tema
+ESTILO_DE_TEMA = {"tactica": "tactico", "racha": "tactico", "mercado": "mercado", "contratos": "mercado",
+                  "vestuario": "vestuario", "hinchada": "vestuario", "arbitraje": "polemico",
+                  "vida_privada": "polemico"}
+# sin los datos de Simon, los tres de siempre
+PROPIOS_POR_ESTILO = {"tactico": PERIODISTAS[0], "vestuario": PERIODISTAS[1], "mercado": PERIODISTAS[1],
+                      "polemico": PERIODISTAS[2]}
+PREGUNTAS_POR_CONFERENCIA = 3
+OBLIGATORIO_DESDE = 7  # una pregunta tan jugosa (hat-trick, roja, sequia, el auto y la mala nota...) no se sortea
+TIPOS_VIDA = ("compra_mal", "compra_bien", "pareja_real", "pareja_famosa", "rumor", "rumor_secreto", "crisis",
+              "evento_malo", "evento_bueno")
+TIPOS_HINCHADA = ("hinchada_contra", "idolo", "ex_club_traidor", "ex_club_idolo", "ex_club_mala")
+TIPOS_METAS = ("meta_cerca", "meta_tabla")
+
+
+def periodista_para(tema: str, usados: set, dado) -> tuple[str, str]:
+    """(nombre, medio) de un periodista del estilo del tema que no pregunto todavia."""
+    from roleplay.servicios import ecosistema
+
+    estilo = ESTILO_DE_TEMA.get(tema, "vestuario")
+    reales = [p for p in ecosistema.periodistas() if str(p.get("nombre", "")).strip() and p["nombre"] not in usados]
+    if reales:
+        elegido = dado.choice([p for p in reales if p.get("estilo") == estilo] or reales)
+        medio = str(elegido.get("medio") or elegido.get("usuario_ig") or "prensa")
+        return str(elegido["nombre"]).strip(), medio.replace(":", " -").replace("(", "").replace(")", "")
+    propio = PROPIOS_POR_ESTILO.get(estilo, PERIODISTAS[0])
+    if propio[0] in usados:
+        propio = next((p for p in PERIODISTAS if p[0] not in usados), propio)
+    return propio
+
+
+DEL_PARTIDO = ("tactica", "racha")  # siempre va al menos una pregunta sobre el partido
+
+
+def _sortear_temas(candidatos: dict, pesos: dict, escritor) -> list[str]:
+    """Los obligatorios (lo mas jugoso) y el resto por sorteo ponderado por el
+    contexto; si no salio ninguna sobre el partido, la ultima sorteada se cambia."""
+    prioridad = {}
+    for tema, lista in candidatos.items():
+        escribibles = [p for p, s, d in lista if escritor.puede(s, **d)]
+        if escribibles:
+            prioridad[tema] = max(escribibles)
+    elegidos = sorted((t for t, p in prioridad.items() if p >= OBLIGATORIO_DESDE), key=lambda t: -prioridad[t])
+    elegidos = elegidos[:PREGUNTAS_POR_CONFERENCIA]
+    resto = [t for t in prioridad if t not in elegidos]
+    obligatorios = len(elegidos)
+    while len(elegidos) < PREGUNTAS_POR_CONFERENCIA and resto:
+        tema = escritor.dado.choices(resto, weights=[pesos.get(t, 1.0) for t in resto])[0]
+        elegidos.append(tema)
+        resto.remove(tema)
+    del_partido = [t for t in DEL_PARTIDO if t in prioridad]
+    if del_partido and not any(t in elegidos for t in DEL_PARTIDO) and len(elegidos) > obligatorios:
+        elegidos[-1] = max(del_partido, key=lambda t: (prioridad[t], pesos.get(t, 1.0)))
+    return elegidos
+
+
+def armar_conferencia(perfil: PlayerProfile, candidatos: dict, pesos: dict, contexto: str, cruces) -> list[str]:
+    """Tres preguntas de tres periodistas distintos sobre tres temas distintos
+    (y, si hay IA, reescritas sobre los mismos temas y hechos)."""
+    preguntas, usados = [], set()
+    with narrador(perfil.id, "entrevista") as escritor:
+        temas = _sortear_temas(candidatos, pesos, escritor)
+        for tema in temas:
+            simbolo, datos = _elegir(candidatos[tema], escritor, candidatos[tema])
+            nombre, medio = periodista_para(tema, usados, escritor.dado)
+            usados.add(nombre)
+            preguntas.append(f"{nombre} ({medio}): {escritor.decir(simbolo, **datos)}")
+    return preguntas_con_ia(perfil, contexto, preguntas, cruces, temas) or preguntas
+
+
+def contexto_de_club(perfil: PlayerProfile) -> dict:
+    """Lo del club que no esta en el partido: el ultimo movimiento del mercado
+    que toco al club y la marca con la que tiene contrato."""
+    if not perfil.id:
+        return {}
+    from roleplay import database
+
+    extra = {}
+    movimientos = [m for m in database.get_estado_prensa(perfil.id).get("mercado", []) if m.get("club") and m.get("texto")]
+    if movimientos:
+        extra["movimiento"] = movimientos[0]["texto"].strip().rstrip(".")
+    contratos = (database.get_economia(perfil.id).get("patrocinios") or {}).get("contratos") or []
+    if contratos:
+        extra["marca"] = contratos[-1]["nombre"]
+    return extra
+
+
+def temas_comunes(perfil: PlayerProfile, base: dict, cruces, extra: dict) -> tuple[dict, dict]:
+    """Los candidatos y pesos que valen igual antes y despues del partido."""
+    candidatos = {t: [] for t in TEMAS}
+    pesos = {t: 1.0 for t in TEMAS}
+    candidatos["vestuario"].append((2, "tema_vestuario", base))
+    candidatos["hinchada"].append((1.5, "tema_hinchada", base))
+    candidatos["arbitraje"].append((2, "tema_arbitraje", base))
+    candidatos["vida_privada"] += [(1, "pic_generico", base), (1, "tema_vida", base)]
+    candidatos["mercado"].append((1, "tema_mercado_futuro", base))
+    candidatos["contratos"].append((1, "tema_contratos", base))
+    candidatos["tactica"].append((2, "tema_tactica", base))
+    if perfil.personalidad == "polemico":
+        candidatos["arbitraje"].append((3, "pic_polemico", base))
+        pesos["arbitraje"] += 1
+        pesos["vida_privada"] += 1
+    if extra.get("movimiento"):
+        candidatos["mercado"].append((6, "tema_mercado", {**base, "movimiento": extra["movimiento"]}))
+        pesos["mercado"] += 3
+    if extra.get("marca"):
+        candidatos["contratos"].append((5, "tema_patrocinio", {**base, "marca": extra["marca"]}))
+        pesos["contratos"] += 1.5
+    for c in cruces:
+        datos = {**base, **c.datos}
+        if c.tipo in TIPOS_VIDA:
+            candidatos["vida_privada"].append((c.peso - 0.5, f"pic_{c.tipo}", datos))
+            pesos["vida_privada"] += 2
+        if c.tipo in TIPOS_HINCHADA:
+            candidatos["hinchada"] += [(c.peso, f"ves_{c.tipo}", datos), (c.peso - 0.5, f"pic_{c.tipo}", datos)]
+            pesos["hinchada"] += 2
+    return candidatos, pesos
+
+
 def generar_entrevista(perfil: PlayerProfile, stats: MatchStats) -> list[str]:
-    """Las tres preguntas (tactico, vestuario, picante)."""
+    """Tres preguntas de tres periodistas, sobre tres de las 8 tematicas:
+    lo mas jugoso del partido y de su vida va si o si; el resto se sortea
+    con pesos segun el contexto (roja, derrota, mercado, rumores...)."""
     historial = _historial(perfil)
     carrera = _carrera()
     resultado = resultado_de(stats)
@@ -201,54 +334,45 @@ def generar_entrevista(perfil: PlayerProfile, stats: MatchStats) -> list[str]:
     }
     memoria = _memoria(stats, historial)
     cruces = cruce.cruces(perfil.id, stats.equipo_rival, stats.rating_jugador or None, carrera)
-    usados = set()
-
-    tactico = [(1, f"tac_{resultado}" if resultado != "victoria" else
-                ("tac_victoria_gol" if stats.goles_jugador else "tac_victoria_sin_gol"), base)]
-    if stats.goles_jugador >= 3:
-        tactico.append((9, "tac_hat_trick", base))
-    if stats.tarjeta_roja:
-        tactico.append((9, "tac_roja", base))
-    if "sequia_rota" in memoria:
-        tactico.append((8, "tac_sequia_rota", {**base, "partidos_sin_gol": memoria["sequia_rota"]}))
-    if "caida" in memoria:
-        tactico.append((8, "tac_caida", {**base, "promedio_antes": memoria["caida"]}))
-    if "mismo_rival" in memoria:
-        tactico.append((6, "tac_mismo_rival", {**base, "marcador_antes": memoria["mismo_rival"]}))
     tabla = _tabla(carrera, stats)
+    candidatos, pesos = temas_comunes(perfil, base, cruces, contexto_de_club(perfil))
+
+    candidatos["tactica"].append((1, f"tac_{resultado}" if resultado != "victoria" else "tac_victoria_sin_gol", base))
+    candidatos["vestuario"] += [(1, f"ves_{resultado}", base), (0.5, "ves_generico", base)]
+    racha = candidatos["racha"]
+    if resultado == "victoria" and stats.goles_jugador:
+        racha.append((1, "tac_victoria_gol", base))
+    if stats.goles_jugador >= 3:
+        racha.append((9, "tac_hat_trick", base))
+    if "sequia_rota" in memoria:
+        racha.append((8, "tac_sequia_rota", {**base, "partidos_sin_gol": memoria["sequia_rota"]}))
+    if "caida" in memoria:
+        racha.append((8, "tac_caida", {**base, "promedio_antes": memoria["caida"]}))
+    if "mismo_rival" in memoria:
+        racha.append((6, "tac_mismo_rival", {**base, "marcador_antes": memoria["mismo_rival"]}))
     if tabla:
-        tactico.append((7, "tac_tabla_sube" if tabla["sube"] else "tac_tabla_baja", {**base, **tabla}))
+        racha.append((7, "tac_tabla_sube" if tabla["sube"] else "tac_tabla_baja", {**base, **tabla}))
     if "racha" in memoria:
-        tactico.append((6, "tac_racha", {**base, "racha": memoria["racha"]}))
-    if stats.hombre_del_partido:
-        tactico.append((5, "tac_figura", base))
-    if 0 < stats.minutos_jugados < 45:
-        tactico.append((4, "tac_pocos_minutos", base))
-
-    vestuario = [(1, f"ves_{resultado}", base), (0.5, "ves_generico", base)]
+        racha.append((6, "tac_racha", {**base, "racha": memoria["racha"]}))
     for c in cruces:
-        if c.tipo in ("meta_cerca", "meta_tabla", "hinchada_contra", "idolo", "ex_club_traidor", "ex_club_idolo",
-                      "ex_club_mala"):
-            vestuario.append((c.peso, f"ves_{c.tipo}", {**base, **c.datos}))
-
-    picante = [(1, "pic_generico", base)]
-    if perfil.personalidad == "polemico":
-        picante.append((2, "pic_polemico", base))
+        if c.tipo in TIPOS_METAS:
+            racha.append((c.peso, f"ves_{c.tipo}", {**base, **c.datos}))
+    if any(k in memoria for k in ("sequia_rota", "caida", "racha")) or stats.goles_jugador >= 3:
+        pesos["racha"] += 3
+    if stats.hombre_del_partido:
+        candidatos["tactica"].append((5, "tac_figura", base))
+    if 0 < stats.minutos_jugados < 45:
+        candidatos["tactica"].append((4, "tac_pocos_minutos", base))
+        pesos["tactica"] += 2
+    if stats.tarjeta_roja:
+        candidatos["arbitraje"].append((9, "tac_roja", base))
     if "contradiccion" in memoria:
         cita, rival_anterior = memoria["contradiccion"]
-        picante.append((10, "pic_contradiccion", {**base, "cita_anterior": cita, "rival_anterior": rival_anterior}))
-    for c in cruces:
-        if c.tipo in ("compra_mal", "compra_bien", "pareja_real", "pareja_famosa", "rumor", "crisis", "evento_malo",
-                      "evento_bueno", "ex_club_traidor", "hinchada_contra"):
-            picante.append((c.peso - 0.5, f"pic_{c.tipo}", {**base, **c.datos}))
-
-    preguntas = []
-    with narrador(perfil.id, "entrevista") as escritor:
-        for (nombre, medio), candidatas in zip(PERIODISTAS, (tactico, vestuario, picante)):
-            libres = [c for c in candidatas if c[1].split("_", 1)[1] not in usados]
-            simbolo, datos = _elegir(libres, escritor, candidatas)
-            usados.add(simbolo.split("_", 1)[1])  # el mismo tema no lo pregunta otro periodista
-            preguntas.append(f"{nombre} ({medio}): {escritor.decir(simbolo, **datos)}")
+        candidatos["arbitraje"].append((10, "pic_contradiccion",
+                                        {**base, "cita_anterior": cita, "rival_anterior": rival_anterior}))
+    if resultado != "victoria":
+        pesos["arbitraje"] += 1.5
+        pesos["hinchada"] += 2
     contexto = [f"Partido de hoy: {describir_partido(stats)}"]
     if memoria:
         contexto.append(f"Memoria de partidos anteriores: {memoria}")
@@ -258,7 +382,7 @@ def generar_entrevista(perfil: PlayerProfile, stats: MatchStats) -> list[str]:
         anterior = zip(historial[0].preguntas_entrevista, historial[0].respuestas_jugador)
         contexto.append("Su entrevista anterior (vs " + (historial[0].equipo_rival or "?") + "): "
                         + " | ".join(f"P: {p[:160]} R: {r[:200]}" for p, r in anterior))
-    return preguntas_con_ia(perfil, "\n".join(contexto), preguntas, cruces) or preguntas
+    return armar_conferencia(perfil, candidatos, pesos, "\n".join(contexto), cruces)
 
 
 # ---- la IA hibrida (opcional) ----
@@ -271,26 +395,32 @@ ESTILOS = {
 SISTEMA_PREGUNTAS = (
     "Sos el editor de una conferencia de prensa de futbol en un juego de roleplay. Tres periodistas le hacen "
     "una pregunta cada uno al jugador. Reescribi la pregunta de cada periodista con su estilo, sobre EL MISMO "
-    "tema que ya se eligio, con variedad y gancho (1 a 2 oraciones, tuteando al jugador). Usa los hechos dados "
+    "tema que ya se eligio, con variedad y gancho (1 a 2 oraciones, tuteando al jugador), con el tono del "
+    "periodismo deportivo actual (streaming, debates, zona mixta): directo y picante. Usa los hechos dados "
     "tal cual. Devolve las preguntas en el mismo orden, sin el nombre del periodista adelante."
 )
 SISTEMA_REACCION = (
     "Sos la prensa deportiva que cubre la conferencia de un futbolista en un juego de roleplay. "
     "`reaccion_prensa`: 3 a 4 oraciones en tono periodistico, en tercera persona, que analicen y contesten "
     "ESPECIFICAMENTE lo que dijo el jugador (sus argumentos, quejas, chistes o detalles; podes citarlo textual "
-    "entre «»), conectandolo con el partido y, si aplica, con lo primero de su vida. "
+    "entre «»), conectandolo con el partido y, si aplica, con lo primero de su vida. Tono del periodismo deportivo "
+    "actual (streaming, debates, zona mixta): si pone excusas o dice algo fuerte, la prensa le contesta con polemica. "
     "`delta_reputacion`: entero (cuanto le suma o resta a su reputacion; parti del sugerido por el sistema). "
     "`delta_carino`: entero de -6 a 6 (la hinchada de su club). `cita`: su frase mas jugosa COPIADA TEXTUAL de "
     "sus respuestas, o vacio. `nuevo_gancho_narrativo`: una trama que deja abierta (promesa, desafio), o vacio."
 )
 
 
-def preguntas_con_ia(perfil: PlayerProfile, contexto: str, preguntas: list[str], cruces) -> Optional[list[str]]:
+def preguntas_con_ia(perfil: PlayerProfile, contexto: str, preguntas: list[str], cruces,
+                     temas: Optional[list[str]] = None) -> Optional[list[str]]:
     """Las mismas preguntas (mismo periodista, mismo tema) reescritas por la IA, o None."""
     partes = [p.split(": ", 1) for p in preguntas]
+    temas = list(temas or [])
     lista = "\n".join(
-        f"{i + 1}. {quien} - estilo {next((e for m, e in ESTILOS.items() if m in quien), 'general')}. "
-        f"Tema y pregunta base: {base}" for i, (quien, base) in enumerate(partes)
+        f"{i + 1}. {quien} - "
+        + (f"tema: {TEMAS.get(temas[i], temas[i])}" if i < len(temas) else
+           f"estilo {next((e for m, e in ESTILOS.items() if m in quien), 'general')}")
+        + f". Pregunta base: {base}" for i, (quien, base) in enumerate(partes)
     )
     datos = ia.pedir_json(
         SISTEMA_PREGUNTAS,

@@ -72,6 +72,8 @@ def _amor(estado: dict) -> Optional[Cruce]:
     pareja = estado.get("pareja")
     if not pareja:
         return None
+    if estado.get("estado") == "secreto":
+        return Cruce("rumor_secreto", 4.5, {})  # nadie sabe con quien: la prensa pregunta por los rumores
     datos = {"pareja": pareja["nombre"], "oficio": pareja.get("oficio", "")}
     if estado.get("estado") == "conociendo":
         return Cruce("rumor", 6, datos)

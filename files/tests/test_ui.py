@@ -163,7 +163,7 @@ class TestEntrevista(ayuda.PruebaDeInterfaz):
         self.pagina.generar_entrevista_btn.click()
         ayuda.esperar_tareas()
         preguntas = self.pagina._preguntas
-        self.assertEqual([q.split(" (")[0] for q in preguntas], [nombre for nombre, _ in servicio.PERIODISTAS])
+        self.assertEqual(sorted(q.split(" (")[0] for q in preguntas), sorted(n for n, _ in servicio.PERIODISTAS))
         self.assertEqual(len(self.pagina._respuesta_edits), len(preguntas))
         self.assertNotRegex(" ".join(preguntas), r"[{}]|#\w+#")
 

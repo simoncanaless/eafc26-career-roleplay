@@ -27,3 +27,9 @@ files/CODIGO_TEXTO.txt
 
 # catalogo de EA FC (lo baja scripts/nombres_faltantes.py --catalogo-ea): solo local, si va en el paquete
 files/roleplay/datos/catalogo_ea.json
+
+# datos de Simon (sus scripts): personas reales y fotos, solo locales; si van en el paquete de los amigos
+files/roleplay/datos/famosas_ig.json
+files/roleplay/datos/ecosistema_ig.json
+files/roleplay/datos/autos_marketplace.json
+files/roleplay/datos/img_autos/

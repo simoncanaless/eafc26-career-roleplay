@@ -1,5 +1,6 @@
 """Metas de temporada: se siguen con la partida y son noticia."""
 
+import re
 from pathlib import Path
 from unittest import mock
 
@@ -90,9 +91,9 @@ class TestMetasEnLaPrensa(ayuda.PruebaConBase):
         database.agregar_meta(self.perfil.id, meta("goles", 10))  # lleva 8: esta cerca
         stats = MatchStats(goles_equipo=1, goles_rival=1, equipo_rival="Leeds", rating_jugador=6.9, minutos_jugados=90)
         with mock.patch.object(entrevista, "_carrera", return_value=construir(f.construir_bytes())):
-            vestuario = entrevista.generar_entrevista(self.perfil, stats)[1]
-        self.assertTrue(vestuario.startswith("Valentina Aros (Radio Tribuna): "))
-        self.assertRegex(vestuario, r"2 goles|8 de 10")  # le faltan 2: la cuenta regresiva
+            preguntas = entrevista.generar_entrevista(self.perfil, stats)
+        # le faltan 2: la cuenta regresiva (tan cerca, la pregunta es obligatoria)
+        self.assertTrue(any(re.search(r"2 goles|8 de 10", p) for p in preguntas), preguntas)
 
     def test_actualizar_no_revive_una_borrada(self):
         m = meta("goles", 30)

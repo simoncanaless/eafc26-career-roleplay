@@ -80,7 +80,7 @@ class TestDibujo(ayuda.PruebaDeInterfaz):
             svg = svg_auto(Configuracion(modelo.id))
             self.assertTrue(QSvgRenderer(QByteArray(svg.encode())).isValid(), modelo.id)
             self.assertEqual(svg.count('fill="#0B0C0E"'), 2, modelo.id)  # los dos pasarruedas, tambien en un todoterreno
-        self.assertEqual({m.carroceria for m in autos.MODELOS}, set(SILUETAS))  # y ninguna familia sobra
+        self.assertEqual({m.carroceria for m in autos.MODELOS + autos.DESCONTINUADOS}, set(SILUETAS))  # y ninguna familia sobra
         aleron = 'M 318 52'
         self.assertIn(aleron, svg_auto(Configuracion("porsche_gt3rs")))
         self.assertNotIn(aleron, svg_auto(Configuracion("porsche_911")))

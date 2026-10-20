@@ -165,24 +165,17 @@ def generar_previa(perfil: PlayerProfile, previa: PreviaPartido) -> list[str]:
     datos = {"nombre": perfil.nombre_jugador, "apellido": entrevista.apellido(perfil), "club": previa.club,
              "rival": previa.rival, **{k: v for k, v in sueltos.items() if v}}
     cruces = cruce.cruces(perfil.id, previa.rival, None, entrevista._carrera())
-    tactico = [(1, "pv_tac_generico", datos), (5, "pv_tac_tabla", datos), (4, "pv_tac_racha", datos),
-               (6, "pv_tac_cruce", datos), (5, "pv_tac_goleador", datos)]
-    vestuario = [(1, "pv_ves_generico", datos)]
-    picante = [(1, "pic_generico", datos)]
-    if perfil.personalidad == "polemico":
-        picante.append((2, "pic_polemico", datos))
+    candidatos, pesos = entrevista.temas_comunes(perfil, datos, cruces, entrevista.contexto_de_club(perfil))
+    candidatos["tactica"] += [(1, "pv_tac_generico", datos), (5, "pv_tac_tabla", datos)]
+    candidatos["racha"] += [(4, "pv_tac_racha", datos), (6, "pv_tac_cruce", datos), (5, "pv_tac_goleador", datos)]
+    candidatos["vestuario"].append((1, "pv_ves_generico", datos))
     for c in cruces:
         if c.tipo in ("meta_cerca", "ex_club_traidor", "ex_club_idolo"):
-            vestuario.append((c.peso, f"pv_ves_{c.tipo}", {**datos, **c.datos}))
-        if c.tipo in ("compra_bien", "pareja_real", "pareja_famosa", "rumor", "crisis", "evento_malo", "evento_bueno",
-                      "hinchada_contra"):
-            picante.append((c.peso, f"pic_{c.tipo}", {**datos, **c.datos}))
-    preguntas = []
-    with narrador(perfil.id, "entrevista") as escritor:
-        for (nombre, medio), candidatas in zip(entrevista.PERIODISTAS, (tactico, vestuario, picante)):
-            simbolo, elegidos = entrevista._elegir(candidatas, escritor, candidatas)
-            preguntas.append(f"{nombre} ({medio}): {escritor.decir(simbolo, **elegidos)}")
-    return entrevista.preguntas_con_ia(perfil, _contexto(previa), preguntas, cruces) or preguntas
+            tema = "racha" if c.tipo == "meta_cerca" else "hinchada"
+            candidatos[tema].append((c.peso, f"pv_ves_{c.tipo}", {**datos, **c.datos}))
+    pesos["tactica"] += 1  # en la previa, el rival y la tabla mandan
+    pesos["racha"] += 1
+    return entrevista.armar_conferencia(perfil, candidatos, pesos, _contexto(previa), cruces)
 
 
 def _contexto(previa: PreviaPartido) -> str:
