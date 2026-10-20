@@ -273,17 +273,46 @@ def armar_conferencia(perfil: PlayerProfile, candidatos: dict, pesos: dict, cont
     return preguntas_con_ia(perfil, contexto, preguntas, cruces, temas) or preguntas
 
 
-def contexto_de_club(perfil: PlayerProfile) -> dict:
+# la linea de cada posicion (carrera.POSICIONES): un fichaje solo le toca al jugador si es de su linea
+LINEA = {
+    "arquero": "arco", "libero": "defensa", "carrilero derecho": "defensa", "lateral derecho": "defensa",
+    "defensa central": "defensa", "lateral izquierdo": "defensa", "carrilero izquierdo": "defensa",
+    "mediocentro defensivo": "medio", "volante derecho": "medio", "mediocentro": "medio", "volante izquierdo": "medio",
+    "mediapunta": "medio", "segundo delantero": "ataque", "extremo derecho": "ataque", "delantero centro": "ataque",
+    "extremo izquierdo": "ataque",
+}
+
+
+def posicion_del_usuario(carrera) -> str:
+    if carrera is None or carrera.usuario_id is None:
+        return ""
+    return carrera.ficha(carrera.usuario_id).get("posicion", "")
+
+
+def contexto_de_club(perfil: PlayerProfile, carrera=None) -> dict:
     """Lo del club que no esta en el partido: el ultimo movimiento del mercado
-    que toco al club y la marca con la que tiene contrato."""
+    del club que es DE SU LINEA (un lateral que llega no le toca a un delantero
+    centro; uno de su mismo puesto es competencia) y la marca con la que tiene
+    contrato. Sin saber su posicion (o la del otro), no se pregunta por fichajes."""
     if not perfil.id:
         return {}
     from roleplay import database
 
     extra = {}
-    movimientos = [m for m in database.get_estado_prensa(perfil.id).get("mercado", []) if m.get("club") and m.get("texto")]
-    if movimientos:
-        extra["movimiento"] = movimientos[0]["texto"].strip().rstrip(".")
+    carrera = carrera if carrera is not None else _carrera()
+    propia = posicion_del_usuario(carrera)
+    if propia:
+        extra["posicion"] = propia
+    for m in database.get_estado_prensa(perfil.id).get("mercado", []):
+        if not (m.get("club") and m.get("texto") and m.get("posicion") and propia):
+            continue
+        if LINEA.get(m["posicion"]) != LINEA.get(propia) or m.get("jugador") == getattr(carrera, "usuario_id", None):
+            continue
+        extra.update(movimiento=m["texto"].strip().rstrip("."), llega=bool(m.get("llega")),
+                     posicion_fichaje=m["posicion"])
+        if m["posicion"] == propia:
+            extra["puesto_compartido"] = propia
+        break
     contratos = (database.get_economia(perfil.id).get("patrocinios") or {}).get("contratos") or []
     if contratos:
         extra["marca"] = contratos[-1]["nombre"]
@@ -306,7 +335,11 @@ def temas_comunes(perfil: PlayerProfile, base: dict, cruces, extra: dict) -> tup
         pesos["arbitraje"] += 1
         pesos["vida_privada"] += 1
     if extra.get("movimiento"):
-        candidatos["mercado"].append((6, "tema_mercado", {**base, "movimiento": extra["movimiento"]}))
+        datos_mercado = {**base, "movimiento": extra["movimiento"], "posicion_fichaje": extra["posicion_fichaje"]}
+        if extra.get("puesto_compartido"):
+            datos_mercado["puesto_compartido"] = extra["puesto_compartido"]
+        simbolo = "tema_mercado_llega" if extra.get("llega") else "tema_mercado_sale"
+        candidatos["mercado"].append((6, simbolo, datos_mercado))
         pesos["mercado"] += 3
     if extra.get("marca"):
         candidatos["contratos"].append((5, "tema_patrocinio", {**base, "marca": extra["marca"]}))
@@ -338,7 +371,8 @@ def generar_entrevista(perfil: PlayerProfile, stats: MatchStats) -> list[str]:
     memoria = _memoria(stats, historial)
     cruces = cruce.cruces(perfil.id, stats.equipo_rival, stats.rating_jugador or None, carrera)
     tabla = _tabla(carrera, stats)
-    candidatos, pesos = temas_comunes(perfil, base, cruces, contexto_de_club(perfil))
+    extra = contexto_de_club(perfil, carrera)
+    candidatos, pesos = temas_comunes(perfil, base, cruces, extra)
 
     candidatos["tactica"].append((1, f"tac_{resultado}" if resultado != "victoria" else "tac_victoria_sin_gol", base))
     candidatos["vestuario"] += [(1, f"ves_{resultado}", base), (0.5, "ves_generico", base)]
@@ -377,6 +411,8 @@ def generar_entrevista(perfil: PlayerProfile, stats: MatchStats) -> list[str]:
         pesos["arbitraje"] += 1.5
         pesos["hinchada"] += 2
     contexto = [f"Partido de hoy: {describir_partido(stats)}"]
+    if extra.get("posicion"):
+        contexto.append(f"Posicion del jugador en su club: {extra['posicion']}")
     if memoria:
         contexto.append(f"Memoria de partidos anteriores: {memoria}")
     if tabla:
@@ -400,7 +436,8 @@ SISTEMA_PREGUNTAS = (
     "una pregunta cada uno al jugador. Reescribi la pregunta de cada periodista con su estilo, sobre EL MISMO "
     "tema que ya se eligio, con variedad y gancho (1 a 2 oraciones, tuteando al jugador), con el tono del "
     "periodismo deportivo actual (streaming, debates, zona mixta): directo y picante. Usa los hechos dados "
-    "tal cual. Devolve las preguntas en el mismo orden, sin el nombre del periodista adelante."
+    "tal cual: nunca le atribuyas al jugador una posicion, un rol o una zona de la cancha distinta de la que "
+    "dicen los datos. Devolve las preguntas en el mismo orden, sin el nombre del periodista adelante."
 )
 SISTEMA_REACCION = (
     "Sos la prensa deportiva que cubre la conferencia de un futbolista en un juego de roleplay. "

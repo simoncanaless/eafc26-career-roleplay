@@ -359,7 +359,8 @@ def revisar_prensa_con_partida(
         hoy = carrera.fecha_actual()
         nuevos = [
             {"fecha": hoy.isoformat() if hoy else "", "texto": mercado.describir_traspaso(carrera, t, nombres),
-             "club": t.toca_al_club}
+             "club": t.toca_al_club, "jugador": t.jugador, "llega": t.hacia == carrera.club_de(carrera.usuario_id),
+             "posicion": carrera.ficha(t.jugador).get("posicion", "")}
             for t in traspasos
         ]
         resultado["estado_prensa"]["mercado"] = (nuevos + list(estado_prensa.get("mercado", [])))[: mercado.MERCADO_GUARDADO]

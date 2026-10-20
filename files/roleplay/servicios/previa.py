@@ -165,7 +165,7 @@ def generar_previa(perfil: PlayerProfile, previa: PreviaPartido) -> list[str]:
     datos = {"nombre": perfil.nombre_jugador, "apellido": entrevista.apellido(perfil), "club": previa.club,
              "rival": previa.rival, **{k: v for k, v in sueltos.items() if v}}
     cruces = cruce.cruces(perfil.id, previa.rival, None, entrevista._carrera())
-    candidatos, pesos = entrevista.temas_comunes(perfil, datos, cruces, entrevista.contexto_de_club(perfil))
+    candidatos, pesos = entrevista.temas_comunes(perfil, datos, cruces, entrevista.contexto_de_club(perfil, entrevista._carrera()))
     candidatos["tactica"] += [(1, "pv_tac_generico", datos), (5, "pv_tac_tabla", datos)]
     candidatos["racha"] += [(4, "pv_tac_racha", datos), (6, "pv_tac_cruce", datos), (5, "pv_tac_goleador", datos)]
     candidatos["vestuario"].append((1, "pv_ves_generico", datos))

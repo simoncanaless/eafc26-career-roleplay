@@ -42,5 +42,42 @@ class TestConferencia(ConEcosistema):
         self.assertNotIn("Periodista emocional @pemocional", tacticos)
 
 
+class TestFichajesDeSuLinea(ConEcosistema):
+    """Un lateral que llega no le toca a un delantero centro; un extremo o un 9, si."""
+
+    def _carrera(self, posicion="delantero centro"):
+        carrera = mock.Mock(usuario_id=1)
+        carrera.ficha.return_value = {"posicion": posicion}
+        return carrera
+
+    def _mercado(self, *movimientos):
+        from roleplay import database
+
+        database.set_estado_prensa(self.perfil.id, {"mercado": [
+            {"texto": texto, "club": True, "jugador": 10 + i, "llega": llega, "posicion": posicion}
+            for i, (texto, llega, posicion) in enumerate(movimientos)]})
+
+    def test_un_lateral_no_le_toca_a_un_delantero(self):
+        self._mercado(("Conor Bradley llega de Brighton", True, "lateral derecho"))
+        extra = entrevista.contexto_de_club(self.perfil, self._carrera())
+        self.assertNotIn("movimiento", extra)
+        self.assertEqual(extra["posicion"], "delantero centro")
+
+    def test_un_extremo_o_un_nueve_si(self):
+        self._mercado(("Un lateral llega", True, "lateral izquierdo"), ("Un extremo llega de Napoli", True, "extremo derecho"))
+        extra = entrevista.contexto_de_club(self.perfil, self._carrera())
+        self.assertEqual(extra["movimiento"], "Un extremo llega de Napoli")
+        self.assertNotIn("puesto_compartido", extra)  # misma linea, otro puesto: acomodarse
+        self._mercado(("Un nueve llega del Inter", True, "delantero centro"))
+        extra = entrevista.contexto_de_club(self.perfil, self._carrera())
+        self.assertEqual(extra["puesto_compartido"], "delantero centro")  # competencia directa
+        candidatos, _ = entrevista.temas_comunes(self.perfil, {"club": "Man Utd", "rival": "Leeds"}, [], extra)
+        self.assertIn("tema_mercado_llega", [s for _, s, _ in candidatos["mercado"]])
+
+    def test_sin_posicion_conocida_no_pregunta_por_fichajes(self):
+        self._mercado(("Un nueve llega", True, "delantero centro"), ("Uno viejo sin posicion", True, ""))
+        self.assertNotIn("movimiento", entrevista.contexto_de_club(self.perfil, self._carrera("")))
+
+
 if __name__ == "__main__":
     unittest.main()
