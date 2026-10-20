@@ -49,6 +49,13 @@ class TestPreviaDelProximo(ayuda.PruebaConBase):
         self.assertIn("En la tabla: Man Utd 2° con 6 pts, Manchester City 1° con 7 pts (de 5 equipos).", p.datos)
         self.assertIn("Goleador de Manchester City (Premier League): Erling Haaland con 5 goles.", p.datos)
         self.assertIn("Ultimo partido de Manchester City: Manchester City 2-0 Arsenal (Premier League).", p.datos)
+        # a la IA se le dice quien es quien (una nota lo culpo del goleador del rival y le dio los goles del 7-0)
+        from roleplay.servicios import ia, previa
+
+        contexto = previa._contexto(p)
+        self.assertIn("El jugador juega en Man Utd; el rival es Manchester City.", contexto)
+        self.assertIn("Los marcadores son de los equipos", contexto)
+        self.assertIn("lo de un rival (su goleador, su racha, su mal momento) es del rival", ia.REGLAS)
 
     def test_sin_proximo_partido_no_hay_previa(self):
         c = carrera_falsa()
@@ -89,6 +96,19 @@ class TestPreguntasYEvaluacion(ayuda.PruebaConBase):
         r = previa.evaluar_previa(self.perfil, self.previa, [("P?", excusas)])
         self.assertEqual(r.eje, "excusa_polemica")
         self.assertTrue(-previa.DELTA_REPUTACION_MAXIMO <= r.delta_reputacion < 0)
+
+    def test_la_nota_de_la_ia_no_trae_al_goleador_del_rival_si_el_no_lo_nombro(self):
+        self.previa.goleador = "Robert Bozenik"
+        culpa = {"titular": "Canales, en duda", "reaccion_prensa": "Genera dudas tras el bajo rendimiento de Boženík.",
+                 "delta_reputacion": -3, "delta_carino": 0, "cita": "", "nuevo_gancho_narrativo": ""}
+        bien = dict(culpa, reaccion_prensa="Respondio corto y la sala lo noto.")
+        respuestas = [("P?", "Jugar como siempre nada mas, el equipo esta bien y vamos a buscar los tres puntos.")]
+        with mock.patch("roleplay.servicios.ia.pedir_json", return_value=culpa):
+            r = previa.evaluar_previa(self.perfil, self.previa, respuestas)
+        self.assertNotIn("bajo rendimiento", r.reaccion_prensa)  # quedo la del motor local
+        with mock.patch("roleplay.servicios.ia.pedir_json", return_value=bien):
+            self.assertEqual(previa.evaluar_previa(self.perfil, self.previa, respuestas).reaccion_prensa,
+                             "Respondio corto y la sala lo noto.")
 
     def test_una_respuesta_seca_no_se_cita(self):
         r = previa.evaluar_previa(self.perfil, self.previa, [("P?", "Si.")])

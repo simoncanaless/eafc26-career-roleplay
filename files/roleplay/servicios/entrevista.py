@@ -594,8 +594,21 @@ SISTEMA_REACCION = (
     "actual (streaming, debates, zona mixta): si pone excusas o dice algo fuerte, la prensa le contesta con polemica. "
     "`delta_reputacion`: entero (cuanto le suma o resta a su reputacion; parti del sugerido por el sistema). "
     "`delta_carino`: entero de -6 a 6 (la hinchada de su club). `cita`: su frase mas jugosa COPIADA TEXTUAL de "
-    "sus respuestas, o vacio. `nuevo_gancho_narrativo`: una trama que deja abierta (promesa, desafio), o vacio."
+    "sus respuestas, o vacio. `nuevo_gancho_narrativo`: una trama que deja abierta (promesa, desafio), o vacio. "
+    "Se juzga SOLO lo que respondio: los datos del partido y del rival son contexto, nunca motivo de critica; no "
+    "traigas a jugadores del rival si el no los nombro, y no le pongas cargos (capitan, lider del vestuario) que "
+    "no esten en los datos."
 )
+
+
+def _nombra_ajenos(texto: str, ajenos, respuestas) -> bool:
+    """La IA trajo a un jugador ajeno (el goleador del rival...) que el jugador no nombro."""
+    dicho, escrito = lexico.normalizar(" ".join(respuestas)), lexico.normalizar(texto)
+    for nombre in ajenos:
+        apellido = lexico.normalizar(nombre).split()[-1] if nombre.strip() else ""
+        if len(apellido) >= 4 and apellido in escrito and apellido not in dicho:
+            return True
+    return False
 
 
 def preguntas_con_ia(perfil: PlayerProfile, contexto: str, preguntas: list[str], cruces,
@@ -635,10 +648,13 @@ def preguntas_con_ia(perfil: PlayerProfile, contexto: str, preguntas: list[str],
 
 def reaccion_con_ia(perfil: PlayerProfile, contexto: str, respuestas: list[tuple[str, str]], cruces,
                     lectura: lexico.Lectura, delta: int, carino: int, tope: int,
-                    con_titular: bool = False) -> Optional[dict]:
+                    con_titular: bool = False, ajenos: tuple = ()) -> Optional[dict]:
     """La reaccion escrita por la IA contestando a lo que dijo, o None.
     Devuelve reaccion, delta (acotado a tope), carino (+-6), cita (solo si
-    es textual; si no, la del lexico), gancho y, si se pide, titular."""
+    es textual; si no, la del lexico), gancho y, si se pide, titular.
+    `ajenos`: nombres de otros (el goleador del rival) que la nota no puede
+    traer si el jugador no los nombro: si los trae, None (queda la del motor
+    local; 2026-10-20, una nota lo culpo del "bajo rendimiento" del goleador del rival)."""
     pares = "\n".join(f"P: {p}\nR: {r}" for p, r in respuestas)
     esquema = {"reaccion_prensa": "...", "delta_reputacion": 0, "delta_carino": 0, "cita": "...",
                "nuevo_gancho_narrativo": "..."}
@@ -667,6 +683,8 @@ def reaccion_con_ia(perfil: PlayerProfile, contexto: str, respuestas: list[tuple
     }
     if con_titular:
         resultado["titular"] = ia.texto(datos.get("titular"), 160)
+    if _nombra_ajenos(resultado["reaccion"] + " " + resultado.get("titular", ""), ajenos, textos):
+        return None
     return resultado
 
 

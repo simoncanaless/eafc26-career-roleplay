@@ -204,7 +204,12 @@ def como_llegan(previa: PreviaPartido) -> tuple[str, int]:
 
 
 def _contexto(previa: PreviaPartido) -> str:
+    """Los datos para la IA, con quien es quien (2026-10-20: una nota lo culpo del "bajo rendimiento" del
+    goleador del RIVAL y le atribuyo como suyos los 7 goles de un 7-0 de su equipo)."""
     return (f"Conferencia PREVIA (todavia no se jugo): {previa.club} {previa.resumen}.\n"
+            f"El jugador juega en {previa.club}; el rival es {previa.rival}. Los marcadores son de los equipos "
+            f"(no dicen cuantos goles hizo el jugador) y lo que se dice de {previa.rival} (su goleador, su racha, "
+            f"su tabla) es del rival.\n"
             + "\n".join(f"- {d}" for d in previa.datos))
 
 
@@ -231,7 +236,8 @@ def evaluar_previa(
         nuevo_gancho = entrevista.gancho(escritor, lectura)
     carino = CARINO_PREVIA.get(lectura.eje, 0)
     hibrida = entrevista.reaccion_con_ia(perfil, _contexto(previa), respuestas, cruces, lectura, delta, carino,
-                                         DELTA_REPUTACION_MAXIMO, con_titular=True)
+                                         DELTA_REPUTACION_MAXIMO, con_titular=True,
+                                         ajenos=(previa.goleador,) if previa.goleador else ())
     if hibrida:
         texto, delta, carino, cita = hibrida["reaccion"], hibrida["delta"], hibrida["carino"], hibrida["cita"]
         titular = hibrida["titular"] or titular

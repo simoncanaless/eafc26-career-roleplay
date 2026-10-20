@@ -44,6 +44,11 @@ REGLAS = (
     "Escribis en espanol (registro chileno/rioplatense informal, natural). "
     "Usa SOLO los datos que te dan: nunca inventes resultados, goles, estadisticas, posiciones en la tabla, "
     "fichajes ni nombres de personas reales que no esten en los datos. Si falta un dato, no lo menciones. "
+    "Cada dato es de quien dice el dato: un marcador es del EQUIPO (no son goles del jugador salvo que se diga), "
+    "y lo de un rival (su goleador, su racha, su mal momento) es del rival, nunca del jugador ni de su equipo. "
+    "No inventes causas ni culpas que los datos no digan: una victoria, una racha buena o un mal numero del "
+    "rival nunca son motivo de dudas o criticas al jugador. Las criticas solo pueden salir de lo que el jugador "
+    "DIJO o de un mal numero SUYO o de SU equipo. "
     "Sin markdown ni emojis salvo que se pidan. Responde SOLO con un objeto JSON valido."
 )
 
