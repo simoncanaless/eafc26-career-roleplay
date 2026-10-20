@@ -66,6 +66,7 @@ def ofertas(player_id: Optional[int], hoy: date) -> list[dict]:
             "marca": auto.get("marca", ""), "modelo": auto.get("modelo", ""), "anio": anio,
             "categoria": auto.get("categoria", ""), "rareza": auto.get("rareza", "Media"), "nota": auto.get("nota", ""),
             "km": km, "estado": estado, "precio": int(max(precio, 1_000)), "imagen": imagen.name if imagen else "",
+            "credito": str(auto.get("imagen_credito") or "") if imagen else "",  # autor y licencia (Commons)
         })
     return sorted(resultado, key=lambda o: o["precio"])
 
@@ -93,7 +94,7 @@ def articulo(oferta: dict) -> Articulo:
 def extra_de(oferta: dict) -> dict:
     """Lo que se guarda en la posesion, para mostrarla y revenderla."""
     return {"nombre": nombre(oferta), "detalle": detalle(oferta), "rareza": oferta["rareza"],
-            "imagen": oferta["imagen"], "categoria": oferta["categoria"]}
+            "imagen": oferta["imagen"], "categoria": oferta["categoria"], "credito": oferta.get("credito", "")}
 
 
 def articulo_de_posesion(posesion: dict) -> Articulo:

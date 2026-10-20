@@ -425,6 +425,8 @@ class PaginaVida(QWidget):
                 f"<b>{esc(articulo.nombre)}</b> · {dinero(oferta['precio'], moneda)}<br>"
                 f"<span style='color:{estilos.TEXTO_SUAVE}'>{esc(oferta['categoria'])} · rareza {esc(oferta['rareza'])}"
                 f" · {esc(articulo.detalle)}{esc(nota)}</span>"
+                + (f"<br><span style='color:{estilos.TEXTO_SUAVE}; font-size: 10px'>Foto: {esc(oferta['credito'])}</span>"
+                   if oferta.get("credito") else "")
             )
             textos.setWordWrap(True)
             ya = economia.tiene(e, articulo.id)
