@@ -103,6 +103,12 @@ def numero(valor, defecto: int = 0) -> int:
 # ---- el tier del club ----
 
 
+def medias_de_plantel(carrera) -> dict[int, float]:
+    """equipo -> promedio de sus 16 mejores jugadores (hombres): que tan bueno es cada club."""
+    _tiers(carrera)
+    return carrera.memo["medias_de_plantel"]
+
+
 def _tiers(carrera) -> dict[int, int]:
     if "tiers" not in carrera.memo:
         medias = defaultdict(list)
@@ -115,12 +121,14 @@ def _tiers(carrera) -> dict[int, int]:
                     equipo in carrera.ligas_de_equipo and not carrera.es_seleccion(equipo))
                 if es_club:
                     medias[equipo].append(media)
-        tiers = {}
+        tiers, promedios = {}, {}
         for equipo, lista in medias.items():
             mejores = sorted(lista, reverse=True)[:JUGADORES_DEL_PLANTEL]
             promedio = sum(mejores) / len(mejores)
+            promedios[equipo] = promedio
             tiers[equipo] = tier_por_nombre(carrera.equipo(equipo)) or (2 if promedio >= TIER_2_DESDE else 3)
         carrera.memo["tiers"] = tiers
+        carrera.memo["medias_de_plantel"] = promedios
     return carrera.memo["tiers"]
 
 

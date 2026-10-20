@@ -176,7 +176,8 @@ class TestEnVida(ayuda.PruebaDeInterfaz):
 
     def test_pensarlo_guarda_la_negociacion(self):
         def pensarlo(dialogo):
-            dialogo.pedidos["gol"].setValue(dialogo.negociacion["techo"]["gol"] * 1.5)
+            # en plata: el pedido es 1,5 veces lo maximo que puede pagar el club por gol
+            dialogo.pedidos["gol"].setValue(round(dialogo.negociacion["techo"]["gol"] * 1.5 * dialogo.sueldo))
             dialogo.contraofertar()
 
         self._negociar(pensarlo)

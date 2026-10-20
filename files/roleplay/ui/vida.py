@@ -248,6 +248,19 @@ class PaginaVida(QWidget):
         self.contrato.cuerpo.addLayout(fila(self.balon_btn, None, self.negociar_btn))
         self.contrato.hide()
         contenido.addWidget(self.contrato)
+        # ofertas de otros clubes (servicios/ofertas.py): mirarlas no es querer irse
+        self.ofertas = Tarjeta("Ofertas de otros clubes")
+        self.ofertas.cuerpo.addWidget(texto_suave(
+            "En las ventanas de pases (julio-agosto y enero) te llegan ofertas segun tu nivel. Mirarlas no es "
+            "querer irte: podes rechazarlas, usarlas para negociar con tu club o aceptarlas. Si aceptas, el "
+            "traspaso lo hace el juego (pedi salir o acepta la oferta cuando llegue en FC 26): apenas tu partida "
+            "te muestre en ese club, las primas de la oferta pasan a ser tu contrato. El sueldo final lo pone el juego."
+        ))
+        self.ofertas_layout = QVBoxLayout()
+        self.ofertas_layout.setSpacing(10)
+        self.ofertas.cuerpo.addLayout(self.ofertas_layout)
+        self.ofertas.hide()
+        contenido.addWidget(self.ofertas)
         contenido.addWidget(self.amor)
         contenido.addWidget(self.vip)
 
@@ -344,6 +357,7 @@ class PaginaVida(QWidget):
             self._revisar_amor(carrera, hoy)
             self._revisar_patrocinios(hoy)
             self._cobrar_primas(carrera, hoy)
+            self._revisar_ofertas(carrera, hoy)
         self._mostrar()
 
     # ---- dibujo ----
@@ -378,6 +392,7 @@ class PaginaVida(QWidget):
         self.mosaico_patrimonio.poner(dinero(economia.patrimonio(e), moneda))
         self._mostrar_eventos()
         self._mostrar_contrato()
+        self._mostrar_ofertas(e)
         self._mostrar_amor()
         self._mostrar_patrocinios(e)
         self._mostrar_tienda(e)
@@ -800,8 +815,14 @@ class PaginaVida(QWidget):
         ctx = contratos.contexto(self._carrera, perfil.id)
         negociacion = e.get("negociacion")
         if not negociacion or negociacion.get("club") != club or negociacion["estado"] != "abierta":
+            from roleplay.servicios import ofertas
+
+            extra = ofertas.palanca_extra(e, hoy)  # una oferta de otro club que usaste para negociar
             negociacion = contratos.abrir(club, ctx["tier"], ctx["fama"], hoy, ctx["posicion"], ctx["carino"],
-                                          ctx["goles"], ctx["partidos"])
+                                          ctx["goles"], ctx["partidos"], extra=extra)
+            if extra:
+                e.pop("palanca_extra", None)
+                set_economia(perfil.id, e)
         dialogo = DialogoNegociacion(negociacion, e["sueldo"], self._moneda(), perfil.id, self)
         dialogo.exec()
         final, firmado, temporadas = dialogo.negociacion, dialogo.firmado, dialogo.duracion()
@@ -860,6 +881,92 @@ class PaginaVida(QWidget):
         if prima:
             QMessageBox.information(self, "Balon de Oro", "Tu contrato tenia prima por el Balon de Oro: "
                                     f"{dinero(prima, self._moneda())}.")
+        self._mostrar()
+
+    # ---- ofertas de otros clubes ----
+
+    def _revisar_ofertas(self, carrera, hoy):
+        from roleplay.servicios import ofertas
+
+        perfil = self.perfil
+        fama = ecosistema.calcular_fama_jugador(perfil.id, carrera)["fama"]
+        e, novedades = ofertas.revisar(get_economia(perfil.id), carrera, perfil.id, hoy, fama)
+        set_economia(perfil.id, e)
+        apellido = (perfil.nombre_jugador.split() or [""])[-1]
+        for novedad in novedades:
+            oferta = novedad["oferta"]
+            if novedad["tipo"] == "nueva":
+                self.decision_pendiente.emit(f"Oferta del {oferta['club']}")
+                if oferta["tier"] <= 2:  # la de un grande se filtra
+                    self._noticia(perfil, f"El {oferta['club']} va por {apellido}",
+                                  f"recibio una oferta del {oferta['club']}, que quiere ficharlo", "neutral", 0.3, 0,
+                                  "oferta:nueva")
+            elif novedad["tipo"] == "cumplida":
+                self._noticia(perfil, f"{apellido} llega al {oferta['club']} con todo acordado",
+                              f"cerro su llegada al {oferta['club']} con las primas que habia acordado", "positiva",
+                              0.5, 1, "oferta:cumplida")
+
+    def _mostrar_ofertas(self, e: dict):
+        from roleplay.servicios import contratos, ofertas
+
+        limpiar_layout(self.ofertas_layout)
+        lista = ofertas.abiertas(e)
+        self.ofertas.setVisible(bool(lista) or bool((e.get("ofertas") or {}).get("lista")))
+        if not lista:
+            self.ofertas_layout.addWidget(texto_suave("No tenes ofertas abiertas ahora."))
+            return
+        moneda, sueldo_hoy = self._moneda(), e.get("sueldo", 0)
+        for oferta in lista:
+            mejora = (oferta["sueldo"] / sueldo_hoy - 1) * 100 if sueldo_hoy else 0
+            primas = []
+            for clave in ("firma", "gol", "meta_goles", "balon_oro"):
+                c = contratos.POR_ID[clave]
+                primas.append(f"{esc(c.nombre)}: {esc(contratos.rotulo(c, oferta['condiciones'][clave], oferta['sueldo'], moneda, oferta.get('meta_goles', 0)))}")
+            aceptada = oferta["estado"] == "aceptada"
+            texto = QLabel(
+                f"<b>{esc(oferta['club'])}</b> <span style='color:{estilos.TEXTO_SUAVE}'>· {esc(oferta['liga'])} · "
+                f"{['', 'gigante', 'competitivo', 'chico'][oferta['tier']]}</span><br>"
+                f"Sueldo: <b>{dinero(oferta['sueldo'], moneda)}</b> por semana"
+                + (f" <span style='color:{estilos.POSITIVO}'>(+{mejora:.0f}% de lo que ganas)</span>" if mejora > 0 else "")
+                + f" · {oferta['temporadas']} temporadas<br>"
+                f"<span style='color:{estilos.TEXTO_SUAVE}'>{' · '.join(primas)}</span>"
+                + (f"<br><span style='color:{estilos.ACENTO}'>Aceptada: ahora el traspaso lo tenes que hacer en el "
+                   "juego.</span>" if aceptada else
+                   f"<br><span style='color:{estilos.TEXTO_SUAVE}'>Vence el {oferta['vence'][8:10]}/{oferta['vence'][5:7]}</span>")
+            )
+            texto.setWordWrap(True)
+            botones = []
+            if not aceptada:
+                for accion, rotulo, primario in (("rechazar", "Rechazar", False), ("negociar", "Usar para negociar", False),
+                                                 ("aceptar", "Aceptar", True)):
+                    b = boton(rotulo, primario=primario)
+                    b.setProperty("oferta", f"{oferta['id']}:{accion}")
+                    b.clicked.connect(lambda _=False, i=oferta["id"], a=accion: self.responder_oferta(i, a))
+                    botones.append(b)
+                botones[1].setToolTip("Tu club se entera: la proxima negociacion de primas arranca con mas fuerza")
+            self.ofertas_layout.addLayout(_fila_ancha(texto, *botones))
+
+    def responder_oferta(self, oferta_id: str, accion: str):
+        from roleplay.servicios import ofertas
+
+        perfil = self.perfil
+        e = get_economia(perfil.id)
+        hoy = self._hoy(e)
+        if hoy is None:
+            return
+        try:
+            e, oferta = ofertas.responder(e, oferta_id, accion, hoy)
+        except ValueError as exc:
+            QMessageBox.information(self, "Ahora no", str(exc))
+            return
+        set_economia(perfil.id, e)
+        if accion == "negociar":
+            QMessageBox.information(self, "A negociar", f"Tu representante le hizo saber a tu club la oferta del "
+                                    f"{oferta['club']}. Anda a \"Tu contrato\" y negocia: arrancas con mas fuerza.")
+        elif accion == "aceptar":
+            QMessageBox.information(self, "Acuerdo", f"Aceptaste la oferta del {oferta['club']}. Ahora hace el "
+                                    "traspaso en FC 26 (pedi salir o acepta su oferta cuando llegue): apenas tu "
+                                    f"partida te muestre en el {oferta['club']}, sus primas pasan a ser tu contrato.")
         self._mostrar()
 
     # ---- vida sentimental ----

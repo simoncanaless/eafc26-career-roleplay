@@ -112,8 +112,11 @@ DECISIONES = {
         (
             Opcion("fiel", "Quedarme: este es mi club", "rechazo una oferta de un grande para quedarse en {club}",
                    "positiva", 10, 2, 0.8),
-            Opcion("escuchar", "Escuchar la oferta", "abrio la puerta a dejar {club}", "mixta", -10, 0, 1.0,
-                   "En el juego, acepta hablar con los clubes interesados en la proxima ventana de pases."),
+            # escuchar NO es querer irse (Simon, 2026-10-20): sin castigo de la hinchada
+            Opcion("escuchar", "Escuchar la oferta, sin compromiso", "escucho la oferta de un grande, sin cerrar "
+                   "ninguna puerta en {club}", "neutral", 0, 0, 1.0,
+                   "Las ofertas de otros clubes te llegan en Vida, en las ventanas de pases: podes mirarlas, "
+                   "usarlas para negociar con tu club o aceptarlas."),
         ),
     ),
 }

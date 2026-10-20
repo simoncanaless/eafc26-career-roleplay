@@ -94,10 +94,11 @@ def _redondear(valor: float, paso: float) -> float:
 
 
 def abrir(club: str, tier: int, fama: int, hoy: date, posicion: str = "", carino: int = 50, goles: int = 0,
-          partidos: int = 0, dado: Optional[random.Random] = None) -> dict:
-    """La directiva se sienta a negociar: su techo (escondido) y su primera oferta."""
+          partidos: int = 0, dado: Optional[random.Random] = None, extra: float = 0.0) -> dict:
+    """La directiva se sienta a negociar: su techo (escondido) y su primera oferta. `extra`: palanca de mas
+    (una oferta de otro club que usaste para negociar, servicios/ofertas.py)."""
     dado = dado or random.Random(f"contrato:{club}:{hoy.isoformat()}:{fama}")
-    fuerza = palanca(fama, carino, goles, partidos) * FACTOR_TIER.get(tier, 1.0)
+    fuerza = (palanca(fama, carino, goles, partidos) + extra) * FACTOR_TIER.get(tier, 1.0)
     techo, oferta = {}, {}
     for c in CLAUSULAS:
         if c.id == "imagen":
@@ -336,14 +337,23 @@ def balon_de_oro(e: Optional[dict], club: str, hoy: date) -> tuple[dict, int]:
     return e, monto
 
 
+COMO_SE_COBRA = {
+    "firma": "en total", "gol": "por gol", "meta_goles": "al llegar a {meta} goles", "mes": "cada vez",
+    "titulo": "si salen campeones", "balon_oro": "si lo ganas", "fidelidad": "por temporada",
+}
+
+
+def monto(clausula: Clausula, valor: float, sueldo: int) -> int:
+    """La clausula en plata (bruto): las primas se guardan en semanas de sueldo, la imagen en %."""
+    return round(sueldo * valor / 100) if clausula.unidad == "%" else round(valor * sueldo)
+
+
 def rotulo(clausula: Clausula, valor: float, sueldo: int, moneda: str, meta: int = 0) -> str:
-    """Como se muestra una clausula: "4 semanas (≈ $120.000)" o "12% del sueldo"."""
+    """Como se muestra una clausula, en plata: "£80.000 por gol", "£16.000 por semana (11% del sueldo)"."""
+    plata = economia.dinero(monto(clausula, valor, sueldo), moneda)
     if clausula.unidad == "%":
-        return f"{valor:g}% del sueldo ({economia.dinero(round(sueldo * valor / 100), moneda)} por semana)"
-    texto = f"{valor:g} semana{'s' if valor != 1 else ''} ({economia.dinero(round(valor * sueldo), moneda)})"
-    if clausula.id == "meta_goles" and meta:
-        texto += f" al llegar a {meta} goles"
-    return texto
+        return f"{plata} por semana ({valor:g}% del sueldo)"
+    return f"{plata} {COMO_SE_COBRA.get(clausula.id, '').format(meta=meta or 20)}".strip()
 
 
 def contexto(carrera, player_id: Optional[int]) -> dict:

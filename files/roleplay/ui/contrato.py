@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDoubleSpinBox,
     QGridLayout,
+    QSpinBox,
     QLabel,
     QVBoxLayout,
     QWidget,
@@ -43,7 +44,7 @@ class DialogoNegociacion(QDialog):
         layout.addWidget(texto_suave(
             "Tu sueldo base es el de tu contrato en FC 26 (eso se negocia en el juego). Aca se negocia lo demas: "
             "lo que el club te paga por firmar, por tus goles y premios, por quedarte y por tu imagen. "
-            "Los montos son en bruto: se cobra el neto, como el sueldo."
+            "Escribi cuanto queres por cada cosa. Los montos son en bruto: se cobra el neto, como el sueldo."
         ))
         self.directiva_label = QLabel()
         self.directiva_label.setWordWrap(True)
@@ -54,7 +55,7 @@ class DialogoNegociacion(QDialog):
         grilla = QGridLayout()
         grilla.setHorizontalSpacing(14)
         grilla.setVerticalSpacing(8)
-        for columna, titulo in enumerate(("Clausula", "Oferta del club", "Tu pedido", "Tu representante")):
+        for columna, titulo in enumerate(("Clausula", "Oferta del club", "Lo que pedis", "Tu representante")):
             grilla.addWidget(etiqueta_campo(titulo), 0, columna)
         self.ofertas, self.pedidos, self.consejos = {}, {}, {}
         for fila_n, c in enumerate(contratos.CLAUSULAS, start=1):
@@ -64,11 +65,17 @@ class DialogoNegociacion(QDialog):
             self.ofertas[c.id] = QLabel()
             self.ofertas[c.id].setWordWrap(True)
             grilla.addWidget(self.ofertas[c.id], fila_n, 1)
-            pedido = QDoubleSpinBox()
-            pedido.setDecimals(2 if c.paso < 0.5 else 1 if c.paso < 1 else 0)
-            pedido.setSingleStep(c.paso)
-            pedido.setRange(0, 1000)
-            pedido.setSuffix("%" if c.unidad == "%" else " sem.")
+            if c.unidad == "%":  # la imagen: en % del sueldo (la plata por semana se ve en la oferta)
+                pedido = QDoubleSpinBox()
+                pedido.setDecimals(0)
+                pedido.setRange(0, 100)
+                pedido.setSuffix("% del sueldo")
+            else:  # las primas: en plata (por dentro siguen siendo semanas de sueldo)
+                pedido = QSpinBox()
+                pedido.setRange(0, 2_000_000_000)
+                pedido.setGroupSeparatorShown(True)
+                pedido.setPrefix(f"{moneda} ")
+                pedido.setSingleStep(max(1_000, round(c.paso * sueldo, -3)))
             pedido.setProperty("clausula", c.id)
             pedido.valueChanged.connect(self._aconsejar)
             self.pedidos[c.id] = pedido
@@ -114,7 +121,8 @@ class DialogoNegociacion(QDialog):
             self.ofertas[c.id].setText(contratos.rotulo(c, neg["oferta"][c.id], self.sueldo, self.moneda,
                                                         neg.get("meta_goles", 0)))
             if poner_pedidos:
-                self.pedidos[c.id].setValue(neg["oferta"][c.id])
+                self.pedidos[c.id].setValue(neg["oferta"][c.id] if c.unidad == "%" else
+                                            contratos.monto(c, neg["oferta"][c.id], self.sueldo))
         abierta = neg["estado"] == "abierta"
         if neg["estado"] == "rota":
             self.paciencia_label.setText("La directiva se levanto de la mesa.")
@@ -132,7 +140,12 @@ class DialogoNegociacion(QDialog):
         self._aconsejar()
 
     def pedido(self) -> dict:
-        return {clausula: spin.value() for clausula, spin in self.pedidos.items()}
+        """Lo que pide, en las unidades de contratos.py (semanas de sueldo; la imagen en %)."""
+        resultado = {}
+        for c in contratos.CLAUSULAS:
+            valor = self.pedidos[c.id].value()
+            resultado[c.id] = valor if c.unidad == "%" or not self.sueldo else valor / self.sueldo
+        return resultado
 
     def _aconsejar(self, *_):
         if self.negociacion["estado"] != "abierta":
