@@ -265,7 +265,7 @@ class TestPatrocinios(ayuda.PruebaConBase):
         e = economia.acreditar(None, hoy, 100_000)
         with mock.patch.object(patrocinios, "PROBABILIDAD_OFERTA", 1.0):
             e, _ = patrocinios.revisar(e, 1, seguidores=500_000, reputacion=70, hoy=hoy)
-        oferta = e["patrocinios"]["oferta"]
+        oferta = patrocinios.pendientes(e)[0]
         self.assertIn(oferta["marca"], {m.id for m in patrocinios.candidatas(e, 500_000, 70, hoy)})
         self.assertNotIn(oferta["marca"], {"apple", "rolex", "gucci", "samsung"})  # no le da el nivel
         e, novedad = patrocinios.responder(e, True, hoy)

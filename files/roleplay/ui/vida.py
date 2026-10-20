@@ -273,6 +273,8 @@ class PaginaVida(QWidget):
         self.buscar_marcas_btn.clicked.connect(self.buscar_marcas)
         self.marcas_mensaje = texto_suave()
         self.marcas.cuerpo.addLayout(fila(self.marcas_mensaje, None, self.buscar_marcas_btn))
+        self.marcas_exclusividad = texto_suave()
+        self.marcas.cuerpo.addWidget(self.marcas_exclusividad)
         self._post_promo = None
         contenido.addWidget(self.marcas)
 
@@ -546,7 +548,7 @@ class PaginaVida(QWidget):
         for contrato in estado.get("contratos", []):
             hasta = contrato["hasta"]
             texto = QLabel(
-                f"<b>{esc(contrato['nombre'])}</b> <span style='color:{estilos.TEXTO_SUAVE}'>· "
+                f"<b>{esc(patrocinios.nombre_de(contrato))}</b> <span style='color:{estilos.TEXTO_SUAVE}'>· "
                 f"{esc(patrocinios._rubro(contrato))} · {dinero(contrato['semanal'], moneda)} por semana (bruto) · "
                 f"hasta el {hasta[8:10]}/{hasta[5:7]}/{hasta[:4]}"
                 + (f" · faltas: {contrato['faltas']}/{patrocinios.FALTAS_PARA_RESCINDIR}" if contrato.get("faltas") else "")
@@ -565,8 +567,8 @@ class PaginaVida(QWidget):
             hacer.setProperty("promo", contrato["id"])
             hacer.clicked.connect(lambda _=False, i=contrato["id"]: self.hacer_promo(i))
             self.marcas_layout.addLayout(_fila_ancha(texto, hacer))
-        oferta = estado.get("oferta")
-        if oferta:
+        ofertas = patrocinios.pendientes(e)
+        for oferta in ofertas:
             texto = QLabel(
                 f"<span style='color:{estilos.ACENTO}'>Te ofrecen un contrato</span><br><b>{esc(oferta['nombre'])}</b>"
                 f" ({esc(oferta['rubro'])}): {dinero(oferta['semanal'], moneda)} por semana, por "
@@ -574,12 +576,17 @@ class PaginaVida(QWidget):
             )
             texto.setWordWrap(True)
             firmar = boton("Firmar", primario=True)
-            firmar.setProperty("patrocinio", "firmar")
-            firmar.clicked.connect(lambda: self.responder_patrocinio(True))
+            firmar.setProperty("patrocinio", f"{oferta['marca']}:firmar")
+            firmar.clicked.connect(lambda _=False, m=oferta["marca"]: self.responder_patrocinio(True, m))
             rechazar = boton("Rechazar")
-            rechazar.setProperty("patrocinio", "rechazar")
-            rechazar.clicked.connect(lambda: self.responder_patrocinio(False))
+            rechazar.setProperty("patrocinio", f"{oferta['marca']}:rechazar")
+            rechazar.clicked.connect(lambda _=False, m=oferta["marca"]: self.responder_patrocinio(False, m))
             self.marcas_layout.addLayout(_fila_ancha(texto, firmar, rechazar))
+        oferta = bool(ofertas)
+        rubros = sorted({patrocinios._rubro(c) for c in estado.get("contratos", [])})
+        self.marcas_exclusividad.setText(
+            f"Exclusividad: ya tenes {esc(', '.join(rubros))}. La competencia (Pepsi si sos de Coca-Cola, Adidas si "
+            "sos de Nike) no te puede contratar." if rubros else "")
         if not estado.get("contratos") and not oferta:
             self.marcas_layout.addWidget(texto_suave(
                 "Con mas seguidores y reputacion, las marcas te van a buscar (botines, bebidas, tecnologia, "
@@ -590,6 +597,8 @@ class PaginaVida(QWidget):
         puede, motivo = patrocinios.puede_buscar(e, hoy) if hoy is not None else (False, "")
         self.buscar_marcas_btn.setEnabled(puede)
         self.buscar_marcas_btn.setToolTip(motivo or "Tu representante sale a buscar marcas (una vez por semana del juego)")
+        if not puede and not self.marcas_mensaje.text():
+            self.marcas_mensaje.setText(esc(motivo))  # que se vea por que no se puede
 
     def buscar_marcas(self):
         perfil = self.perfil
@@ -597,12 +606,12 @@ class PaginaVida(QWidget):
         hoy = self._hoy(e)
         if perfil is None or hoy is None:
             return
-        e, oferta, mensaje = patrocinios.buscar(e, perfil.id, get_seguidores(perfil.id),
+        e, nuevas, mensaje = patrocinios.buscar(e, perfil.id, get_seguidores(perfil.id),
                                                 get_reputacion_actual(perfil.id), hoy)
         set_economia(perfil.id, e)
         self.marcas_mensaje.setText(esc(mensaje))
-        if oferta is not None:
-            self.decision_pendiente.emit(f"Oferta de {oferta['nombre']}")
+        if nuevas:
+            self.decision_pendiente.emit(f"Ofertas de marcas: {', '.join(o['nombre'] for o in nuevas)}")
         self._mostrar()
 
     def hacer_promo(self, contrato_id: str):
@@ -655,7 +664,7 @@ class PaginaVida(QWidget):
             self.marcas_mensaje.setText(f"Promo cumplida: {dinero(novedad.dinero, self._moneda())} de bono (neto).")
             self._mostrar()
 
-    def responder_patrocinio(self, aceptar: bool):
+    def responder_patrocinio(self, aceptar: bool, marca: Optional[str] = None):
         perfil = self.perfil
         if perfil is None:
             return
@@ -663,7 +672,7 @@ class PaginaVida(QWidget):
         hoy = self._hoy(e)
         if hoy is None:
             return
-        e, novedad = patrocinios.responder(e, aceptar, hoy)
+        e, novedad = patrocinios.responder(e, aceptar, hoy, marca)
         set_economia(perfil.id, e)
         if novedad is not None:
             self._contar_marca(perfil, novedad, hoy)

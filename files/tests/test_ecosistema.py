@@ -99,7 +99,7 @@ class TestPantallas(ayuda.PruebaDeInterfaz):
         posesiones = database.get_economia(self.pid)["posesiones"]
         self.assertTrue(posesiones[0]["articulo"].startswith(marketplace.PREFIJO))
 
-        firmar = next(b for b in self._botones(pagina, "patrocinio") if b.property("patrocinio") == "firmar")
+        firmar = next(b for b in self._botones(pagina, "patrocinio") if b.property("patrocinio").endswith(":firmar"))
         firmar.click()
         ayuda.esperar_tareas()
         contratos = database.get_economia(self.pid)["patrocinios"]["contratos"]

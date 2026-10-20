@@ -36,7 +36,8 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Optional
 
-MAXIMO_CONTRATOS = 6
+MAXIMO_CONTRATOS = 8
+MAXIMO_OFERTAS = 3  # esperando respuesta a la vez
 DURACION_DIAS = 730
 PROBABILIDAD_OFERTA = 0.4  # por semana, si alguna marca lo quiere
 NO_INSISTE_DIAS = 120  # una marca rechazada no vuelve antes
@@ -60,7 +61,11 @@ class Marca:
 # Un contrato por rubro (exclusividad, como en los contratos de verdad). Pagos base por semana, en la moneda del juego.
 MARCAS = [
     # botines y ropa deportiva
-    Marca("local", "una marca deportiva local", "botines", 3_000, 40, 2_500),
+    Marca("local", "Kelme", "botines", 3_000, 40, 2_500),  # (antes "una marca deportiva local")
+    Marca("penalty", "Penalty", "botines", 10_000, 44, 5_000),
+    Marca("lotto", "Lotto", "botines", 20_000, 46, 7_000),
+    Marca("diadora", "Diadora", "botines", 40_000, 49, 10_000),
+    Marca("hummel", "Hummel", "botines", 60_000, 51, 13_000),
     Marca("joma", "Joma", "botines", 30_000, 48, 9_000),
     Marca("umbro", "Umbro", "botines", 50_000, 50, 12_000),
     Marca("puma", "Puma", "botines", 80_000, 55, 25_000),
@@ -70,19 +75,28 @@ MARCAS = [
     Marca("adidas", "Adidas", "botines", 300_000, 65, 55_000),
     Marca("nike", "Nike", "botines", 400_000, 68, 65_000),
     # bebidas
-    Marca("bebida", "una bebida isotonica", "bebidas", 20_000, 50, 8_000),
+    Marca("bebida", "Zuko", "bebidas", 5_000, 42, 3_000),  # (antes "una bebida isotonica")
+    Marca("aquarius", "Aquarius", "bebidas", 50_000, 50, 8_000),
+    Marca("lucozade", "Lucozade Sport", "bebidas", 80_000, 52, 10_000),
+    Marca("monster", "Monster Energy", "bebidas", 300_000, 58, 22_000),
+    Marca("prime", "Prime Hydration", "bebidas", 600_000, 62, 35_000),
     Marca("powerade", "Powerade", "bebidas", 150_000, 55, 15_000),
     Marca("gatorade", "Gatorade", "bebidas", 400_000, 62, 30_000),
     Marca("red_bull", "Red Bull", "bebidas", 800_000, 65, 45_000),
     Marca("pepsi", "Pepsi", "bebidas", 2_000_000, 70, 70_000),
     Marca("coca_cola", "Coca-Cola", "bebidas", 3_000_000, 74, 90_000),
     # tecnologia
+    Marca("motorola", "Motorola", "tecnologia", 60_000, 50, 9_000),
+    Marca("realme", "realme", "tecnologia", 100_000, 52, 12_000),
+    Marca("lenovo", "Lenovo", "tecnologia", 200_000, 55, 16_000),
     Marca("xiaomi", "Xiaomi", "tecnologia", 300_000, 58, 25_000),
     Marca("oppo", "OPPO", "tecnologia", 400_000, 60, 28_000),
     Marca("huawei", "Huawei", "tecnologia", 500_000, 60, 30_000),
     Marca("samsung", "Samsung", "tecnologia", 800_000, 70, 70_000),
     Marca("apple", "Apple", "tecnologia", 1_500_000, 75, 90_000),
     # electrodomesticos
+    Marca("oster", "Oster", "electrodomesticos", 30_000, 48, 6_000),
+    Marca("mabe", "Mabe", "electrodomesticos", 60_000, 50, 8_000),
     Marca("midea", "Midea", "electrodomesticos", 100_000, 52, 10_000),
     Marca("tcl", "TCL", "electrodomesticos", 200_000, 55, 15_000),
     Marca("hisense", "Hisense", "electrodomesticos", 350_000, 58, 22_000),
@@ -94,6 +108,7 @@ MARCAS = [
     Marca("jbl", "JBL", "auriculares", 150_000, 55, 12_000),
     Marca("beats", "Beats by Dre", "auriculares", 1_000_000, 66, 45_000),
     # cuidado personal
+    Marca("axe", "Axe", "cuidado personal", 100_000, 52, 10_000),
     Marca("nivea", "Nivea Men", "cuidado personal", 200_000, 56, 15_000),
     Marca("head_shoulders", "Head & Shoulders", "cuidado personal", 500_000, 60, 25_000),
     Marca("gillette", "Gillette", "cuidado personal", 1_000_000, 65, 40_000),
@@ -123,8 +138,23 @@ MARCAS = [
     Marca("santander", "Santander", "bancos y tarjetas", 300_000, 58, 18_000),
     Marca("visa", "Visa", "bancos y tarjetas", 1_000_000, 66, 40_000),
     Marca("mastercard", "Mastercard", "bancos y tarjetas", 1_200_000, 68, 45_000),
+    Marca("pringles", "Pringles", "comida", 100_000, 52, 10_000),
     Marca("lays", "Lay's", "comida", 200_000, 55, 14_000),
     Marca("mcdonalds", "McDonald's", "comida", 800_000, 62, 35_000),
+    # telefonia, delivery, suplementos, gaming, gimnasios y musica
+    Marca("entel", "Entel", "telefonia", 40_000, 48, 7_000),
+    Marca("claro", "Claro", "telefonia", 100_000, 52, 12_000),
+    Marca("movistar", "Movistar", "telefonia", 200_000, 55, 18_000),
+    Marca("vodafone", "Vodafone", "telefonia", 600_000, 62, 30_000),
+    Marca("pedidosya", "PedidosYa", "delivery", 50_000, 50, 8_000),
+    Marca("rappi", "Rappi", "delivery", 80_000, 52, 10_000),
+    Marca("uber_eats", "Uber Eats", "delivery", 400_000, 60, 25_000),
+    Marca("myprotein", "Myprotein", "suplementos", 40_000, 48, 6_000),
+    Marca("herbalife", "Herbalife", "suplementos", 300_000, 58, 20_000),
+    Marca("dxracer", "DXRacer", "sillas gamer", 30_000, 47, 5_000),
+    Marca("secretlab", "Secretlab", "sillas gamer", 150_000, 54, 12_000),
+    Marca("smart_fit", "Smart Fit", "gimnasios", 80_000, 50, 9_000),
+    Marca("spotify", "Spotify", "musica", 1_500_000, 68, 50_000),
 ]
 POR_ID = {m.id: m for m in MARCAS}
 
@@ -164,7 +194,29 @@ class Novedad:
 
 
 def _estado(e: dict) -> dict:
-    return e.setdefault("patrocinios", {"contratos": [], "oferta": None, "rechazadas": {}})
+    estado = e.setdefault("patrocinios", {"contratos": [], "ofertas": [], "rechazadas": {}})
+    vieja = estado.pop("oferta", None)  # (antes habia una sola oferta a la vez)
+    estado.setdefault("ofertas", [])
+    if vieja:
+        estado["ofertas"].insert(0, vieja)
+    return estado
+
+
+def pendientes(e: Optional[dict]) -> list[dict]:
+    """Las ofertas de marcas esperando respuesta (las mas nuevas primero)."""
+    estado = (e or {}).get("patrocinios") or {}
+    return ([estado["oferta"]] if estado.get("oferta") else []) + list(estado.get("ofertas", []))
+
+
+def _oferta(marca: Marca, seguidores: int, hoy: date) -> dict:
+    return {"marca": marca.id, "nombre": marca.nombre, "rubro": marca.rubro, "semanal": pago_para(marca, seguidores),
+            "fecha": hoy.isoformat()}
+
+
+def nombre_de(contrato: dict) -> str:
+    """El nombre de hoy de la marca (las genericas de antes ahora son marcas de verdad)."""
+    marca = POR_ID.get(contrato.get("marca"))
+    return marca.nombre if marca else contrato.get("nombre", "")
 
 
 def ingreso_semanal(e: Optional[dict], hoy: Optional[date] = None) -> int:
@@ -187,8 +239,8 @@ def _sin_espera() -> bool:
 
 def puede_buscar(e: Optional[dict], hoy: date) -> tuple[bool, str]:
     estado = (e or {}).get("patrocinios") or {}
-    if estado.get("oferta"):
-        return False, "Ya tenes una oferta esperando respuesta."
+    if len(pendientes(e)) >= MAXIMO_OFERTAS:
+        return False, "Ya tenes ofertas esperando respuesta: contestalas primero."
     if len(estado.get("contratos", [])) >= MAXIMO_CONTRATOS:
         return False, f"Ya tenes {MAXIMO_CONTRATOS} contratos: no te da el tiempo para mas."
     ultima = estado.get("busqueda")
@@ -198,15 +250,17 @@ def puede_buscar(e: Optional[dict], hoy: date) -> tuple[bool, str]:
 
 
 def buscar(e: Optional[dict], player_id: Optional[int], seguidores: int, reputacion: int,
-           hoy: date) -> tuple[dict, Optional[dict], str]:
-    """Tu representante sale a buscar marcas (una vez por semana del juego): (economia, oferta o None, mensaje)."""
+           hoy: date) -> tuple[dict, list[dict], str]:
+    """Tu representante sale a buscar marcas (una vez por semana del juego): (economia, ofertas nuevas, mensaje).
+    Trae hasta MAXIMO_OFERTAS, de rubros distintos: elegis la que quieras (o varias)."""
     ok, motivo = puede_buscar(e, hoy)
     if not ok:
-        return copy.deepcopy(e or {}), None, motivo
+        return copy.deepcopy(e or {}), [], motivo
     e = copy.deepcopy(e or {})
     estado = _estado(e)
     estado["busqueda"] = hoy.isoformat()
-    posibles = candidatas(e, seguidores, reputacion, hoy)
+    ofrecidas = {o["rubro"] for o in estado["ofertas"]}
+    posibles = [m for m in candidatas(e, seguidores, reputacion, hoy) if m.rubro not in ofrecidas]
     if not posibles:
         siguiente = min((m for m in MARCAS if m.seguidores > seguidores or m.reputacion > reputacion),
                         key=lambda m: (m.seguidores, m.reputacion), default=None)
@@ -214,12 +268,19 @@ def buscar(e: Optional[dict], player_id: Optional[int], seguidores: int, reputac
         if siguiente is not None:
             mensaje += (f" La proxima ({siguiente.nombre}) pide {siguiente.seguidores:,} seguidores y "
                         f"reputacion {siguiente.reputacion}.").replace(",", ".")
-        return e, None, mensaje
+        return e, [], mensaje
     dado = random.Random(f"busqueda:{player_id}:{hoy.isoformat()}:{len(estado['contratos'])}")
-    marca = posibles[0] if dado.random() < 0.5 else dado.choice(posibles)
-    estado["oferta"] = {"marca": marca.id, "nombre": marca.nombre, "rubro": marca.rubro,
-                        "semanal": pago_para(marca, seguidores), "fecha": hoy.isoformat()}
-    return e, estado["oferta"], f"{marca.nombre} quiere hablar con vos."
+    nuevas = []
+    lugar = MAXIMO_OFERTAS - len(estado["ofertas"])
+    while posibles and len(nuevas) < lugar:
+        # la que mas paga es la mas probable, pero tambien aparecen las mas chicas
+        marca = dado.choices(posibles, weights=[1 + i for i in range(len(posibles), 0, -1)])[0]
+        nuevas.append(_oferta(marca, seguidores, hoy))
+        posibles = [m for m in posibles if m.rubro != marca.rubro]
+    estado["ofertas"] = nuevas + estado["ofertas"]
+    nombres = [o["nombre"] for o in nuevas]
+    quien = nombres[0] if len(nombres) == 1 else ", ".join(nombres[:-1]) + " y " + nombres[-1]
+    return e, nuevas, f"{quien} {'quiere' if len(nombres) == 1 else 'quieren'} hablar con vos."
 
 
 def texto_promo(tipo: str, marca: str, rubro: str) -> str:
@@ -336,14 +397,14 @@ def revisar(e: Optional[dict], player_id: Optional[int], seguidores: int, reputa
         semanas = 1  # la primera vez ya puede llegar una oferta
     else:
         estado["hasta"] = (desde + timedelta(days=7 * semanas)).isoformat() if semanas else estado["hasta"]
-    if not estado.get("oferta") and len(vigentes) < MAXIMO_CONTRATOS:
+    if len(estado["ofertas"]) < MAXIMO_OFERTAS and len(vigentes) < MAXIMO_CONTRATOS:
         for i in range(semanas):
             dado = random.Random(f"patrocinio:{player_id}:{(desde + timedelta(days=7 * i)).isoformat()}")
-            posibles = candidatas(e, seguidores, reputacion, hoy)
+            ofrecidas = {o["rubro"] for o in estado["ofertas"]}
+            posibles = [m for m in candidatas(e, seguidores, reputacion, hoy) if m.rubro not in ofrecidas]
             if posibles and dado.random() < PROBABILIDAD_OFERTA:
                 marca = posibles[0] if dado.random() < 0.6 else dado.choice(posibles)
-                estado["oferta"] = {"marca": marca.id, "nombre": marca.nombre, "rubro": marca.rubro,
-                                    "semanal": pago_para(marca, seguidores), "fecha": hoy.isoformat()}
+                estado["ofertas"].insert(0, _oferta(marca, seguidores, hoy))
                 break
     for novedad in novedades:
         if novedad.dinero:
@@ -354,13 +415,16 @@ def revisar(e: Optional[dict], player_id: Optional[int], seguidores: int, reputa
     return e, novedades
 
 
-def responder(e: dict, aceptar: bool, hoy: date) -> tuple[dict, Optional[Novedad]]:
+def responder(e: dict, aceptar: bool, hoy: date, marca: Optional[str] = None) -> tuple[dict, Optional[Novedad]]:
+    """Contestar una oferta (`marca`: su id; sin el, la primera)."""
     e = copy.deepcopy(e)
     estado = _estado(e)
-    oferta = estado.get("oferta")
+    oferta = next((o for o in estado["ofertas"] if marca is None or o["marca"] == marca), None)
     if not oferta:
         return e, None
-    estado["oferta"] = None
+    estado["ofertas"].remove(oferta)
+    if aceptar and oferta["rubro"] in {_rubro(c) for c in estado["contratos"]}:
+        return e, None  # ya firmo otra del mismo rubro
     if not aceptar:
         estado.setdefault("rechazadas", {})[oferta["marca"]] = hoy.isoformat()
         return e, None
@@ -371,6 +435,8 @@ def responder(e: dict, aceptar: bool, hoy: date) -> tuple[dict, Optional[Novedad
     }
     contrato["promo"] = _nueva_promo(contrato, hoy, random.Random(f"promo:{contrato['id']}"))  # la campana de lanzamiento
     estado["contratos"].append(contrato)
+    # exclusividad: la competencia del mismo rubro ya no puede (Pepsi si firmaste con Coca-Cola)
+    estado["ofertas"] = [o for o in estado["ofertas"] if o["rubro"] != oferta["rubro"]]
     return e, Novedad(f"Firma con {oferta['nombre']}", f"firmo un contrato de patrocinio con {oferta['nombre']} "
                       f"({oferta['rubro']})", "positiva", clave=f"patrocinio:firma:{oferta['marca']}")
 
