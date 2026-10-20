@@ -17,6 +17,7 @@ Lo que provoca la compra (seguidores, reputacion, noticia) lo decide
 servicios/economia.py, igual que el resto de la tienda.
 """
 
+import json
 import re
 from dataclasses import dataclass
 from typing import Optional
@@ -28,6 +29,7 @@ class Tienda:
     nombre: str
     url: str
     que: str  # que se hace ahi, para la pantalla
+    adentro: bool = True  # False: bloquea los navegadores de las apps ("Access Denied"); se abre en el de siempre
 
 
 TIENDAS = {
@@ -39,12 +41,22 @@ TIENDAS = {
         Tienda("Audemars Piguet", "https://www.audemarspiguet.com/es/watch-collection", "las colecciones"),
         Tienda("Cartier", "https://www.cartier.com/es-es/watches/collections", "relojes y joyas"),
     ],
+    # (probadas en el navegador de la app el 2026-10-20: Gucci, Louis Vuitton, Dior y Farfetch dan
+    # "Access Denied" a cualquier navegador integrado, asi que se abren en el de siempre)
     "moda": [
         Tienda("Nike By You", "https://www.nike.com/es/nike-by-you", "disenar tus zapatillas en 3D"),
-        Tienda("Gucci", "https://www.gucci.com/es/es/", "la tienda oficial"),
-        Tienda("Louis Vuitton", "https://es.louisvuitton.com/esp-es/homepage", "la tienda oficial"),
         Tienda("Balenciaga", "https://www.balenciaga.com/es-es", "la tienda oficial"),
-        Tienda("Farfetch", "https://www.farfetch.com/es/", "moda de lujo de todas las marcas"),
+        Tienda("Prada", "https://www.prada.com/es/es.html", "la tienda oficial"),
+        Tienda("Versace", "https://www.versace.com/es/es/", "la tienda oficial"),
+        Tienda("Moncler", "https://www.moncler.com/es-es/", "la tienda oficial"),
+        Tienda("Palm Angels", "https://www.palmangels.com/es-es", "streetwear de lujo"),
+        Tienda("Zara", "https://www.zara.com/es/", "la tienda oficial"),
+        Tienda("Gucci", "https://www.gucci.com/es/es/", "la tienda oficial (en tu navegador)", adentro=False),
+        Tienda("Louis Vuitton", "https://es.louisvuitton.com/esp-es/homepage", "la tienda oficial (en tu navegador)",
+               adentro=False),
+        Tienda("Dior", "https://www.dior.com/es_es", "la tienda oficial (en tu navegador)", adentro=False),
+        Tienda("Farfetch", "https://www.farfetch.com/es/", "moda de lujo de todas las marcas (en tu navegador)",
+               adentro=False),
     ],
     "yate": [
         Tienda("JamesEdition", "https://www.jamesedition.com/yachts", "yates en venta"),
@@ -79,7 +91,11 @@ NIVELES = {
 EN_EUROS = {"EUR": 1.0, "USD": 0.92, "GBP": 1.17, "CHF": 1.05, "CLP": 0.00098, "MXN": 0.05, "AED": 0.25,
             "JPY": 0.0061, "CAD": 0.67, "AUD": 0.6}
 EURO_EN = {"€": 1.0, "£": 0.85, "$": 1.09}
-SIMBOLOS = {"€": "EUR", "£": "GBP", "US$": "USD", "USD": "USD", "CLP": "CLP"}
+SIMBOLOS = {"€": "EUR", "£": "GBP", "US$": "USD", "$": "USD", "USD": "USD", "EUR": "EUR", "GBP": "GBP", "CHF": "CHF",
+            "CLP": "CLP"}
+# un precio escrito en la pagina: "€19,250,000", "US$ 1.299", "12 500 000 EUR"
+PRECIO_EN_TEXTO = re.compile(
+    r"(US\$|USD|EUR|GBP|CHF|€|£|\$)\s?(\d[\d.,\s]{2,}\d)|(\d[\d.,\s]{2,}\d)\s?(USD|EUR|GBP|CHF|€|£)")
 LARGO_NOMBRE = 80
 
 # lo que corre en la pagina (ui/tienda.py): junta JSON-LD y OpenGraph
@@ -105,7 +121,7 @@ SCRIPT_METADATOS = r"""
       if (precio !== undefined && precio !== null && precio !== "") {
         ofertas.push({
           nombre: String(x.name || ""),
-          precio: String(precio),
+          precio: typeof precio === "number" ? precio : String(precio),  // un numero va como numero (21622823.823)
           moneda: String((oferta && (oferta.priceCurrency || spec.priceCurrency)) || x.priceCurrency || ""),
           imagen: String([].concat(x.image || [])[0] || "").trim(),
         });
@@ -118,9 +134,27 @@ SCRIPT_METADATOS = r"""
     precio: meta("product:price:amount") || meta("og:price:amount") || meta("price"),
     moneda: meta("product:price:currency") || meta("og:price:currency") || meta("priceCurrency"),
     ofertas: ofertas.slice(0, 5),
+    precio_texto: ((document.querySelector("main") || document.body).innerText.slice(0, 20000)
+      .match(/(US\$|USD|EUR|GBP|CHF|€|£|\$)\s?\d[\d.,\s]{2,}\d|\d[\d.,\s]{2,}\d\s?(USD|EUR|GBP|CHF|€|£)/) || [""])[0],
   };
 })()
 """
+
+
+# runJavaScript no convierte bien un objeto con listas de objetos (llegaba "" y nunca se leia el
+# precio): la pagina devuelve el JSON como texto y datos_de_script lo abre
+SCRIPT_METADATOS = "JSON.stringify(" + SCRIPT_METADATOS.strip() + ")"
+
+
+def datos_de_script(resultado) -> Optional[dict]:
+    """Lo que devolvio SCRIPT_METADATOS (texto JSON; o ya un dict) como dict, o None."""
+    if isinstance(resultado, dict):
+        return resultado
+    try:
+        datos = json.loads(resultado) if isinstance(resultado, str) and resultado else None
+    except ValueError:
+        return None
+    return datos if isinstance(datos, dict) else None
 
 
 def numero(texto) -> Optional[float]:
@@ -179,12 +213,24 @@ def leer_metadatos(datos: Optional[dict], moneda_juego: str) -> LecturaPagina:
     else:
         nombre = limpiar_titulo(datos.get("og_titulo") or datos.get("titulo", ""))
         monto, moneda, imagen = numero(datos.get("precio")), datos.get("moneda", ""), ""
+        if not monto:  # ni schema.org ni OpenGraph: el primer precio escrito en la pagina
+            monto, moneda = precio_en_texto(datos.get("precio_texto", ""))
     lectura = LecturaPagina(nombre=nombre.strip()[:LARGO_NOMBRE], imagen=(imagen or datos.get("og_imagen", "")).strip())
     if monto:
         moneda = SIMBOLOS.get(moneda.strip(), moneda.strip().upper())
         lectura.original = f"{moneda or '?'} {round(monto):,}".replace(",", ".")
         lectura.precio = convertir(monto, moneda, moneda_juego) if moneda else None
     return lectura
+
+
+def precio_en_texto(texto: str) -> tuple:
+    """"€19,250,000" -> (19250000.0, "EUR"); (None, "") si no hay un precio con su moneda."""
+    m = PRECIO_EN_TEXTO.search(texto or "")
+    if not m:
+        return None, ""
+    simbolo = (m.group(1) or m.group(4) or "").strip()
+    cifra = (m.group(2) or m.group(3) or "").replace(" ", "").replace("\u202f", "").replace("\xa0", "")
+    return numero(cifra), SIMBOLOS.get(simbolo, simbolo)
 
 
 def _dominio(url: str) -> str:

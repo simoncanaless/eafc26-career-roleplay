@@ -11,14 +11,18 @@ yates, aviones, tecnologia, muebles) como el configurador de los autos.
   mano), la foto ("CAPTURAR VISTA", con el recorte del configurador) y COMPRAR.
 
 Sin navegador (sin pantalla o sin QtWebEngine) queda el formulario y un boton
-para abrir la tienda en el navegador de siempre. Lo que provoca la compra lo
+para abrir la tienda en el navegador de siempre. Las tiendas que bloquean a
+los navegadores integrados (`Tienda.adentro` False: Gucci, Louis Vuitton,
+Dior, Farfetch; y cualquiera que conteste "Access Denied") se abren en el
+navegador de siempre: el nombre y el precio se anotan y la foto se pega
+("PEGAR FOTO", del portapapeles). Lo que provoca la compra lo
 decide servicios/economia.py (ui/vida.py la hace con `articulo()`).
 """
 
 from typing import Optional
 
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QDesktopServices, QImage, QPixmap
+from PySide6.QtGui import QDesktopServices, QGuiApplication, QImage, QPixmap
 from PySide6.QtWidgets import (
     QButtonGroup,
     QDialog,
@@ -59,7 +63,7 @@ class DialogoTiendaReal(QDialog):
         self.setWindowTitle("EAFC 26 Roleplay - Tienda")
         self.categoria, self.saldo, self.moneda = categoria, saldo, moneda
         self.tiendas = tiendas.TIENDAS.get(categoria, [])
-        self.tienda = self.tiendas[0] if self.tiendas else None
+        self.tienda = next((t for t in self.tiendas if t.adentro), self.tiendas[0] if self.tiendas else None)
         self.foto: Optional[QImage] = None
 
         layout = QHBoxLayout(self)
@@ -76,7 +80,7 @@ class DialogoTiendaReal(QDialog):
         chips.setSpacing(8)
         for i, tienda in enumerate(self.tiendas):
             chip = chip_alternable(tienda.nombre)
-            chip.setChecked(i == 0)
+            chip.setChecked(tienda is self.tienda)
             chip.setToolTip(tienda.que)
             chip.clicked.connect(lambda _=False, t=tienda: self.ir_a(t))
             self._grupo.addButton(chip)
@@ -87,6 +91,7 @@ class DialogoTiendaReal(QDialog):
         self.navegador = crear_navegador(self.tienda.url, self) if self.tienda else None
         if self.navegador is not None:
             izquierda.addWidget(self.navegador, 1)
+            self.navegador.vista.loadFinished.connect(self._revisar_bloqueo)
             self.setMinimumSize(1280, 780)
         else:
             sin = texto_suave("No se puede mostrar la web adentro de la app. Abri la tienda en tu navegador, elegi "
@@ -143,7 +148,10 @@ class DialogoTiendaReal(QDialog):
         self.capturar_btn = boton("Capturar vista")
         self.capturar_btn.setEnabled(self.navegador is not None)
         self.capturar_btn.clicked.connect(self.capturar)
-        derecha.addLayout(fila(self.capturar_btn, None))
+        self.pegar_btn = boton("Pegar foto")
+        self.pegar_btn.setToolTip("Copia la imagen en tu navegador (clic derecho > Copiar imagen) y pegala aca")
+        self.pegar_btn.clicked.connect(self.pegar_foto)
+        derecha.addLayout(fila(self.capturar_btn, self.pegar_btn, None))
         derecha.addStretch()
         self.saldo_label = texto_suave(f"Tenes {dinero(saldo, moneda)}")
         derecha.addWidget(self.saldo_label)
@@ -162,8 +170,31 @@ class DialogoTiendaReal(QDialog):
 
     def ir_a(self, tienda: tiendas.Tienda):
         self.tienda = tienda
-        if self.navegador is not None:
+        if not tienda.adentro:
+            self.abrir_afuera(f"{tienda.nombre} no deja abrirse adentro de apps")
+        elif self.navegador is not None:
             self.navegador.vista.load(QUrl(tienda.url))
+
+    def abrir_afuera(self, motivo: str):
+        QDesktopServices.openUrl(QUrl(self.tienda.url))
+        self.lectura_label.setText(f"{esc(motivo)}: se abrio en tu navegador. Anota aca el nombre y el precio, y "
+                                   "pega la foto (clic derecho > Copiar imagen, y PEGAR FOTO).")
+
+    def _revisar_bloqueo(self, _ok: bool):
+        self.navegador.vista.page().runJavaScript(
+            "document.title + ' ' + (document.body ? document.body.innerText.slice(0, 300) : '')", 0, self.on_texto_pagina)
+
+    def on_texto_pagina(self, texto):
+        if isinstance(texto, str) and any(m in texto.lower() for m in ("access denied", "page unavailable",
+                                                                       "no hemos podido darte acceso")):
+            self.abrir_afuera(f"{self.tienda.nombre if self.tienda else 'Esta tienda'} bloquea el navegador de la app")
+
+    def pegar_foto(self):
+        imagen = QGuiApplication.clipboard().image()
+        if imagen.isNull():
+            self.lectura_label.setText("No hay una imagen copiada: en tu navegador, clic derecho > Copiar imagen.")
+            return
+        self.poner_foto(imagen)
 
     def url_actual(self) -> str:
         if self.navegador is not None:
@@ -177,7 +208,7 @@ class DialogoTiendaReal(QDialog):
         self.navegador.vista.page().runJavaScript(tiendas.SCRIPT_METADATOS, 0, self.on_metadatos)
 
     def on_metadatos(self, datos):
-        lectura = tiendas.leer_metadatos(datos if isinstance(datos, dict) else None, self.moneda)
+        lectura = tiendas.leer_metadatos(tiendas.datos_de_script(datos), self.moneda)
         if lectura.nombre and not self.nombre_edit.text().strip():
             self.nombre_edit.setText(lectura.nombre)
         if lectura.precio:

@@ -99,5 +99,53 @@ class TestCompraEnVida(ayuda.PruebaDeInterfaz):
         self.assertIn("Rolex Daytona de oro", self.pagina.resultado_label.text())
 
 
+class TestLeerPrecios(unittest.TestCase):
+    """Lo que fallaba: runJavaScript devolvia "" (el objeto no se convertia) y un precio
+    con 3 decimales se leia por mil. Y sin schema.org, el precio escrito en la pagina."""
+
+    def test_el_script_devuelve_texto_json(self):
+        self.assertTrue(tiendas.SCRIPT_METADATOS.startswith("JSON.stringify("))
+        self.assertEqual(tiendas.datos_de_script('{"titulo": "X"}'), {"titulo": "X"})
+        self.assertIsNone(tiendas.datos_de_script(""))
+        self.assertIsNone(tiendas.datos_de_script("no es json"))
+
+    def test_un_precio_numero_con_decimales_no_se_multiplica(self):
+        lectura = tiendas.leer_metadatos({"ofertas": [{"nombre": "Solaris 111RS", "precio": 21622823.823,
+                                                       "moneda": "USD"}]}, "£")
+        self.assertEqual(lectura.precio, tiendas.convertir(21622823.823, "USD", "£"))
+
+    def test_el_precio_escrito_en_la_pagina(self):
+        self.assertEqual(tiendas.precio_en_texto("€19,250,000"), (19250000.0, "EUR"))
+        self.assertEqual(tiendas.precio_en_texto("12 500 000 EUR"), (12500000.0, "EUR"))
+        self.assertEqual(tiendas.precio_en_texto("sin precio"), (None, ""))
+        lectura = tiendas.leer_metadatos({"titulo": "Yate | JamesEdition", "precio_texto": "€19,250,000"}, "£")
+        self.assertEqual(lectura.precio, tiendas.convertir(19250000, "EUR", "£"))
+
+
+class TestTiendasQueBloquean(ayuda.PruebaDeInterfaz):
+    def test_se_abren_en_el_navegador_de_siempre_y_la_foto_se_pega(self):
+        from PySide6.QtGui import QColor, QGuiApplication, QImage
+
+        from roleplay.ui import tienda as modulo
+
+        afuera = [t for t in tiendas.TIENDAS["moda"] if not t.adentro]
+        self.assertTrue({"Gucci", "Louis Vuitton"} <= {t.nombre for t in afuera})
+        dialogo = modulo.DialogoTiendaReal("moda", 100_000, "£")
+        self.addCleanup(dialogo.deleteLater)
+        self.assertTrue(dialogo.tienda.adentro)  # arranca en una que se ve adentro
+        with mock.patch.object(modulo.QDesktopServices, "openUrl") as abrir:
+            dialogo.ir_a(afuera[0])
+        abrir.assert_called_once()
+        self.assertIn("tu navegador", dialogo.lectura_label.text())
+        with mock.patch.object(modulo.QDesktopServices, "openUrl") as abrir:
+            dialogo.on_texto_pagina("Access Denied You don't have permission")
+        abrir.assert_called_once()
+        imagen = QImage(300, 200, QImage.Format.Format_RGB32)
+        imagen.fill(QColor("red"))
+        QGuiApplication.clipboard().setImage(imagen)
+        dialogo.pegar_foto()
+        self.assertIsNotNone(dialogo.foto)
+
+
 if __name__ == "__main__":
     unittest.main()
