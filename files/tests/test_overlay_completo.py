@@ -4,6 +4,8 @@ import unittest
 from unittest import mock
 
 import ayuda
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QApplication
 from roleplay import ajustes, database
 from roleplay.models import PlayerProfile
 
@@ -57,6 +59,34 @@ class TestOverlayCompleto(ayuda.PruebaDeInterfaz):
         self.assertFalse(self.ventana.overlay.abierto)
         self.ventana.overlay.abrir()
         self.ventana.close()  # en el overlay, cerrar no cierra la app
+        self.assertFalse(self.ventana.overlay.abierto)
+
+    def test_abrir_la_app_desde_afuera_cierra_el_overlay_sin_dejar_la_barra(self):
+        self.ventana.overlay.abrir()
+        self.ventana.traer_desde_otra()  # el icono del escritorio o la bandeja
+        self.assertFalse(self.ventana.overlay.abierto)
+        self.assertTrue(self.ventana.barra_overlay.isHidden())
+        self.assertFalse(self.ventana.windowFlags() & Qt.WindowType.WindowStaysOnTopHint)
+        self.assertTrue(self.ventana.isVisible())
+
+    def test_si_el_juego_vuelve_al_frente_el_overlay_se_cierra(self):
+        overlay = self.ventana.overlay
+        with mock.patch.object(self.modulo, "_ventana_al_frente", return_value=77):
+            overlay.abrir()
+        self.assertEqual(overlay._juego, 77)
+        with mock.patch.object(self.modulo, "_ventana_al_frente", return_value=5):
+            overlay._si_volvio_el_juego()  # otra ventana (los recortes, un chat): sigue abierto
+        self.assertTrue(overlay.abierto)
+        with mock.patch.object(self.modulo, "_ventana_al_frente", return_value=77):
+            overlay._si_volvio_el_juego()  # alt-tab o click en el juego
+        self.assertFalse(overlay.abierto)
+        self.assertTrue(self.ventana.barra_overlay.isHidden())
+
+    def test_minimizar_cierra_el_overlay(self):
+        self.ventana.overlay.abrir()
+        self.ventana.showMinimized()
+        ayuda.esperar_tareas(0.2)
+        QApplication.processEvents()
         self.assertFalse(self.ventana.overlay.abierto)
 
     def test_el_atajo_abre_el_overlay_o_la_sala_segun_ajustes(self):

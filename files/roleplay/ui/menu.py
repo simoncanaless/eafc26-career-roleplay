@@ -863,16 +863,19 @@ class MainMenuWindow(QMainWindow):
         super().closeEvent(evento)
 
     def _traer_al_frente(self):
+        """La ventana de siempre al frente (la bandeja, el icono del escritorio): si
+        el overlay estaba abierto, primero se cierra (si no, quedaba a medias: la
+        ventana normal con la barra del overlay)."""
+        if self.overlay.abierto:
+            self.overlay.cerrar(devolver_foco=False)
         self.showNormal()
         self.raise_()
         self.activateWindow()
+        _poner_al_frente(int(self.winId()))
 
     def traer_desde_otra(self):
         """Alguien quiso abrir la app de nuevo: se muestra esta (ui/instancia.py)."""
-        if self.overlay.abierto:
-            return
         self._traer_al_frente()
-        _poner_al_frente(int(self.winId()))
 
     def _abrir_sala_de_prensa(self):
         self._traer_al_frente()

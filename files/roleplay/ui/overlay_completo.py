@@ -8,6 +8,9 @@ completa encima del juego.
   (`ajustes.overlay.opacidad`), y toma el foco: se usa al toque.
 - El mismo atajo, Esc o "VOLVER AL JUEGO" lo cierran: la ventana se esconde,
   vuelve a ser la de siempre (sus bordes, su tamano) y el foco vuelve al juego.
+  Tambien se cierra solo si el juego vuelve al frente (alt-tab, un click en
+  el juego) o si la ventana se minimiza: si no, quedaba "abierto" a medias, con
+  la barra del overlay en la ventana de siempre.
 
 No se toca el juego: es una ventana mas encima (por eso el juego tiene que
 estar en "ventana sin bordes"; en pantalla completa EXCLUSIVA ninguna ventana
@@ -22,7 +25,7 @@ sala flotante chica de antes, ui/overlay.py).
 import ctypes
 from typing import Optional
 
-from PySide6.QtCore import QObject, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
 
 from roleplay import ajustes
@@ -32,6 +35,7 @@ OPACIDAD = 0.95
 OPACIDAD_MINIMA = 0.7
 REINTENTOS_FOCO = 6  # si el juego no suelta el foco al toque, se insiste cada INTERVALO_FOCO_MS
 INTERVALO_FOCO_MS = 120
+ESPERA_DESACTIVADA_MS = 300  # al perder el foco, cuanto esperar para ver quien lo tomo
 MODOS = ("completo", "sala")
 
 
@@ -63,7 +67,16 @@ def pantalla_de_la_ventana(hwnd: int):
         info.cbSize = ctypes.sizeof(MONITORINFOEX)
         if not user32.GetMonitorInfoW(monitor, ctypes.byref(info)):
             return None
-        return next((p for p in QGuiApplication.screens() if p.name() == info.szDevice), None)
+        monitor_rect = info.rcMonitor
+        for pantalla in QGuiApplication.screens():
+            # Qt 6 nombra las pantallas con el nombre del monitor ("VG27AQ5A"), no
+            # con el de Windows (DISPLAY1): se compara la esquina y el ancho
+            g, escala = pantalla.geometry(), pantalla.devicePixelRatio()
+            if pantalla.name() == info.szDevice or (
+                    (g.x(), g.y()) == (monitor_rect.left, monitor_rect.top)
+                    and round(g.width() * escala) == monitor_rect.right - monitor_rect.left):
+                return pantalla
+        return None
     except (OSError, AttributeError, ValueError):
         return None
 
@@ -82,6 +95,23 @@ class OverlayCompleto(QObject):
         self._esc.setContext(Qt.ShortcutContext.WindowShortcut)
         self._esc.setEnabled(False)
         self._esc.activated.connect(self.cerrar)
+        ventana.installEventFilter(self)
+
+    def eventFilter(self, objeto, evento):
+        if self.abierto and objeto is self.ventana:
+            if (evento.type() == QEvent.Type.WindowStateChange and self.ventana.isMinimized()
+                    and not evento.oldState() & Qt.WindowState.WindowMinimized):  # (no al abrirse desde minimizada)
+                QTimer.singleShot(0, self._cerrar_sin_devolver)
+            elif evento.type() == QEvent.Type.WindowDeactivate:
+                QTimer.singleShot(ESPERA_DESACTIVADA_MS, self._si_volvio_el_juego)
+        return False
+
+    def _si_volvio_el_juego(self):
+        if self.abierto and self._juego and _ventana_al_frente() == self._juego:
+            self.cerrar(devolver_foco=False)
+
+    def _cerrar_sin_devolver(self):
+        self.cerrar(devolver_foco=False)
 
     def alternar(self):
         if self.abierto:
@@ -123,7 +153,7 @@ class OverlayCompleto(QObject):
             if self._intentos < REINTENTOS_FOCO:
                 QTimer.singleShot(INTERVALO_FOCO_MS, self._tomar_el_foco)
 
-    def cerrar(self):
+    def cerrar(self, devolver_foco: bool = True):
         if not self.abierto:
             return
         v = self.ventana
@@ -138,5 +168,6 @@ class OverlayCompleto(QObject):
             v.restoreGeometry(antes["geometria"])
         if antes.get("visible"):
             v.showNormal()  # como estaba antes (queda detras del juego)
-        _poner_al_frente(self._juego)
+        if devolver_foco:
+            _poner_al_frente(self._juego)
         self.cambio.emit(False)
