@@ -200,10 +200,10 @@ TEMAS = {
     "contratos": "contratos, patrocinios con marcas y futuro",
     "hinchada": "la presion de la hinchada",
 }
-# que estilo de periodista (ecosistema_ig.json, datos de Simon) pregunta cada tema
-ESTILO_DE_TEMA = {"tactica": "tactico", "racha": "tactico", "mercado": "mercado", "contratos": "mercado",
-                  "vestuario": "vestuario", "hinchada": "vestuario", "arbitraje": "polemico",
-                  "vida_privada": "polemico"}
+# que estilos de periodista (ecosistema_ig.json, datos de Simon) preguntan cada tema
+ESTILO_DE_TEMA = {"tactica": ("tactico",), "racha": ("tactico",), "mercado": ("mercado",), "contratos": ("mercado",),
+                  "vestuario": ("vestuario",), "hinchada": ("vestuario", "emocional"), "arbitraje": ("polemico",),
+                  "vida_privada": ("polemico", "emocional")}
 # sin los datos de Simon, los tres de siempre
 PROPIOS_POR_ESTILO = {"tactico": PERIODISTAS[0], "vestuario": PERIODISTAS[1], "mercado": PERIODISTAS[1],
                       "polemico": PERIODISTAS[2]}
@@ -216,16 +216,19 @@ TIPOS_METAS = ("meta_cerca", "meta_tabla")
 
 
 def periodista_para(tema: str, usados: set, dado) -> tuple[str, str]:
-    """(nombre, medio) de un periodista del estilo del tema que no pregunto todavia."""
+    """(quien, medio) de un periodista del estilo del tema que no pregunto todavia.
+    Los reales firman con su @usuario: "Nombre @usuario". (`usados`: los nombres.)"""
     from roleplay.servicios import ecosistema
 
-    estilo = ESTILO_DE_TEMA.get(tema, "vestuario")
+    estilos = ESTILO_DE_TEMA.get(tema, ("vestuario",))
     reales = [p for p in ecosistema.periodistas() if str(p.get("nombre", "")).strip() and p["nombre"] not in usados]
     if reales:
-        elegido = dado.choice([p for p in reales if p.get("estilo") == estilo] or reales)
-        medio = str(elegido.get("medio") or elegido.get("usuario_ig") or "prensa")
-        return str(elegido["nombre"]).strip(), medio.replace(":", " -").replace("(", "").replace(")", "")
-    propio = PROPIOS_POR_ESTILO.get(estilo, PERIODISTAS[0])
+        elegido = dado.choice([p for p in reales if p.get("estilo") in estilos] or reales)
+        medio = str(elegido.get("medio") or "prensa").replace(":", " -").replace("(", "").replace(")", "")
+        usuario = str(elegido.get("usuario_ig") or "").strip()
+        quien = str(elegido["nombre"]).strip() + (f" {usuario}" if usuario.startswith("@") else "")
+        return quien, medio
+    propio = PROPIOS_POR_ESTILO.get(estilos[0], PERIODISTAS[0])
     if propio[0] in usados:
         propio = next((p for p in PERIODISTAS if p[0] not in usados), propio)
     return propio
@@ -265,7 +268,7 @@ def armar_conferencia(perfil: PlayerProfile, candidatos: dict, pesos: dict, cont
         for tema in temas:
             simbolo, datos = _elegir(candidatos[tema], escritor, candidatos[tema])
             nombre, medio = periodista_para(tema, usados, escritor.dado)
-            usados.add(nombre)
+            usados.add(nombre.split(" @")[0])
             preguntas.append(f"{nombre} ({medio}): {escritor.decir(simbolo, **datos)}")
     return preguntas_con_ia(perfil, contexto, preguntas, cruces, temas) or preguntas
 
@@ -434,8 +437,8 @@ def preguntas_con_ia(perfil: PlayerProfile, contexto: str, preguntas: list[str],
     limpias = []
     for (quien, _), pregunta in zip(partes, nuevas):
         pregunta = ia.texto(pregunta, 400)
-        nombre = quien.split(" (")[0]
-        if pregunta.startswith(nombre) and ": " in pregunta[:80]:
+        nombre = quien.split(" (")[0].split(" @")[0]
+        if pregunta.startswith(nombre) and ": " in pregunta[:120]:
             pregunta = pregunta.split(": ", 1)[1]
         if not pregunta:
             return None

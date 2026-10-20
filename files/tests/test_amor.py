@@ -173,3 +173,80 @@ class TestTarjetaEnVida(ayuda.PruebaDeInterfaz):
         noticia = database.load_noticias_prensa(self.pid)[0]
         self.assertEqual(noticia.hitos, ["amor:proponer:anillo"])
         self.assertEqual([a.tipo for a in database.load_actividad_instagram(self.pid)], ["amor"])
+
+
+# ---- parejas del catalogo, DMs y romance secreto (datos de prueba: tests/datos_ecosistema.py) ----
+
+import random  # noqa: E402
+
+from datos_ecosistema import CELEBRIDADES, ConEcosistema  # noqa: E402
+from roleplay.servicios import cruce  # noqa: E402
+
+
+def _dado(*valores):
+    """Un dado que devuelve `valores` en orden (para que el DM no dependa del azar)."""
+    return mock.Mock(random=mock.Mock(side_effect=list(valores)))
+
+
+class TestParejas(ConEcosistema):
+    def _soltero(self):
+        return {"estado": "soltero", "pareja": None, "hasta": "2026-10-01", "decision": None, "historial": []}
+
+    def test_buscar_y_el_dm_segun_la_fama(self):
+        self.assertEqual([c["nombre"] for c in amor.buscar(categoria="actriz")], ["Actriz Conocida"])
+        self.assertEqual(len(amor.buscar("@influ")), 1)
+        hoy = date(2026, 10, 1)
+        estado, _, si = amor.intentar(self._soltero(), {}, CELEBRIDADES[1], fama=70, hoy=hoy, dado=_dado(0.0))
+        self.assertEqual(estado["estado"], "conociendo")
+        self.assertEqual(estado["decision"]["tipo"], "como_seguir")
+        self.assertTrue(si.privado)
+        with self.assertRaises(ValueError):  # un DM por semana (y ya no esta soltero)
+            amor.intentar(estado, {}, CELEBRIDADES[2], 70, hoy)
+
+        # muy lejos de su nivel: visto y la captura llega a los portales de chismes
+        _, _, visto = amor.intentar(self._soltero(), {}, CELEBRIDADES[0], fama=50, hoy=hoy, dado=_dado(0.99, 0.0))
+        self.assertFalse(visto.privado)
+        self.assertEqual((visto.tono, visto.reputacion), ("negativa", -1))
+        self.assertIn("chismes", visto.detalle)
+        _, _, nada = amor.intentar(self._soltero(), {}, CELEBRIDADES[0], fama=50, hoy=hoy, dado=_dado(0.99, 0.99))
+        self.assertTrue(nada.privado)  # visto, pero no se filtro
+
+    def test_la_chance_y_la_filtracion(self):
+        self.assertAlmostEqual(amor.probabilidad_de_exito(70, 70), amor.EXITO_AL_ALCANZAR)
+        self.assertEqual(amor.probabilidad_de_exito(100, 60), amor.EXITO_MAXIMO)  # casi seguro, nunca 100%
+        self.assertEqual(amor.probabilidad_de_exito(40, 95), amor.EXITO_MINIMO)  # una megaestrella: casi imposible
+        self.assertLess(amor.probabilidad_de_exito(60, 70), amor.probabilidad_de_exito(70, 70))
+        self.assertEqual(amor.probabilidad_de_filtracion(60, 65), 0)  # cerca de su nivel: no es noticia
+        self.assertGreater(amor.probabilidad_de_filtracion(40, 95), amor.probabilidad_de_filtracion(50, 75))
+
+    def test_oficializar_un_romance_secreto_cuando_quiera(self):
+        hoy = date(2026, 10, 1)
+        estado, e, _ = amor.intentar(self._soltero(), {}, CELEBRIDADES[1], 70, hoy, dado=_dado(0.0))
+        estado, e, _ = amor.elegir(estado, e, "secreto", hoy)
+        estado, e, suceso = amor.oficializar(estado, e, date(2026, 10, 3))  # sin esperar el mes
+        self.assertEqual(estado["estado"], "pareja")
+        self.assertFalse(suceso.privado)
+        self.assertGreater(suceso.seguidores, 0)  # boom de seguidores
+        with self.assertRaises(ValueError):
+            amor.oficializar(estado, e, hoy)
+
+    def test_romance_secreto_y_despues_publico(self):
+        hoy = date(2026, 10, 1)
+        estado, e, _ = amor.intentar(self._soltero(), {}, CELEBRIDADES[1], 70, hoy, dado=_dado(0.0))
+        estado, e, suceso = amor.elegir(estado, e, "secreto", hoy)
+        self.assertEqual(estado["estado"], "secreto")
+        self.assertTrue(suceso.privado)
+        database.set_estado_amor(self.perfil.id, estado)
+        tipos = [c.tipo for c in cruce.cruces(self.perfil.id)]
+        self.assertIn("rumor_secreto", tipos)  # la prensa pregunta por los rumores, sin nombre
+        estado["hasta"] = hoy.isoformat()
+        estado, e, _ = amor.revisar(self.perfil, estado, e, date(2026, 11, 5), fama=70)
+        self.assertEqual(estado["decision"]["tipo"], "salir_a_la_luz")
+        estado, e, publico = amor.elegir(estado, e, "publico", date(2026, 11, 5))
+        self.assertEqual(estado["estado"], "pareja")
+        self.assertFalse(publico.privado)
+
+    def test_lo_ven_con_alguien_de_su_nivel(self):
+        dado = random.Random(3)
+        for _ in range(10):
+            self.assertLessEqual(amor.famosa_para(30, dado)["exigencia"], 30)

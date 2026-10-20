@@ -13,14 +13,17 @@ EAFC_ECOSISTEMA cambia la carpeta (las pruebas la apuntan a una vacia).
 
 Ademas, dos medidas que usan la hinchada, el amor, los patrocinios, la prensa
 y los comentarios de colegas:
-- el tier del club (1 gigante, 2 competitivo, 3 chico), por la media de su
-  plantel en la partida;
-- el Player Power Index (fama del jugador, 0-100): reputacion + el tier del
-  club + sus goles de la temporada + sus premios.
+- el tier mediatico del club (1 gigante, 2 competitivo, 3 chico): los gigantes
+  y los competitivos de siempre por nombre (TIER_1 / TIER_2: un Man United es
+  tier 1 aunque ande mal); el resto por la media de su plantel en la partida,
+  como mucho tier 2;
+- el Player Power Index (fama del jugador, 0-100): reputacion + la base del
+  tier (35 / 20 / 8) + goles y asistencias de la temporada + premios y titulos.
 """
 
 import json
 import os
+import unicodedata
 from collections import defaultdict
 from functools import lru_cache
 from pathlib import Path
@@ -28,10 +31,20 @@ from typing import Optional
 
 from roleplay.servicios.narrador import CARPETA_DATOS
 
-# tier por la media de los 16 mejores del plantel (calibrado con la partida de Simon, 2026-10-20)
-TIER_1_DESDE, TIER_2_DESDE = 81.5, 74.0
+# tier mediatico por nombre (normalizado: minusculas y sin tildes); los nombres de la
+# partida de FC 26 incluidos (Man Utd, Paris SG, Milano FC = el Milan sin licencia)
+TIER_1 = {"real madrid", "man utd", "manchester united", "fc barcelona", "barcelona", "manchester city", "man city",
+          "fc bayern munchen", "bayern munchen", "bayern", "paris sg", "paris saint-germain", "psg", "liverpool",
+          "arsenal", "chelsea", "juventus"}
+TIER_2 = {"psv", "psv eindhoven", "sl benfica", "benfica", "borussia dortmund", "dortmund", "ac milan", "milan",
+          "milano fc", "atletico de madrid", "atletico madrid", "inter", "lombardia fc", "ssc napoli", "napoli",
+          "fc porto", "porto", "ajax", "spurs", "tottenham", "newcastle utd", "sporting cp", "as roma", "roma",
+          "rb leipzig", "leverkusen", "aston villa", "olympique de marseille", "om", "galatasaray", "fenerbahce",
+          "boca juniors", "river plate", "flamengo", "palmeiras", "al nassr", "al hilal", "inter miami"}
+# el resto: por la media de los 16 mejores del plantel (calibrado con la partida de Simon, 2026-10-20)
+TIER_2_DESDE = 74.0
 JUGADORES_DEL_PLANTEL = 16
-BASE_FAMA = {1: 25, 2: 12, 3: 4}
+BASE_FAMA = {1: 35, 2: 20, 3: 8}
 
 
 def carpeta() -> Path:
@@ -106,16 +119,26 @@ def _tiers(carrera) -> dict[int, int]:
         for equipo, lista in medias.items():
             mejores = sorted(lista, reverse=True)[:JUGADORES_DEL_PLANTEL]
             promedio = sum(mejores) / len(mejores)
-            tiers[equipo] = 1 if promedio >= TIER_1_DESDE else 2 if promedio >= TIER_2_DESDE else 3
+            tiers[equipo] = tier_por_nombre(carrera.equipo(equipo)) or (2 if promedio >= TIER_2_DESDE else 3)
         carrera.memo["tiers"] = tiers
     return carrera.memo["tiers"]
+
+
+def normalizar(nombre: str) -> str:
+    sin_tildes = unicodedata.normalize("NFKD", str(nombre or "")).encode("ascii", "ignore").decode()
+    return " ".join(sin_tildes.lower().split())
+
+
+def tier_por_nombre(nombre: str) -> Optional[int]:
+    clave = normalizar(nombre)
+    return 1 if clave in TIER_1 else 2 if clave in TIER_2 else None
 
 
 def tier_club(carrera, club: Optional[int]) -> int:
     """1 gigante, 2 competitivo, 3 chico (2 si no se sabe)."""
     if carrera is None or club is None:
         return 2
-    return _tiers(carrera).get(club, 2)
+    return _tiers(carrera).get(club) or tier_por_nombre(carrera.equipo(club)) or 2
 
 
 def club_del_usuario(carrera) -> Optional[int]:
@@ -130,12 +153,19 @@ def goles_de_la_temporada(carrera) -> int:
     return sum(e.goles for e in carrera.estadisticas_de(carrera.usuario_id))
 
 
+def asistencias_de_la_temporada(carrera) -> int:
+    if carrera is None or carrera.usuario_id is None:
+        return 0
+    return sum(e.asistencias for e in carrera.estadisticas_de(carrera.usuario_id))
+
+
 # ---- la fama del jugador ----
 
 
-def fama_jugador(reputacion: int, tier: int, goles_temporada: int = 0, premios: int = 0) -> int:
-    """Player Power Index (0-100). Un tier 1 da una base enorme; un club chico, casi nada."""
-    valor = reputacion * 0.55 + BASE_FAMA.get(tier, BASE_FAMA[2]) + min(15, goles_temporada * 0.4) + min(10, premios * 3)
+def fama_jugador(reputacion: int, tier: int, goles_temporada: int = 0, premios: int = 0, asistencias: int = 0) -> int:
+    """Player Power Index (0-100). Un tier 1 da una base enorme (35); un club chico, casi nada (8)."""
+    valor = (reputacion * 0.45 + BASE_FAMA.get(tier, BASE_FAMA[2]) + min(12, goles_temporada * 0.3)
+             + min(5, asistencias * 0.2) + min(10, premios * 3))
     return max(0, min(100, round(valor)))
 
 
@@ -147,11 +177,14 @@ def premios_del_jugador(player_id: Optional[int]) -> int:
     return len(database.get_estado_prensa(player_id).get("vitrina", []))
 
 
-def calcular_fama_jugador(player_id: Optional[int], carrera=None, leer_partida: bool = True) -> dict:
-    """{"fama", "tier", "goles", "premios"} del jugador. Sin `carrera`, lee la
-    partida (lento: llamarla desde un hilo) salvo leer_partida=False."""
+def calcular_fama_jugador(perfil, carrera=None, leer_partida: bool = True) -> dict:
+    """{"fama", "tier", "goles", "asistencias", "premios"} del jugador (`perfil`:
+    el PlayerProfile o su id). Sin `carrera`, lee la partida (lento: llamarla
+    desde un hilo) salvo leer_partida=False. Premios: la vitrina (titulos y
+    premios individuales)."""
     from roleplay import database
 
+    player_id = getattr(perfil, "id", perfil)
     if carrera is None and leer_partida:
         try:
             from roleplay.partida.lector import carrera_actual
@@ -162,5 +195,7 @@ def calcular_fama_jugador(player_id: Optional[int], carrera=None, leer_partida: 
     reputacion = database.get_reputacion_actual(player_id) if player_id else 50
     tier = tier_club(carrera, club_del_usuario(carrera))
     goles = goles_de_la_temporada(carrera)
+    asistencias = asistencias_de_la_temporada(carrera)
     premios = premios_del_jugador(player_id)
-    return {"fama": fama_jugador(reputacion, tier, goles, premios), "tier": tier, "goles": goles, "premios": premios}
+    return {"fama": fama_jugador(reputacion, tier, goles, premios, asistencias), "tier": tier, "goles": goles,
+            "asistencias": asistencias, "premios": premios}

@@ -56,6 +56,12 @@ class TestGramatica(unittest.TestCase):
         self.assertEqual(limpiar("« hola »"), "«Hola»")
 
 
+class TestLimpiar(unittest.TestCase):
+    def test_no_toca_un_usuario_al_principio(self):
+        self.assertEqual(limpiar("@actriz en los comentarios. ojo"), "@actriz en los comentarios. Ojo")
+        self.assertEqual(limpiar("ojo que @actriz comento"), "Ojo que @actriz comento")
+
+
 class TestNoRepetir(unittest.TestCase):
     def test_no_se_repite_un_bloque_hasta_usar_los_demas(self):
         escritor = con_gramatica({"x": [f"opcion {i}" for i in range(5)]})

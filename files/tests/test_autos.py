@@ -357,3 +357,34 @@ class TestConcesionarioEnLaPagina(ayuda.PruebaDeInterfaz):
         self.pagina.pedir(Configuracion("porsche_911"))
         self.assertNotIn("foto", database.get_economia(self.pid)["pedidos"][0])
         self.assertEqual(len(self.pagina.pedidos.findChildren(VistaAuto)), 1)
+
+
+# ---- hiperautos y marketplace de nicho (datos de prueba: tests/datos_ecosistema.py) ----
+
+from datos_ecosistema import ConEcosistema  # noqa: E402
+from roleplay.servicios import marketplace  # noqa: E402
+
+
+class TestAutos(ConEcosistema):
+    def test_hiperautos_nuevos_y_descontinuados_en_el_garage(self):
+        ids = {m.id for m in autos.MODELOS}
+        self.assertTrue({"ferrari_f80", "mclaren_w1", "porsche_mission_x"} <= ids)
+        self.assertEqual(autos.POR_ID["ferrari_f80"].precio, 3_735_000)
+        self.assertNotIn("ferrari_sf90", ids)
+        self.assertIn("ferrari_sf90", autos.POR_ID)  # el que lo tenga lo sigue viendo
+
+    def test_marketplace_rota_por_semana_y_se_valoriza(self):
+        hoy = date(2026, 10, 7)
+        ofertas = marketplace.ofertas(self.perfil.id, hoy)
+        self.assertTrue(marketplace.MINIMO_OFERTAS <= len(ofertas) <= marketplace.MAXIMO_OFERTAS)
+        self.assertEqual(ofertas, marketplace.ofertas(self.perfil.id, date(2026, 10, 9)))  # la misma semana
+        self.assertNotEqual([o["id"] for o in ofertas], [o["id"] for o in marketplace.ofertas(self.perfil.id, date(2026, 10, 20))])
+        oferta = ofertas[0]  # (todas las rarezas de los datos se valorizan)
+        e = economia.comprar({"saldo": 10_000_000}, marketplace.articulo(oferta), hoy, marketplace.extra_de(oferta))
+        posesion = e["posesiones"][0]
+        self.assertTrue(posesion["articulo"].startswith(marketplace.PREFIJO))
+        self.assertEqual(economia.articulo_de_posesion(posesion).nombre, marketplace.nombre(oferta))
+        dos_anios = date(2028, 10, 7)
+        self.assertGreater(economia.valor_de_venta(posesion, dos_anios), oferta["precio"])  # subio de valor
+        vendido, recuperado = economia.vender(e, posesion["id"], dos_anios)
+        self.assertEqual(recuperado, marketplace.valor_de_reventa(posesion, dos_anios))

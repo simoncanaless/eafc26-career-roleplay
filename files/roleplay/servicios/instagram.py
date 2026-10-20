@@ -15,6 +15,7 @@ from roleplay.servicios.narrador import narrador
 TASA_LIKES = 0.05  # un post normal: ~5% de los seguidores, mas con reputacion
 MAXIMO_COLEGAS = 2
 PROBABILIDAD_FAMOSA = 0.3
+MAXIMO_LIKES_VERIFICADOS = 3
 
 
 class ComentarioIA(BaseModel):  # (el nombre quedo de cuando lo escribia la IA)
@@ -106,6 +107,14 @@ def comentarios_del_ambiente(perfil: PlayerProfile, fama: int, estado_amor: dict
                 famosa = dado.choice(de_su_nivel)
                 resultado.append({"autor": famosa["usuario_ig"], "texto": escritor.decir("com_famosa"), "tono": "positivo"})
                 resultado.append(hincha("com_nota_famosa", famosa=famosa["usuario_ig"]))
+
+        # likes verificados: colegas y celebridades de su nivel que no comentaron
+        ya = {c["autor"] for c in resultado}
+        verificados = [c["usuario_ig"] for c in colegas if c["usuario_ig"] not in ya]
+        verificados += [c["usuario_ig"] for c in ecosistema.celebridades() if c.get("usuario_ig")
+                        and c["usuario_ig"] not in ya and ecosistema.numero(c.get("exigencia"), 101) <= fama]
+        for usuario in dado.sample(verificados, min(len(verificados), dado.randint(0, MAXIMO_LIKES_VERIFICADOS))):
+            resultado.append({"autor": usuario, "texto": "le dio like ❤️ (verificado)", "tono": "like"})
     return resultado
 
 

@@ -59,7 +59,7 @@ def limpiar(texto: str) -> str:
     texto = re.sub(r"([.!?]\s+[¿¡«]?)([a-zà-ü])", lambda m: m.group(1) + m.group(2).upper(), texto)
     if texto:
         i = next((n for n, c in enumerate(texto) if c.isalpha()), None)
-        if i is not None:
+        if i is not None and not (i and texto[i - 1] == "@"):  # un @usuario va tal cual
             texto = texto[:i] + texto[i].upper() + texto[i + 1:]
     return texto
 

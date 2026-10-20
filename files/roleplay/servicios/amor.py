@@ -19,10 +19,14 @@ alfombras rojas, crisis.
 Fama (ecosistema.calcular_fama_jugador: reputacion + tier del club + goles
 + premios) contra la `exigencia` de cada celebridad:
 - soltero, puede buscar en el catalogo y mandar un DM (uno por semana del
-  juego). Si su fama alcanza, le contesta y elige: mantenerlo en SECRETO
-  (nada sale en la prensa, pero los periodistas preguntan por los rumores) o
-  hacerlo OFICIAL. Si no alcanza, visto; y si la diferencia es grande, la
-  captura se filtra (chisme publico, reputacion -1).
+  juego). La chance de que conteste (`probabilidad_de_exito`) sale de su fama
+  contra la exigencia, con un margen: alcanzarla da ~85%, pasarla casi seguro,
+  quedarse corto la baja rapido. Si contesta, elige: mantenerlo en SECRETO
+  (nada sale en la prensa, pero los periodistas preguntan por los rumores; se
+  puede oficializar cuando quiera con `oficializar`) o hacerlo OFICIAL. Si no,
+  visto; y cuanto mas lejos estaba, mas probable que la captura se filtre a
+  los portales de chismes (`probabilidad_de_filtracion`: chisme publico,
+  reputacion -1 y burlas).
 - a los que lo "ven con una famosa" (sorteo semanal), solo les toca alguien
   de su nivel.
 - un romance secreto, al mes, pide decidir si sale a la luz.
@@ -65,7 +69,12 @@ CRISIS = 25
 PROPONER_DESDE_RELACION, PROPONER_DESDE_DIAS = 80, 180
 BODA_DESDE_DIAS = 120
 DM_CADA_DIAS = 7  # un DM por semana del juego
-CHISME_DESDE = 25  # tanta diferencia entre su fama y la exigencia: el visto se filtra
+EXITO_AL_ALCANZAR = 0.85  # chance de que conteste si su fama justo alcanza la exigencia
+EXITO_POR_PUNTO = 0.03  # cuanto sube (o baja) por cada punto de fama de diferencia
+EXITO_MINIMO, EXITO_MAXIMO = 0.03, 0.97
+FILTRACION_DESDE = 10  # puntos de diferencia desde los que un visto puede filtrarse
+FILTRACION_POR_PUNTO = 1 / 30
+FILTRACION_MAXIMA = 0.9
 SECRETO_DECIDIR_DIAS = 30
 
 NOMBRES = ["Valentina", "Camila", "Lucia", "Martina", "Renata", "Julieta", "Emilia", "Antonella", "Catalina",
@@ -277,26 +286,37 @@ def puede_mandar_dm(estado: Optional[dict], hoy: date) -> bool:
     return not ultimo or (hoy - date.fromisoformat(ultimo)).days >= DM_CADA_DIAS
 
 
-def intentar(estado: dict, e: dict, celebridad: dict, fama: int, hoy: date) -> tuple[dict, dict, Suceso]:
-    """Mandarle un DM a alguien del catalogo. Si su fama alcanza la exigencia,
-    contesta (y hay que decidir: secreto u oficial); si no, visto, y con mucha
-    diferencia la captura se filtra."""
+def probabilidad_de_exito(fama: int, exigencia_: int) -> float:
+    """La chance de que conteste el DM (0-1): ~85% si la fama justo alcanza."""
+    return max(EXITO_MINIMO, min(EXITO_MAXIMO, EXITO_AL_ALCANZAR + EXITO_POR_PUNTO * (fama - exigencia_)))
+
+
+def probabilidad_de_filtracion(fama: int, exigencia_: int) -> float:
+    """Si lo deja en visto: la chance de que la captura llegue a los portales de chismes."""
+    return max(0.0, min(FILTRACION_MAXIMA, (exigencia_ - fama - FILTRACION_DESDE) * FILTRACION_POR_PUNTO))
+
+
+def intentar(estado: dict, e: dict, celebridad: dict, fama: int, hoy: date,
+             dado: Optional[random.Random] = None) -> tuple[dict, dict, Suceso]:
+    """Mandarle un DM a alguien del catalogo. Con `probabilidad_de_exito`
+    contesta (y hay que decidir: secreto u oficial); si no, visto, y quizas la
+    captura se filtra (`probabilidad_de_filtracion`)."""
     if not puede_mandar_dm(estado, hoy):
         raise ValueError("Ahora no podes mandar otro DM.")
     estado, e = copy.deepcopy(estado), copy.deepcopy(e or {})
     estado["ultimo_dm"] = hoy.isoformat()
     pareja = de_catalogo(celebridad)
     nombre, oficio = pareja["nombre"], pareja["oficio"] or "celebridad"
-    falta = pareja["exigencia"] - fama
-    if falta <= 0:
+    dado = dado or random.Random(f"dm:{nombre}:{hoy.isoformat()}:{fama}")
+    if dado.random() < probabilidad_de_exito(fama, pareja["exigencia"]):
         estado["estado"], estado["pareja"] = "conociendo", pareja
         estado["decision"] = {"tipo": "como_seguir", "fecha": hoy.isoformat()}
         suceso = Suceso(f"{nombre} te contesto el DM", f"recibio respuesta de {nombre}, {oficio}", "positiva", 0,
                         fecha=hoy, clave="amor:dm:si", privado=True)
-    elif falta >= CHISME_DESDE:
+    elif dado.random() < probabilidad_de_filtracion(fama, pareja["exigencia"]):
         suceso = Suceso(f"{nombre} lo dejo en visto", f"le escribio a {nombre}, {oficio}, y lo dejo en visto: "
-                        "la captura ya circula en las redes", "negativa", 0.4, reputacion=-1, fecha=hoy,
-                        clave="amor:dm:visto")
+                        "la captura del chat llego a los portales de chismes y las redes se burlan", "negativa", 0.4,
+                        reputacion=-1, fecha=hoy, clave="amor:dm:visto")
     else:
         suceso = Suceso(f"{nombre} no contesto", f"le escribio a {nombre}, {oficio}, y no hubo respuesta", "neutral", 0,
                         fecha=hoy, clave="amor:dm:no", privado=True)
@@ -410,6 +430,15 @@ def revisar(perfil: PlayerProfile, estado: Optional[dict], e: dict, hoy: date,
         break  # a lo sumo una cosa por revision
     _proponer(estado, hoy)
     return estado, e, sucesos
+
+
+def oficializar(estado: dict, e: dict, hoy: date) -> tuple[dict, dict, Suceso]:
+    """Hacer publico un romance secreto cuando quiera (no hace falta esperar la decision)."""
+    if (estado or {}).get("estado") != "secreto" or not estado.get("pareja"):
+        raise ValueError("No hay un romance secreto para oficializar.")
+    estado = copy.deepcopy(estado)
+    estado["decision"] = {"tipo": "salir_a_la_luz", "fecha": hoy.isoformat()}
+    return elegir(estado, e, "publico", hoy)
 
 
 # ---- contestar una decision ----

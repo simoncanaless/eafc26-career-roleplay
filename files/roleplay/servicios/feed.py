@@ -24,7 +24,8 @@ PROBABILIDAD_RUMOR = 0.15  # por revision, si es famoso
 FAMA_RUMOR = 60
 LIKES = {"viral": (150_000, 2_500_000), "mercado": (80_000, 900_000), "polemica": (20_000, 250_000),
          "farandula": (40_000, 600_000), "medio": (15_000, 200_000)}
-PALABRAS_FARANDULA = ("pareja", "romance", "novia", "cena", "alfombra", "visto", "rumor", "boda", "casamiento", "secreto")
+PALABRAS_FARANDULA = ("pareja", "romance", "novia", "cena", "alfombra", "visto", "rumor", "boda", "casamiento", "secreto",
+                      "fiesta", "noche", "boliche", "yate", "chisme", "captura")
 PALABRAS_LUJO = ("compro", "estrena", "llego", "mansion", "yate", "jet", "reloj", "auto")
 
 
@@ -79,9 +80,9 @@ def actualizar(perfil: PlayerProfile, eventos: list, anterior: list, seguidores:
     nuevos = []
     with narrador(perfil.id, "redes") as escritor:
         for evento in eventos:
-            if dado.random() >= PROBABILIDAD_POST:
-                continue
             tipo = _tipo(evento)
+            if tipo != "farandula" and dado.random() >= PROBABILIDAD_POST:
+                continue  # (la farandula no se pierde un chisme)
             pagina = _pagina(paginas, tipo, dado)
             texto = escritor.decir(f"feed_{tipo}", **base, titulo=evento.titulo)
             if texto:

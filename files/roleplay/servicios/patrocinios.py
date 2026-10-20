@@ -56,6 +56,7 @@ MARCAS = [
     Marca("apple", "Apple", "smartphones", 1_500_000, 75, 90_000),
     Marca("rolex", "Rolex", "relojes", 1_000_000, 78, 80_000),
     Marca("gucci", "Gucci", "moda de lujo", 2_000_000, 72, 100_000),
+    Marca("louis_vuitton", "Louis Vuitton", "moda de lujo", 3_000_000, 78, 130_000),
 ]
 POR_ID = {m.id: m for m in MARCAS}
 

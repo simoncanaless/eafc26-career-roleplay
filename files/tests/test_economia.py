@@ -243,3 +243,49 @@ class TestPaginaVida(ayuda.PruebaDeInterfaz):
         una_semana_despues = construir(f.construir_bytes(otros_partidos=[(20270123, f.LIGA, f.CITY, f.LIVERPOOL, 1, 0, True)]))
         self.pagina.acreditar_con(una_semana_despues)
         self.assertEqual(database.get_economia(self.pid)["saldo"], saldo + NETO_SEMANAL)
+
+
+# ---- seguidores por tier y patrocinios (datos de prueba: tests/datos_ecosistema.py) ----
+
+from roleplay.servicios import patrocinios  # noqa: E402
+
+
+class TestSeguidores(ayuda.PruebaConBase):
+    def test_la_base_y_la_exposicion_segun_el_club_y_los_goles(self):
+        self.assertGreater(hinchada.base_de_seguidores(1, 60), 100 * hinchada.base_de_seguidores(3, 60))
+        normal = hinchada.exposicion(3, 10, 30)
+        estrella = hinchada.exposicion(1, 80, 40, premios=3)
+        self.assertGreater(estrella, 20 * normal)  # 80 goles en 40 partidos en un gigante: explota
+        self.assertLessEqual(hinchada.exposicion(1, 500, 10, 99), hinchada.TOPE_EXPOSICION)
+
+
+class TestPatrocinios(ayuda.PruebaConBase):
+    def test_oferta_firma_y_cobra_con_el_sueldo(self):
+        hoy = date(2026, 10, 1)
+        e = economia.acreditar(None, hoy, 100_000)
+        with mock.patch.object(patrocinios, "PROBABILIDAD_OFERTA", 1.0):
+            e, _ = patrocinios.revisar(e, 1, seguidores=500_000, reputacion=70, hoy=hoy)
+        oferta = e["patrocinios"]["oferta"]
+        self.assertIn(oferta["marca"], {m.id for m in patrocinios.candidatas(e, 500_000, 70, hoy)})
+        self.assertNotIn(oferta["marca"], {"apple", "rolex", "gucci", "samsung"})  # no le da el nivel
+        e, novedad = patrocinios.responder(e, True, hoy)
+        self.assertEqual(novedad.tono, "positiva")
+        self.assertIn(oferta["nombre"], novedad.titulo)
+        saldo = e["saldo"]
+        e2 = economia.acreditar(e, date(2026, 10, 8), 100_000)
+        semanal = e["patrocinios"]["contratos"][0]["semanal"]
+        self.assertEqual(e2["saldo"] - saldo, round(100_000 * economia.NETO) + round(semanal * economia.NETO))
+        self.assertTrue(any("Patrocinios" in m["concepto"] for m in e2["movimientos"]))
+
+    def test_rescinden_por_imagen_o_escandalo(self):
+        hoy = date(2026, 10, 1)
+        e = {"saldo": 1_000_000, "patrocinios": {"contratos": [
+            {"id": "a", "marca": "nike", "nombre": "Nike", "rubro": "botines", "semanal": 50_000,
+             "desde": "2026-01-01", "hasta": "2027-12-31"}], "oferta": None, "rechazadas": {}}}
+        caida, novedades = patrocinios.revisar(e, 1, 500_000, reputacion=40, hoy=hoy)  # muy debajo de lo que pide
+        self.assertEqual(caida["patrocinios"]["contratos"], [])
+        self.assertEqual(novedades[0].tono, "negativa")
+        with mock.patch.object(patrocinios, "PROBABILIDAD_RESCISION_ESCANDALO", 1.0):
+            multado, novedades = patrocinios.revisar(e, 1, 500_000, reputacion=80, hoy=hoy, escandalo=True)
+        self.assertEqual(multado["saldo"], 1_000_000 - 50_000 * patrocinios.MULTA_SEMANAS)
+        self.assertTrue(patrocinios.hubo_escandalo({"historial": [{"fecha": "2026-09-25", "tono": "negativa"}]}, hoy))

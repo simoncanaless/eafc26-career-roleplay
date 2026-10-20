@@ -189,10 +189,15 @@ class PaginaVida(QWidget):
         self.amor_eleccion.setWordWrap(True)
         self.amor_eleccion.hide()
         self.amor.cuerpo.addWidget(self.amor_eleccion)
+        self.oficializar_btn = boton("Oficializar relacion", primario=True)
+        self.oficializar_btn.clicked.connect(self.oficializar_romance)
+        self.oficializar_btn.hide()
+        self.amor.cuerpo.addLayout(fila(None, self.oficializar_btn))
         self.amor_historial = QVBoxLayout()
         self.amor_historial.setSpacing(6)
         self.amor.cuerpo.addLayout(self.amor_historial)
-        # soltero: buscar en el catalogo de famosas y mandar un DM
+        # soltero: buscar en el catalogo de famosas y mandar un DM (su propia tarjeta)
+        self.vip = Tarjeta("Explorar Instagram VIP")
         self.dm = QWidget()
         dm = QVBoxLayout(self.dm)
         dm.setContentsMargins(0, 6, 0, 0)
@@ -209,10 +214,11 @@ class PaginaVida(QWidget):
         self.dm_resultados = QVBoxLayout()
         self.dm_resultados.setSpacing(6)
         dm.addLayout(self.dm_resultados)
-        self.dm.hide()
-        self.amor.cuerpo.addWidget(self.dm)
+        self.vip.cuerpo.addWidget(self.dm)
+        self.vip.hide()
         self.amor.hide()
         contenido.addWidget(self.amor)
+        contenido.addWidget(self.vip)
 
         self.marcas = Tarjeta("Patrocinios")
         self.marcas_layout = QVBoxLayout()
@@ -739,6 +745,7 @@ class PaginaVida(QWidget):
                                                      f"{esc(' · '.join(efectos))}</span>" if efectos else ""))
             linea.setWordWrap(True)
             self.amor_historial.addWidget(linea)
+        self.oficializar_btn.setVisible(estado.get("estado") == "secreto" and bool(estado.get("pareja")))
         self._mostrar_dm(estado)
         self.amor.show()
 
@@ -750,7 +757,7 @@ class PaginaVida(QWidget):
     def _mostrar_dm(self, estado: dict):
         hay_catalogo = bool(ecosistema.celebridades())
         soltero = estado.get("estado", "soltero") == "soltero" and not estado.get("decision")
-        self.dm.setVisible(hay_catalogo and soltero)
+        self.vip.setVisible(hay_catalogo and soltero)
         if not (hay_catalogo and soltero):
             return
         if self.dm_categoria.count() == 0:
@@ -777,19 +784,39 @@ class PaginaVida(QWidget):
         fama = self._fama() if self.perfil is not None else 0
         for indice, celebridad in enumerate(self._resultados_dm):
             exigencia = amor.exigencia(celebridad)
+            chance = amor.probabilidad_de_exito(fama, exigencia)
             color = estilos.TEXTO if exigencia <= fama else estilos.TEXTO_SUAVE
+            color_chance = estilos.POSITIVO if chance >= 0.6 else estilos.MIXTO if chance >= 0.25 else estilos.NEGATIVO
             texto = QLabel(
                 f"<span style='color:{color}'><b>{esc(celebridad.get('nombre', ''))}</b></span> "
                 f"<span style='color:{estilos.TEXTO_SUAVE}'>· {esc(celebridad.get('oficio', ''))} · "
-                f"{esc(celebridad.get('usuario_ig', ''))} · exigencia {exigencia}"
-                + (" · fuera de tu nivel" if exigencia > fama else "") + "</span>"
+                f"{esc(celebridad.get('usuario_ig', ''))} · exigencia {exigencia}</span> "
+                f"<span style='color:{color_chance}'><b>{round(chance * 100)}% de chance</b></span>"
+                + (f" <span style='color:{estilos.TEXTO_SUAVE}'>· si te clava el visto, "
+                   f"{round(amor.probabilidad_de_filtracion(fama, exigencia) * 100)}% de que se filtre</span>"
+                   if amor.probabilidad_de_filtracion(fama, exigencia) else "")
             )
             texto.setWordWrap(True)
-            mandar = boton("Mandar DM", primario=exigencia <= fama)
+            mandar = boton("Enviar DM", primario=exigencia <= fama)
             mandar.setProperty("dm", indice)
             mandar.setEnabled(puede)
             mandar.clicked.connect(lambda _=False, i=indice: self.mandar_dm(i))
             self.dm_resultados.addLayout(_fila_ancha(texto, mandar))
+
+    def oficializar_romance(self):
+        perfil = self.perfil
+        estado = get_estado_amor(perfil.id) if perfil is not None else {}
+        hoy = self._hoy(get_economia(perfil.id)) if perfil is not None else None
+        if perfil is None or hoy is None or estado.get("estado") != "secreto":
+            return
+        estado, e, suceso = amor.oficializar(estado, get_economia(perfil.id), hoy)
+        set_estado_amor(perfil.id, estado)
+        set_economia(perfil.id, e)
+        seguidores = self._contar_amor(perfil, suceso, estado)
+        self.amor_eleccion.setText(f"<b>Lo hiciste oficial</b> · {_con_signo(seguidores)} seguidores"
+                                   f"<br><span style='color:{estilos.TEXTO_SUAVE}'>La prensa ya se entero...</span>")
+        self.amor_eleccion.show()
+        self._mostrar()
 
     def mandar_dm(self, indice: int):
         perfil = self.perfil
