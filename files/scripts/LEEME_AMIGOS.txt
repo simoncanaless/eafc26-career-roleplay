@@ -44,9 +44,14 @@ IA (OPCIONAL, GRATIS)
 ---------------------
 Sin IA todo funciona: los textos los arma la app sola, al instante y sin
 internet. Con IA, las preguntas, la prensa y los comentarios contestan a lo
-que vos escribiste. Para activarla:
-1. Crea una clave gratis en https://console.groq.com/keys (con tu cuenta).
-2. AJUSTES > "Motor narrativo e IA hibrida" > pegala en Groq > "Probar IA".
+que vos escribiste. Paso a paso:
+"COMO PONER LA IA.txt" (en esta misma carpeta). En corto:
+1. Entra a https://console.groq.com/keys con tu cuenta de Google, GitHub o
+   email (gratis, sin tarjeta) > "Create API Key" > copia la clave (empieza
+   con gsk_; Groq la muestra una sola vez).
+2. AJUSTES > "Motor narrativo e IA hibrida" > pegala en "Clave de Groq" >
+   "Probar IA". En AJUSTES tambien estan los botones "Como consigo la clave?"
+   y "Abrir Groq".
 Tu clave es tuya: no la compartas con nadie.
 
 

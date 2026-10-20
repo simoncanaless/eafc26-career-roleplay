@@ -1,0 +1,61 @@
+COMO PONER LA IA (GROQ, GRATIS)
+===============================
+
+La app funciona perfecto SIN IA. Con IA, las preguntas de los periodistas,
+la reaccion de la prensa y los comentarios de Instagram contestan a lo que
+VOS escribiste. Es gratis, no pide tarjeta y se hace una sola vez.
+
+
+1. CREA TU CUENTA EN GROQ
+-------------------------
+- Entra a https://console.groq.com
+- Apreta "Sign in" / "Log in" y entra con tu cuenta de Google, de GitHub o
+  con tu email. Es gratis y NO pide tarjeta.
+
+
+2. CREA LA CLAVE (API KEY)
+--------------------------
+- Ya adentro, anda a https://console.groq.com/keys
+  (o en el menu, "API Keys").
+- Apreta "Create API Key".
+- Ponele un nombre cualquiera (por ejemplo: EAFC Roleplay) y apreta
+  "Submit".
+- Te muestra la clave: es un texto largo que EMPIEZA CON  gsk_
+- COPIALA YA (boton de copiar, o seleccionala entera y Ctrl+C).
+  OJO: Groq la muestra UNA SOLA VEZ. Si la perdes, no pasa nada: borras esa
+  y creas otra igual.
+
+
+3. PONELA EN LA APP
+-------------------
+- Abri la app > AJUSTES (abajo a la izquierda).
+- Busca la tarjeta "Motor narrativo e IA hibrida".
+- Hace clic en el campo "Clave de Groq" y pegala (Ctrl+V). Se ve con
+  puntitos: es normal, es para que nadie la vea.
+- Hace clic afuera del campo (asi se guarda) y apreta "Probar IA".
+- Si dice que respondio Groq (y cuantos milisegundos tardo), listo.
+- Asegurate de que "Usar solo motor local sin IA" este DESMARCADO.
+
+Atajo: en AJUSTES estan los botones "Como consigo la clave?" (estos mismos
+pasos) y "Abrir Groq" (te lleva directo a la pagina de las claves).
+
+
+SI NO ANDA
+----------
+- "La clave no empieza con gsk_": no se copio entera. Volve a copiarla (o
+  crea otra) y pegala de nuevo.
+- "Probar IA" falla: revisa tu internet y que la clave este bien pegada (sin
+  espacios). Si sigue, crea una clave nueva en Groq y reemplazala.
+- Si Groq anda lento o sin cupo un rato, la app sigue igual con su motor
+  local: nunca se traba por la IA.
+
+
+IMPORTANTE
+----------
+- La clave es TUYA: no la compartas ni la mandes por chat. Cada uno usa la
+  suya (el plan gratis tiene un limite de uso por minuto, de sobra para la app).
+- Queda guardada solo en tu PC (en %APPDATA%\EAFC26 Roleplay\ajustes.json).
+- Lo que escribis en las entrevistas y posts se manda a Groq para que la IA
+  conteste. Si no queres eso, marca "Usar solo motor local sin IA".
+- Si alguna vez la quieres sacar: borra el campo en AJUSTES, o marca
+  "Usar solo motor local sin IA".

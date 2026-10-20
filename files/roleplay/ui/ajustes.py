@@ -9,7 +9,8 @@ import os
 import subprocess
 import sys
 
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtCore import QUrl
+from PySide6.QtGui import QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -40,6 +41,17 @@ def elegir_juego_a_mano(padre: QWidget):
         padre, "Elegi el juego (FC26.exe) o su acceso directo", os.path.expanduser("~/Desktop"), FILTRO_JUEGO
     )
     return elegir_a_mano(ruta) if ruta else None
+
+
+URL_CLAVES_GROQ = "https://console.groq.com/keys"
+PASOS_GROQ = (
+    "Es gratis, no pide tarjeta y se hace una sola vez:\n\n"
+    "1. Apreta \"Abrir Groq\" (o entra a console.groq.com/keys) y entra con tu cuenta de Google, GitHub o tu email.\n"
+    "2. Apreta \"Create API Key\", ponele un nombre (por ejemplo EAFC Roleplay) y \"Submit\".\n"
+    "3. Copia la clave que aparece: empieza con gsk_. Groq la muestra UNA SOLA VEZ (si la perdes, creas otra).\n"
+    "4. Pegala aca en \"Clave de Groq\" (Ctrl+V), hace clic afuera para guardarla y apreta \"Probar IA\".\n\n"
+    "Tu clave es tuya: no la compartas. Queda guardada solo en tu PC."
+)
 
 
 def reiniciar_app() -> None:
@@ -164,7 +176,7 @@ class DialogoAjustes(QDialog):
         )
         guardados = ajustes.leer()
         self.groq_edit = QLineEdit(guardados.get("groq_api_key", ""))
-        self.groq_edit.setPlaceholderText("Clave de Groq (recomendado: gratis y ~0,3 s, en console.groq.com)")
+        self.groq_edit.setPlaceholderText("Clave de Groq (empieza con gsk_; gratis, en console.groq.com)")
         self.gemini_edit = QLineEdit(guardados.get("gemini_api_key", ""))
         self.gemini_edit.setPlaceholderText("Clave de Gemini (opcional, de respaldo)")
         for edit in (self.groq_edit, self.gemini_edit):
@@ -178,6 +190,12 @@ class DialogoAjustes(QDialog):
         self.probar_btn = boton("Probar IA")
         self.probar_btn.clicked.connect(self._on_probar_ia)
         motor.cuerpo.addWidget(self.sin_ia_check)
+        ayuda_btn = boton("Como consigo la clave?")
+        ayuda_btn.clicked.connect(self.mostrar_pasos_groq)
+        abrir_btn = boton("Abrir Groq")
+        abrir_btn.setToolTip(URL_CLAVES_GROQ)
+        abrir_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(URL_CLAVES_GROQ)))
+        motor.cuerpo.addLayout(fila(ayuda_btn, abrir_btn, None))
         motor.cuerpo.addLayout(fila(self.prueba_label, None, self.probar_btn))
         layout.addWidget(motor)
 
@@ -265,9 +283,17 @@ class DialogoAjustes(QDialog):
         self.preguntas_check.setEnabled(self.vigilar_check.isChecked())
         self.flotante_check.setEnabled(self.vigilar_check.isChecked())
 
+    def mostrar_pasos_groq(self):
+        QMessageBox.information(self, "Como conseguir la clave de Groq", PASOS_GROQ)
+
     def _on_claves(self):
-        ajustes.guardar(groq_api_key=self.groq_edit.text().strip() or None,
+        groq = "".join(self.groq_edit.text().split())  # (al pegar se cuelan espacios o saltos de linea)
+        if groq != self.groq_edit.text():
+            self.groq_edit.setText(groq)
+        ajustes.guardar(groq_api_key=groq or None,
                         gemini_api_key=self.gemini_edit.text().strip() or None)
+        if groq and not groq.startswith("gsk_"):
+            self.prueba_label.setText("La clave de Groq empieza con gsk_: revisa que la copiaste entera.")
 
     def _on_sin_ia(self, activado: bool):
         ajustes.guardar(sin_ia=True if activado else None)

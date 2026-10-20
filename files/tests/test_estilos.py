@@ -45,5 +45,29 @@ class TestPopups(ayuda.PruebaDeInterfaz):
         self.assertEqual(estilos._colorref("#0A0E14"), 0x00140E0A)
 
 
+class TestAyudaGroq(ayuda.PruebaDeInterfaz):
+    def test_los_pasos_y_el_aviso_de_la_clave_mal_copiada(self):
+        from unittest import mock
+
+        from roleplay import ajustes
+        from roleplay.ui import ajustes as pantalla
+
+        dialogo = pantalla.DialogoAjustes()
+        dialogo.mostrar_pasos_groq()
+        self.assertIn("gsk_", self.avisos.call_args[0][2])  # los pasos dicen como empieza la clave
+        dialogo.groq_edit.setText(" gsk_abc 123 ")  # pegada con espacios
+        dialogo._on_claves()
+        self.assertEqual(ajustes.leer()["groq_api_key"], "gsk_abc123")
+        dialogo.groq_edit.setText("abc")
+        dialogo._on_claves()
+        self.assertIn("gsk_", dialogo.prueba_label.text())
+        with mock.patch.object(pantalla.QDesktopServices, "openUrl") as abrir:
+            next(b for b in dialogo.findChildren(type(dialogo.probar_btn)) if b.text() == "ABRIR GROQ").click()
+        self.assertIn("console.groq.com/keys", abrir.call_args[0][0].toString())
+        dialogo.groq_edit.setText("")
+        dialogo._on_claves()
+        dialogo.deleteLater()
+
+
 if __name__ == "__main__":
     unittest.main()

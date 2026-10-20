@@ -60,6 +60,7 @@ def construir() -> Path:
     subprocess.run(comando, check=True, cwd=RAIZ)
     carpeta = DIST / NOMBRE
     shutil.copy(RAIZ / "scripts" / "LEEME_AMIGOS.txt", carpeta / "LEEME.txt")
+    shutil.copy(RAIZ / "scripts" / "COMO_PONER_LA_IA.txt", carpeta / "COMO PONER LA IA.txt")
 
     podar_chromium(carpeta)
     colados = [ruta for ruta in carpeta.rglob("*") if ruta.name in NO_VA]
