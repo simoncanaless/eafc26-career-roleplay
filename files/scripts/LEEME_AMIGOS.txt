@@ -60,7 +60,15 @@ JUGAR
 - Abri "EA FC 26 + Roleplay". Mientras jugas, la app mira tu partida: al
   terminar un partido te avisa y deja la conferencia lista.
 - OVERLAY: Ctrl+Shift+F12 abre la app entera encima del juego (como
-  Overwolf). La usas, y con Ctrl+Shift+F12 o Esc volves al juego.
+  Overwolf). La usas, y con Ctrl+Shift+F12 o Esc volves al juego. Si
+  volves al juego con alt-tab, el overlay se cierra solo.
+- CON MANDO (PS5, PS4 o Xbox), con el overlay abierto:
+    stick izquierdo = mover el cursor (la cruceta, para apuntar fino)
+    X = apretar        circulo = volver al juego
+    stick derecho = bajar/subir        L1 / R1 = seccion anterior/siguiente
+  Se apaga en AJUSTES > Overlay encima del juego.
+- La app se abre una sola vez: si la abris de nuevo, aparece la que ya
+  estaba abierta (por ejemplo, minimizada en la bandeja).
 - SALA DE PRENSA: despues del partido, o "Previa del proximo" antes de jugar.
   Tres periodistas preguntan con los datos reales (la tabla, tus goles, tus
   premios, tus marcas, tu vida) y se acuerdan de lo que dijiste antes. Responde
