@@ -426,6 +426,17 @@ def set_memoria_conferencias(player_id: int, memoria: dict) -> None:
         estado["conferencias"] = memoria
 
 
+MAXIMO_DICHOS = 6
+
+
+def agregar_dicho(player_id: int, dicho: dict) -> None:
+    """Lo que dijo en una conferencia (servicios/memoria.py: la IA se acuerda),
+    en estado_json.conferencias.dichos, los ultimos MAXIMO_DICHOS."""
+    with _editar_estado(player_id) as (estado, _):
+        memoria = estado.setdefault("conferencias", {})
+        memoria["dichos"] = ([dicho] + memoria.get("dichos", []))[:MAXIMO_DICHOS]
+
+
 def get_narrador_usados(player_id: int) -> dict:
     """La memoria anti-repeticion del motor narrativo (servicios/narrador.py):
     estado_json.narrador_usados = {"bloques": {simbolo: [indices]}, "textos": [huellas]}."""

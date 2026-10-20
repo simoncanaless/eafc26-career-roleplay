@@ -17,10 +17,17 @@ Solo libreria estandar (urllib): no suma nada al arranque. Las claves
 Los numeros reales (resultados, goles, tablas) y los nombres los sigue
 poniendo el codigo: la IA solo recibe esos hechos y tiene prohibido
 inventar otros. Nunca loguear ni mostrar las claves.
+
+Roleplay vivo (2026-10-20, Simon: "que se sienta vivo, no como un guion"):
+con `jugador=` el pedido lleva la memoria del roleplay (servicios/memoria.py:
+lo que dijo, lo que le paso, las tramas abiertas) y la consigna VOZ. La
+guardia de hechos (`_sin_numeros_inventados`) vacia todo texto de la
+respuesta con un numero que no este en el pedido: ese campo cae al motor local.
 """
 
 import json
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -50,6 +57,15 @@ REGLAS = (
     "rival nunca son motivo de dudas o criticas al jugador. Las criticas solo pueden salir de lo que el jugador "
     "DIJO o de un mal numero SUYO o de SU equipo. "
     "Sin markdown ni emojis salvo que se pidan. Responde SOLO con un objeto JSON valido."
+)
+
+VOZ = (
+    "Esto es un roleplay VIVO, no un guion: escribi como gente real de ese mundo (periodistas con opinion "
+    "propia, hinchas con memoria, personas con su manera de hablar). Usa la memoria del roleplay para dar "
+    "continuidad cuando venga al caso (retomar algo que dijo, una trama abierta, como viene), sin repetir "
+    "titulares ni frases que ya estan ahi. Varia la forma: nada de plantillas ni frases hechas de diario "
+    "(\"genera dudas\", \"alimenta la polemica\", \"no paso desapercibido\", \"zona mixta\"). La memoria es "
+    "contexto: no saques de ahi datos nuevos ni la cuentes entera."
 )
 
 ultimo = {"proveedor": "", "modelo": "", "ms": 0}  # para "Probar IA" y el diagnostico
@@ -185,15 +201,50 @@ def modelos_de_groq(clave: str, timeout: float) -> list[str]:
 PROVEEDORES = (("groq", GROQ_MODELOS, _groq), ("gemini", GEMINI_MODELOS, _gemini))
 
 
+_NUMERO = re.compile(r"\d+(?:[.,]\d+)*")
+
+
+def _numeros_de(texto: str) -> set:
+    """Los numeros de un texto, enteros y por partes ("1.888.150" -> 1.888.150, 1888150, 1, 888, 150)."""
+    vistos = set()
+    for numero in _NUMERO.findall(texto):
+        vistos.add(numero)
+        vistos.add(re.sub(r"[.,]", "", numero))
+        vistos.update(re.split(r"[.,]", numero))
+    return vistos
+
+
+def _sin_numeros_inventados(valor, permitidos: set):
+    """La respuesta con "" en cada texto que trae un numero que no se le paso."""
+    if isinstance(valor, str):
+        return valor if all(n in permitidos or re.sub(r"[.,]", "", n) in permitidos
+                            for n in _NUMERO.findall(valor)) else ""
+    if isinstance(valor, list):
+        return [_sin_numeros_inventados(v, permitidos) for v in valor]
+    if isinstance(valor, dict):
+        return {k: _sin_numeros_inventados(v, permitidos) for k, v in valor.items()}
+    return valor
+
+
 def pedir_json(prompt_sistema: str, prompt_usuario: str, esquema_ejemplo: dict,
-               timeout: float = TIMEOUT) -> Optional[dict]:
+               timeout: float = TIMEOUT, jugador: Optional[int] = None) -> Optional[dict]:
     """El JSON que devolvio el primer proveedor que contesto, o None (sin
-    claves, sin internet, sin cuota, desactivada). Nunca lanza."""
+    claves, sin internet, sin cuota, desactivada). Nunca lanza. Con `jugador`,
+    el pedido lleva la memoria del roleplay. Los textos con numeros que no
+    estan en el pedido vuelven vacios (el que llama usa lo del motor local)."""
     try:
         if desactivada():
             return None
+        if jugador:
+            from roleplay.servicios.memoria import cronica
+
+            memoria = cronica(jugador)
+            if memoria:
+                prompt_usuario = f"MEMORIA DEL ROLEPLAY (lo que ya paso):\n{memoria}\n\nLO DE AHORA:\n{prompt_usuario}"
+                prompt_sistema = f"{prompt_sistema}\n\n{VOZ}"
         sistema = (f"{prompt_sistema}\n\n{REGLAS}\nForma exacta del JSON (mismas claves y tipos): "
                    f"{json.dumps(esquema_ejemplo, ensure_ascii=False)}")
+        permitidos = _numeros_de(sistema + prompt_usuario)
         limite = time.monotonic() + timeout * TOPE_TOTAL
         for proveedor, modelos, llamar in PROVEEDORES:
             for clave in claves(proveedor):
@@ -215,7 +266,7 @@ def pedir_json(prompt_sistema: str, prompt_usuario: str, esquema_ejemplo: dict,
                             pendientes = [m for m in modelos_de_groq(clave, min(timeout, queda)) if m not in modelos]
                         continue  # cuota, caida o respuesta rara: el siguiente modelo
                     ultimo.update(proveedor=proveedor, modelo=modelo, ms=round((time.monotonic() - inicio) * 1000))
-                    return datos
+                    return _sin_numeros_inventados(datos, permitidos)
         return None
     except Exception:  # noqa: BLE001  (pase lo que pase, queda el motor local)
         return None

@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from roleplay.models import NoticiaPrensa, PlayerProfile
 from roleplay.partida.carrera import Carrera
 from roleplay.servicios import cruce, lexico
+from roleplay.servicios.memoria import anotar_dichos
 from roleplay.servicios.narrador import narrador
 from roleplay.servicios.partida_real import (
     clave_partido,
@@ -242,6 +243,7 @@ def evaluar_previa(
         texto, delta, carino, cita = hibrida["reaccion"], hibrida["delta"], hibrida["carino"], hibrida["cita"]
         titular = hibrida["titular"] or titular
         nuevo_gancho = hibrida["gancho"] or nuevo_gancho
+    anotar_dichos(perfil.id, "previa", previa.rival, [r for _, r in respuestas], cita, previa.fecha)
     return ReaccionPrevia(
         titular=titular, reaccion_prensa=texto, tono=entrevista.tono_de(delta), delta_reputacion=delta,
         nuevo_gancho_narrativo=nuevo_gancho, eje=lectura.eje, cita=cita, delta_carino=carino,

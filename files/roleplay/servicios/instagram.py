@@ -149,6 +149,7 @@ def _comentarios_con_ia(perfil: PlayerProfile, texto_post: str, crecimiento: int
         f"{ia.ficha(perfil)}\n{ultimo}\nLo que pasa en su vida:\n{vida}\n\nEl post (textual):\n{texto_post[:1500]}\n\n"
         f"Como cayo: {como}.",
         {"comentarios": [{"autor": "@usuario", "texto": "...", "tono": "positivo"}]},
+        jugador=perfil.id,
     )
     return ia.comentarios_validos(datos.get("comentarios") if datos else None, minimo=3)
 

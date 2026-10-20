@@ -210,6 +210,7 @@ def _comentarios_con_ia(perfil: PlayerProfile, eventos: list[EventoHinchada]) ->
     datos = ia.pedir_json(
         SISTEMA_HINCHAS, f"{ia.ficha(perfil)}\n\nLos eventos:\n{lista}",
         {"eventos": [{"indice": 0, "comentarios": [{"autor": "@usuario", "texto": "...", "tono": "positivo"}]}]},
+        jugador=perfil.id,
     )
     resultado = {}
     for item in (datos or {}).get("eventos") or []:

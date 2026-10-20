@@ -32,6 +32,7 @@ from pydantic import BaseModel
 
 from roleplay.models import MatchInterviewRecord, PlayerProfile
 from roleplay.servicios import cruce, ia, lexico
+from roleplay.servicios.memoria import anotar_dichos
 from roleplay.servicios.narrador import narrador, unir
 from roleplay.servicios.vision import MatchStats
 
@@ -297,6 +298,7 @@ def armar_conferencia(perfil: PlayerProfile, candidatos: dict, pesos: dict, cont
     finales = preguntas_con_ia(perfil, contexto, preguntas, cruces, temas, memoria.get("preguntas", [])) or preguntas
     if perfil.id:
         database.set_memoria_conferencias(perfil.id, {
+            **memoria,  # (los dichos, de servicios/memoria.py)
             "simbolos": (simbolos + memoria.get("simbolos", []))[:MEMORIA_SIMBOLOS],
             "temas": ([temas] + memoria.get("temas", []))[:MEMORIA_CONFERENCIAS],
             "preguntas": ([p.split(": ", 1)[-1] for p in finales] + memoria.get("preguntas", []))[:MEMORIA_PREGUNTAS],
@@ -630,19 +632,18 @@ def preguntas_con_ia(perfil: PlayerProfile, contexto: str, preguntas: list[str],
            + "\n".join(f"- {r[:200]}" for r in (recientes or [])[:MEMORIA_PREGUNTAS]) + "\n\n" if recientes else "")
         + f"Las preguntas base:\n{lista}",
         {"preguntas": [f"pregunta {i + 1}" for i in range(len(partes))]},
+        jugador=perfil.id,
     )
     nuevas = datos.get("preguntas") if datos else None
     if not isinstance(nuevas, list) or len(nuevas) != len(partes):
         return None
     limpias = []
-    for (quien, _), pregunta in zip(partes, nuevas):
+    for (quien, base), pregunta in zip(partes, nuevas):
         pregunta = ia.texto(pregunta, 400)
         nombre = quien.split(" (")[0].split(" @")[0]
         if pregunta.startswith(nombre) and ": " in pregunta[:120]:
             pregunta = pregunta.split(": ", 1)[1]
-        if not pregunta:
-            return None
-        limpias.append(f"{quien}: {pregunta}")
+        limpias.append(f"{quien}: {pregunta or base}")  # (vacia = la guardia de hechos la tiro: queda la del motor)
     return limpias
 
 
@@ -669,6 +670,7 @@ def reaccion_con_ia(perfil: PlayerProfile, contexto: str, respuestas: list[tuple
         f"Lectura del sistema: tono dominante {lectura.eje}, delta de reputacion sugerido {delta}, "
         f"carino de la hinchada sugerido {carino}.",
         esquema,
+        jugador=perfil.id,
     )
     reaccion = ia.texto(datos.get("reaccion_prensa"), 1000) if datos else ""
     if not reaccion:
@@ -771,6 +773,7 @@ def evaluar_respuestas(
     if hibrida:
         texto, delta, carino, cita = hibrida["reaccion"], hibrida["delta"], hibrida["carino"], hibrida["cita"]
         nuevo_gancho = hibrida["gancho"] or nuevo_gancho
+    anotar_dichos(perfil.id, "post", stats.equipo_rival, [r for _, r in respuestas], cita)
     return ReaccionPrensa(
         reaccion_prensa=texto, delta_reputacion=delta, nuevo_gancho_narrativo=nuevo_gancho, eje=lectura.eje,
         cita=cita, delta_carino=carino, tono=tono_de(delta),

@@ -262,6 +262,7 @@ def _nota_con_ia(perfil: PlayerProfile, registro: MatchInterviewRecord, cita: st
         f"{registro.equipo_rival or 'su rival'}, {registro.goles_jugador} goles, nota {registro.rating_jugador:.1f}.\n"
         f"La entrevista:\n{pares}\nLa cita elegida: «{cita}»\nComo la leyo la prensa ({tono}): {registro.reaccion_prensa}",
         {"titular": "...", "cuerpo": "..."},
+        jugador=perfil.id,
     )
     if not datos:
         return None
