@@ -414,6 +414,18 @@ def set_estado_eventos(player_id: int, estado_eventos: dict) -> None:
         estado["eventos"] = estado_eventos
 
 
+def get_memoria_conferencias(player_id: int) -> dict:
+    """Lo que se pregunto en las ultimas conferencias (servicios/entrevista.py: para no repetir):
+    estado_json.conferencias = {"simbolos": [...], "temas": [[...], ...], "preguntas": [...]}."""
+    leido = _leer_estado(player_id)
+    return dict(leido[0].get("conferencias", {})) if leido else {}
+
+
+def set_memoria_conferencias(player_id: int, memoria: dict) -> None:
+    with _editar_estado(player_id) as (estado, _):
+        estado["conferencias"] = memoria
+
+
 def get_narrador_usados(player_id: int) -> dict:
     """La memoria anti-repeticion del motor narrativo (servicios/narrador.py):
     estado_json.narrador_usados = {"bloques": {simbolo: [indices]}, "textos": [huellas]}."""

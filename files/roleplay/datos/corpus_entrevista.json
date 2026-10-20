@@ -1,327 +1,74 @@
 {
   "_que_es": "Preguntas de la entrevista post-partido y de la previa, y la reaccion a las respuestas (servicios/entrevista.py y previa.py). {variable}: la pone el codigo; #simbolo#: se expande. Sin tildes.",
-
-  "a_tac": ["Vamos a lo tactico.", "Mirando los numeros,", "Te pregunto por el juego:", "Desde lo futbolistico,", "Analizando el partido,", "Pizarra en mano:", "Hablemos de futbol:", "Con los datos en la mano,", "Una de cancha:"],
-  "a_ves": ["Del vestuario:", "Pensando en la gente,", "Una sobre el grupo:", "Mirando la temporada,", "Desde la tribuna me piden que te pregunte:", "Te pregunto por el animo:", "Una para los hinchas:", ""],
-  "a_pic": ["Una fuera de la cancha:", "Ahora una picante:", "Cambiando de tema,", "Lo que todos quieren saber:", "Sin rodeos:", "Para las redes:", "Te la tengo que hacer:", ""],
-
-  "tac_hat_trick": [
-    "#a_tac# {goles} goles ante {rival}. ¿En que momento sentiste que era tu noche?",
-    "#a_tac# hat-trick y un {rating} de nota. ¿Que viste en la defensa de {rival} para hacerles tanto dano?",
-    "#a_tac# {goles} goles no se hacen todos los dias. ¿Con cual te quedas y por que?",
-    "#a_tac# te llevaste la pelota a la casa. ¿Lo trabajaron en la semana o fue pura inspiracion?"
-  ],
-  "tac_roja": [
-    "#a_tac# la expulsion dejo al equipo con uno menos. ¿Como la analizas en frio?",
-    "#a_tac# ¿fue justa la roja? ¿Que paso en esa jugada?",
-    "#a_tac# {club} termino con diez por tu expulsion. ¿Le pediste disculpas al grupo?",
-    "#a_tac# la roja cambio el partido. ¿Te equivocaste o te sacaron de quicio?"
-  ],
-  "tac_sequia_rota": [
-    "#a_tac# cortaste una sequia de {partidos_sin_gol} partidos sin gol. ¿Que cambiaste esta semana?",
-    "#a_tac# despues de {partidos_sin_gol} partidos sin convertir, volviste a marcar. ¿Te sacaste una mochila de encima?",
-    "#a_tac# {partidos_sin_gol} partidos en blanco y hoy gol. ¿Te pesaba la sequia?",
-    "#a_tac# volviste al gol despues de {partidos_sin_gol} fechas. ¿Que te dijo el cuerpo tecnico cuando no salia?"
-  ],
-  "tac_caida": [
-    "#a_tac# venias promediando {promedio_antes} de nota y hoy te quedaste en {rating}. ¿Que te falto?",
-    "#a_tac# tu rendimiento bajo de {promedio_antes} a {rating}. ¿Es cansancio o algo tactico?",
-    "#a_tac# hoy no fue tu mejor tarde, un {rating} despues de una racha muy buena. ¿Que analisis haces?",
-    "#a_tac# la nota dice {rating}, lejos del {promedio_antes} que venias haciendo. ¿Te costo encontrar espacios?"
-  ],
-  "tac_mismo_rival": [
-    "#a_tac# ya se habian cruzado con {rival} esta temporada, aquella vez {marcador_antes}. ¿Que cambio de ese partido a este?",
-    "#a_tac# contra {rival} venian de un {marcador_antes}. ¿Lo usaron como referencia para este partido?",
-    "#a_tac# segundo cruce con {rival} en la temporada, el primero termino {marcador_antes}. ¿Ya les tienen tomada la mano?"
-  ],
-  "tac_tabla_sube": [
-    "#a_tac# con este resultado {club} subio al {posicion} puesto de la {liga}. ¿Hasta donde puede llegar este equipo?",
-    "#a_tac# {club} ahora esta {posicion} en la {liga}. ¿Se animan a decir que pelean arriba?",
-    "#a_tac# escalaron hasta el {posicion} lugar de la {liga}. ¿Que tiene este equipo que antes no tenia?"
-  ],
-  "tac_tabla_baja": [
-    "#a_tac# {club} cayo al {posicion} puesto de la {liga}. ¿Preocupa la tabla?",
-    "#a_tac# perdieron terreno: ahora estan {posicion} en la {liga}. ¿Que hay que corregir?",
-    "#a_tac# bajaron al {posicion} lugar. ¿Se encendieron las alarmas en el vestuario?"
-  ],
-  "tac_racha": [
-    "#a_tac# llevas {racha} partidos seguidos marcando. ¿Que te tiene en este momento?",
-    "#a_tac# {racha} partidos al hilo con gol. ¿Te pones un numero para esta racha?",
-    "#a_tac# otra vez gol, y ya van {racha} partidos seguidos. ¿Que cambiaste respecto de la temporada pasada?"
-  ],
-  "tac_figura": [
-    "#a_tac# te eligieron la figura con un {rating}. ¿Que te pedia el plan de juego hoy?",
-    "#a_tac# figura del partido. ¿Cual fue la clave tactica para que te quedara tanta pelota?",
-    "#a_tac# un {rating} y la figura. ¿Sentiste que hoy el partido pasaba por vos?"
-  ],
-  "tac_pocos_minutos": [
-    "#a_tac# jugaste {minutos} minutos. ¿Te sorprendio la decision del tecnico?",
-    "#a_tac# solo {minutos} minutos en cancha. ¿Fue tactico o fisico?",
-    "#a_tac# con {minutos} minutos te toco poco. ¿Estas conforme con tu rol?"
-  ],
-  "tac_victoria_gol": [
-    "#a_tac# ganaron {marcador} y marcaste {goles_texto}. ¿Como viste el plan de partido?",
-    "#a_tac# victoria {marcador} con gol tuyo. ¿Que les pidio el tecnico en el entretiempo?",
-    "#a_tac# {marcador} y {goles_texto} tuyo. ¿Que espacio encontraste en la defensa de {rival}?",
-    "#a_tac# triunfo {marcador} ante {rival}. ¿Donde se gano el partido?"
-  ],
-  "tac_victoria_sin_gol": [
-    "#a_tac# ganaron {marcador} aunque no te toco marcar. ¿Como te sentiste en tu funcion?",
-    "#a_tac# victoria {marcador} sin gol tuyo. ¿Te vas tranquilo con lo que aportaste?",
-    "#a_tac# el equipo gano {marcador}. ¿Que te pidio el tecnico para este partido?"
-  ],
-  "tac_derrota": [
-    "#a_tac# perdieron {marcador} con {rival}. ¿Donde se les escapo el partido?",
-    "#a_tac# derrota {marcador}. ¿Que vio {rival} que ustedes no?",
-    "#a_tac# el {marcador} duele. ¿Fue un problema de actitud o de planteamiento?",
-    "#a_tac# {rival} les gano {marcador}. ¿Que se llevan para corregir?"
-  ],
-  "tac_empate": [
-    "#a_tac# empate {marcador} ante {rival}. ¿Gusto a poco o punto valioso?",
-    "#a_tac# {marcador} con {rival}. ¿Les falto profundidad?",
-    "#a_tac# reparto de puntos, {marcador}. ¿Como evaluas el trabajo del equipo?"
-  ],
-
-  "ves_meta_cerca": [
-    "#a_ves# te propusiste {meta} y te faltan {faltan} {unidad}. ¿Lo ves cerca?",
-    "#a_ves# la cuenta regresiva corre: {faltan} {unidad} para cumplir tu meta. ¿Te mete presion?",
-    "#a_ves# llevas {actual} de {objetivo}. ¿Cuando crees que llegas a tu meta?",
-    "#a_ves# a {faltan} {unidad} de cumplir lo que prometiste. ¿Ya te imaginas como lo vas a celebrar?"
-  ],
-  "ves_meta_tabla": [
-    "#a_ves# tu meta era {meta} y hoy estan {puesto} en la tabla. ¿Sigue en pie?",
-    "#a_ves# te propusiste {meta}, pero van {puesto}. ¿Te arrepentis de haberlo dicho en publico?",
-    "#a_ves# la tabla dice {puesto} y vos hablaste de {meta}. ¿Que tiene que pasar para lograrlo?"
-  ],
-  "ves_hinchada_contra": [
-    "#a_ves# la hinchada de {club} no anda contenta con vos. ¿Que les dirias hoy?",
-    "#a_ves# se escucharon silbidos para vos. ¿Como te cae eso?",
-    "#a_ves# en las redes de {club} piden explicaciones. ¿Sentis que perdiste a la gente?"
-  ],
-  "ves_idolo": [
-    "#a_ves# en {club} ya te cantan como idolo. ¿Como se vive eso?",
-    "#a_ves# la gente de {club} te adora. ¿Pensas en quedarte muchos anos?",
-    "#a_ves# sos de los preferidos de la tribuna. ¿Que sentis cuando corean tu nombre?"
-  ],
-  "ves_ex_club_idolo": [
-    "#a_ves# volviste a cruzarte con {ex_club}, donde te despidieron como idolo. ¿Como fue el reencuentro?",
-    "#a_ves# en {ex_club} todavia te quieren. ¿Te costo jugar contra ellos?",
-    "#a_ves# enfrente estaba {ex_club}, tu ex club. ¿Saludaste a la tribuna?"
-  ],
-  "ves_ex_club_traidor": [
-    "#a_ves# los hinchas de {ex_club} no te perdonan que te hayas ido a un rival. ¿Escuchaste lo que te gritaban?",
-    "#a_ves# para la gente de {ex_club} sos un traidor. ¿Te afecta?",
-    "#a_ves# {ex_club} fue tu casa y hoy te silbaron de punta a punta. ¿Que les dirias?"
-  ],
-  "ves_ex_club_mala": [
-    "#a_ves# te fuiste de {ex_club} entre silbidos y hoy te tocaba enfrentarlos. ¿Habia cuentas pendientes?",
-    "#a_ves# con {ex_club} la historia no termino bien. ¿Este partido era especial?",
-    "#a_ves# volviste a ver a {ex_club}. ¿Ya cerraste esa etapa?"
-  ],
-  "ves_derrota": [
-    "#a_ves# ¿como quedo el vestuario despues de la derrota?",
-    "#a_ves# ¿hubo charla fuerte en el camarin?",
-    "#a_ves# ¿que le dirias a los hinchas que se fueron enojados?",
-    "#a_ves# ¿el grupo esta unido para salir de este momento?"
-  ],
-  "ves_victoria": [
-    "#a_ves# ¿como se celebro en el camarin?",
-    "#a_ves# ¿que le dirias a los hinchas que vinieron a alentar?",
-    "#a_ves# ¿este triunfo une al grupo?",
-    "#a_ves# ¿a quien le dedicas la victoria?"
-  ],
-  "ves_empate": [
-    "#a_ves# ¿como esta el animo despues del empate?",
-    "#a_ves# ¿la gente se fue conforme con el punto?",
-    "#a_ves# ¿que se habla en el vestuario despues de un empate asi?"
-  ],
-  "ves_generico": [
-    "#a_ves# ¿como esta el grupo de cara a lo que viene?",
-    "#a_ves# ¿que mensaje le dejas a la hinchada?",
-    "#a_ves# ¿como te sentis dentro del plantel de {club}?"
-  ],
-
-  "pic_contradiccion": [
-    "#a_pic# la fecha pasada dijiste «{cita_anterior}» y hoy perdieron. ¿Te arrepentis?",
-    "#a_pic# despues de lo que declaraste ante {rival_anterior}, «{cita_anterior}», hoy llego la derrota. ¿Pecaste de confiado?",
-    "#a_pic# hace una semana: «{cita_anterior}». Hoy: derrota. ¿Te la vas a bancar en las redes?"
-  ],
-  "pic_compra_mal": [
-    "#a_pic# te compraste un {articulo} de {precio} y hoy jugaste para un {rating}. ¿No te distrae tanto lujo?",
-    "#a_pic# en las redes dicen que el {articulo} corre mas que vos. ¿Que les contestas?",
-    "#a_pic# {precio} en un {articulo} y un partido flojo. ¿Entendes la bronca de la gente?",
-    "#a_pic# muchos hinchas te sacan en cara el {articulo}. ¿Te arrepentis del momento de la compra?"
-  ],
-  "pic_compra_bien": [
-    "#a_pic# te vieron llegar en el {articulo} nuevo. ¿Es la cabala?",
-    "#a_pic# ¿el {articulo} ya tiene apodo? Porque hoy jugaste como para ponerle tu numero.",
-    "#a_pic# ¿cuanto tiene que ver el {articulo} con lo bien que andas?"
-  ],
-  "pic_pareja_real": [
-    "#a_pic# ¿estaba {pareja} mirando? ¿Le dedicas el partido?",
-    "#a_pic# ¿que tan importante es {pareja} en este momento de tu carrera?",
-    "#a_pic# ¿que te dijo {pareja} despues del partido?"
-  ],
-  "pic_pareja_famosa": [
-    "#a_pic# ¿{pareja} estaba en el palco? Las camaras la buscaron todo el partido.",
-    "#a_pic# ser pareja de {pareja}, {oficio}, te pone en todas las revistas. ¿Te molesta tanta atencion?",
-    "#a_pic# ¿que opina {pareja} de tu momento futbolistico?"
-  ],
-  "pic_rumor": [
-    "#a_pic# te vieron otra vez con {pareja}, {oficio}. ¿Hay algo que quieras confirmar?",
-    "#a_pic# ¿que hay entre vos y {pareja}? Las redes no hablan de otra cosa.",
-    "#a_pic# los rumores con {pareja} crecen. ¿Lo vas a hacer oficial?"
-  ],
-  "pic_crisis": [
-    "#a_pic# se habla de una crisis con {pareja}. ¿Te afecto en la cancha?",
-    "#a_pic# las revistas dicen que con {pareja} no andan bien. ¿Algo que aclarar?"
-  ],
-  "pic_evento_malo": [
-    "#a_pic# despues de que {evento}, ¿sentis que la gente te mira distinto?",
-    "#a_pic# muchos conectan lo de que {evento} con tu rendimiento. ¿Que respondes?",
-    "#a_pic# lo de que {evento} sigue dando vueltas. ¿Te desconcentro esta semana?"
-  ],
-  "pic_evento_bueno": [
-    "#a_pic# se viralizo que {evento}. ¿Te gusta mostrar ese lado?",
-    "#a_pic# todos hablan de que {evento}. ¿Como lo viviste?"
-  ],
-  "pic_ex_club_traidor": [
-    "#a_pic# ¿te dolio que en {ex_club} te digan traidor?",
-    "#a_pic# ¿volverias algun dia a {ex_club} sabiendo como te tratan?"
-  ],
-  "pic_hinchada_contra": [
-    "#a_pic# en las redes de {club} hay hashtags pidiendo tu salida. ¿Los leiste?",
-    "#a_pic# ¿pensaste en irte de {club}?"
-  ],
-  "pic_polemico": [
-    "#a_pic# siempre das titulares. ¿Hoy tambien vas a encender las redes?",
-    "#a_pic# tus declaraciones siempre generan ruido. ¿Lo haces a proposito?",
-    "#a_pic# ¿con quien te peleaste esta semana en las redes?"
-  ],
-  "pic_generico": [
-    "#a_pic# ¿cuanto lees de lo que se dice de vos en las redes?",
-    "#a_pic# ¿como manejas la presion mediatica?",
-    "#a_pic# si tuvieras que mandarle un mensaje a tus criticos, ¿que les dirias?",
-    "#a_pic# ¿que haces para desconectarte del futbol?",
-    "#a_pic# ¿que te falta para ser una estrella de verdad?",
-    "#a_pic# ¿te imaginas jugando en otra liga?"
-  ],
-
+  "a_tac": ["Vamos a lo tactico.", "Mirando los numeros,", "Te pregunto por el juego:", "Desde lo futbolistico,", "Analizando el partido,", "Pizarra en mano:", "Hablemos de futbol:", "Con los datos en la mano,", "Una de cancha:", "Hablemos de futbol.", "Una de pizarra:", "En lo tactico,", "Con los numeros en la mano,", "Desde lo deportivo,", "Te pregunto de cancha:", "Una para los que miran la tactica:"],
+  "a_ves": ["Del vestuario:", "Pensando en la gente,", "Una sobre el grupo:", "Mirando la temporada,", "Desde la tribuna me piden que te pregunte:", "Te pregunto por el animo:", "Una para los hinchas:", "", "Del grupo:", "Pensando en el camarin,", "Una sobre el plantel:", "Sobre la gente,", "Desde adentro,", "Una de la tribuna:", "Hablemos del ambiente."],
+  "a_pic": ["Una fuera de la cancha:", "Ahora una picante:", "Cambiando de tema,", "Lo que todos quieren saber:", "Sin rodeos:", "Para las redes:", "Te la tengo que hacer:", "", "Te tiro una incomoda:", "Para los titulares:", "Una que todos se preguntan:", "Sin vueltas:", "Para el streaming:", "Una que no te va a gustar:", "Fuera de libreto:"],
+  "tac_hat_trick": ["#a_tac# {goles} goles ante {rival}. ¿En que momento sentiste que era tu noche?", "#a_tac# hat-trick y un {rating} de nota. ¿Que viste en la defensa de {rival} para hacerles tanto dano?", "#a_tac# {goles} goles no se hacen todos los dias. ¿Con cual te quedas y por que?", "#a_tac# te llevaste la pelota a la casa. ¿Lo trabajaron en la semana o fue pura inspiracion?"],
+  "tac_roja": ["#a_tac# la expulsion dejo al equipo con uno menos. ¿Como la analizas en frio?", "#a_tac# ¿fue justa la roja? ¿Que paso en esa jugada?", "#a_tac# {club} termino con diez por tu expulsion. ¿Le pediste disculpas al grupo?", "#a_tac# la roja cambio el partido. ¿Te equivocaste o te sacaron de quicio?"],
+  "tac_sequia_rota": ["#a_tac# cortaste una sequia de {partidos_sin_gol} partidos sin gol. ¿Que cambiaste esta semana?", "#a_tac# despues de {partidos_sin_gol} partidos sin convertir, volviste a marcar. ¿Te sacaste una mochila de encima?", "#a_tac# {partidos_sin_gol} partidos en blanco y hoy gol. ¿Te pesaba la sequia?", "#a_tac# volviste al gol despues de {partidos_sin_gol} fechas. ¿Que te dijo el cuerpo tecnico cuando no salia?"],
+  "tac_caida": ["#a_tac# venias promediando {promedio_antes} de nota y hoy te quedaste en {rating}. ¿Que te falto?", "#a_tac# tu rendimiento bajo de {promedio_antes} a {rating}. ¿Es cansancio o algo tactico?", "#a_tac# hoy no fue tu mejor tarde, un {rating} despues de una racha muy buena. ¿Que analisis haces?", "#a_tac# la nota dice {rating}, lejos del {promedio_antes} que venias haciendo. ¿Te costo encontrar espacios?"],
+  "tac_mismo_rival": ["#a_tac# ya se habian cruzado con {rival} esta temporada, aquella vez {marcador_antes}. ¿Que cambio de ese partido a este?", "#a_tac# contra {rival} venian de un {marcador_antes}. ¿Lo usaron como referencia para este partido?", "#a_tac# segundo cruce con {rival} en la temporada, el primero termino {marcador_antes}. ¿Ya les tienen tomada la mano?"],
+  "tac_tabla_sube": ["#a_tac# con este resultado {club} subio al {posicion} puesto de la {liga}. ¿Hasta donde puede llegar este equipo?", "#a_tac# {club} ahora esta {posicion} en la {liga}. ¿Se animan a decir que pelean arriba?", "#a_tac# escalaron hasta el {posicion} lugar de la {liga}. ¿Que tiene este equipo que antes no tenia?"],
+  "tac_tabla_baja": ["#a_tac# {club} cayo al {posicion} puesto de la {liga}. ¿Preocupa la tabla?", "#a_tac# perdieron terreno: ahora estan {posicion} en la {liga}. ¿Que hay que corregir?", "#a_tac# bajaron al {posicion} lugar. ¿Se encendieron las alarmas en el vestuario?"],
+  "tac_racha": ["#a_tac# llevas {racha} partidos seguidos marcando. ¿Que te tiene en este momento?", "#a_tac# {racha} partidos al hilo con gol. ¿Te pones un numero para esta racha?", "#a_tac# otra vez gol, y ya van {racha} partidos seguidos. ¿Que cambiaste respecto de la temporada pasada?"],
+  "tac_figura": ["#a_tac# te eligieron la figura con un {rating}. ¿Que te pedia el plan de juego hoy?", "#a_tac# figura del partido. ¿Cual fue la clave tactica para que te quedara tanta pelota?", "#a_tac# un {rating} y la figura. ¿Sentiste que hoy el partido pasaba por vos?"],
+  "tac_pocos_minutos": ["#a_tac# jugaste {minutos} minutos. ¿Te sorprendio la decision del tecnico?", "#a_tac# solo {minutos} minutos en cancha. ¿Fue tactico o fisico?", "#a_tac# con {minutos} minutos te toco poco. ¿Estas conforme con tu rol?"],
+  "tac_victoria_gol": ["#a_tac# ganaron {marcador} y marcaste {goles_texto}. ¿Como viste el plan de partido?", "#a_tac# victoria {marcador} con gol tuyo. ¿Que les pidio el tecnico en el entretiempo?", "#a_tac# {marcador} y {goles_texto} tuyo. ¿Que espacio encontraste en la defensa de {rival}?", "#a_tac# triunfo {marcador} ante {rival}. ¿Donde se gano el partido?", "#a_tac# #ctx_victoria_gol# #q_victoria#"],
+  "tac_victoria_sin_gol": ["#a_tac# ganaron {marcador} aunque no te toco marcar. ¿Como te sentiste en tu funcion?", "#a_tac# victoria {marcador} sin gol tuyo. ¿Te vas tranquilo con lo que aportaste?", "#a_tac# el equipo gano {marcador}. ¿Que te pidio el tecnico para este partido?", "#a_tac# #ctx_victoria# #q_victoria#"],
+  "tac_derrota": ["#a_tac# perdieron {marcador} con {rival}. ¿Donde se les escapo el partido?", "#a_tac# derrota {marcador}. ¿Que vio {rival} que ustedes no?", "#a_tac# el {marcador} duele. ¿Fue un problema de actitud o de planteamiento?", "#a_tac# {rival} les gano {marcador}. ¿Que se llevan para corregir?", "#a_tac# #ctx_derrota# #q_derrota#"],
+  "tac_empate": ["#a_tac# empate {marcador} ante {rival}. ¿Gusto a poco o punto valioso?", "#a_tac# {marcador} con {rival}. ¿Les falto profundidad?", "#a_tac# reparto de puntos, {marcador}. ¿Como evaluas el trabajo del equipo?", "#a_tac# #ctx_empate# #q_empate#"],
+  "ves_meta_cerca": ["#a_ves# te propusiste {meta} y te faltan {faltan} {unidad}. ¿Lo ves cerca?", "#a_ves# la cuenta regresiva corre: {faltan} {unidad} para cumplir tu meta. ¿Te mete presion?", "#a_ves# llevas {actual} de {objetivo}. ¿Cuando crees que llegas a tu meta?", "#a_ves# a {faltan} {unidad} de cumplir lo que prometiste. ¿Ya te imaginas como lo vas a celebrar?"],
+  "ves_meta_tabla": ["#a_ves# tu meta era {meta} y hoy estan {puesto} en la tabla. ¿Sigue en pie?", "#a_ves# te propusiste {meta}, pero van {puesto}. ¿Te arrepentis de haberlo dicho en publico?", "#a_ves# la tabla dice {puesto} y vos hablaste de {meta}. ¿Que tiene que pasar para lograrlo?"],
+  "ves_hinchada_contra": ["#a_ves# la hinchada de {club} no anda contenta con vos. ¿Que les dirias hoy?", "#a_ves# se escucharon silbidos para vos. ¿Como te cae eso?", "#a_ves# en las redes de {club} piden explicaciones. ¿Sentis que perdiste a la gente?"],
+  "ves_idolo": ["#a_ves# en {club} ya te cantan como idolo. ¿Como se vive eso?", "#a_ves# la gente de {club} te adora. ¿Pensas en quedarte muchos anos?", "#a_ves# sos de los preferidos de la tribuna. ¿Que sentis cuando corean tu nombre?"],
+  "ves_ex_club_idolo": ["#a_ves# volviste a cruzarte con {ex_club}, donde te despidieron como idolo. ¿Como fue el reencuentro?", "#a_ves# en {ex_club} todavia te quieren. ¿Te costo jugar contra ellos?", "#a_ves# enfrente estaba {ex_club}, tu ex club. ¿Saludaste a la tribuna?"],
+  "ves_ex_club_traidor": ["#a_ves# los hinchas de {ex_club} no te perdonan que te hayas ido a un rival. ¿Escuchaste lo que te gritaban?", "#a_ves# para la gente de {ex_club} sos un traidor. ¿Te afecta?", "#a_ves# {ex_club} fue tu casa y hoy te silbaron de punta a punta. ¿Que les dirias?"],
+  "ves_ex_club_mala": ["#a_ves# te fuiste de {ex_club} entre silbidos y hoy te tocaba enfrentarlos. ¿Habia cuentas pendientes?", "#a_ves# con {ex_club} la historia no termino bien. ¿Este partido era especial?", "#a_ves# volviste a ver a {ex_club}. ¿Ya cerraste esa etapa?"],
+  "ves_derrota": ["#a_ves# ¿como quedo el vestuario despues de la derrota?", "#a_ves# ¿hubo charla fuerte en el camarin?", "#a_ves# ¿que le dirias a los hinchas que se fueron enojados?", "#a_ves# ¿el grupo esta unido para salir de este momento?", "#a_ves# #ctx_derrota# #q_derrota#"],
+  "ves_victoria": ["#a_ves# ¿como se celebro en el camarin?", "#a_ves# ¿que le dirias a los hinchas que vinieron a alentar?", "#a_ves# ¿este triunfo une al grupo?", "#a_ves# ¿a quien le dedicas la victoria?", "#a_ves# #ctx_victoria# #q_victoria#"],
+  "ves_empate": ["#a_ves# ¿como esta el animo despues del empate?", "#a_ves# ¿la gente se fue conforme con el punto?", "#a_ves# ¿que se habla en el vestuario despues de un empate asi?", "#a_ves# #ctx_empate# #q_empate#"],
+  "ves_generico": ["#a_ves# ¿como esta el grupo de cara a lo que viene?", "#a_ves# ¿que mensaje le dejas a la hinchada?", "#a_ves# ¿como te sentis dentro del plantel de {club}?", "#a_ves# #q_vestuario#", "#a_ves# #q_hinchada#"],
+  "pic_contradiccion": ["#a_pic# la fecha pasada dijiste «{cita_anterior}» y hoy perdieron. ¿Te arrepentis?", "#a_pic# despues de lo que declaraste ante {rival_anterior}, «{cita_anterior}», hoy llego la derrota. ¿Pecaste de confiado?", "#a_pic# hace una semana: «{cita_anterior}». Hoy: derrota. ¿Te la vas a bancar en las redes?"],
+  "pic_compra_mal": ["#a_pic# te compraste un {articulo} de {precio} y hoy jugaste para un {rating}. ¿No te distrae tanto lujo?", "#a_pic# en las redes dicen que el {articulo} corre mas que vos. ¿Que les contestas?", "#a_pic# {precio} en un {articulo} y un partido flojo. ¿Entendes la bronca de la gente?", "#a_pic# muchos hinchas te sacan en cara el {articulo}. ¿Te arrepentis del momento de la compra?"],
+  "pic_compra_bien": ["#a_pic# te vieron llegar en el {articulo} nuevo. ¿Es la cabala?", "#a_pic# ¿el {articulo} ya tiene apodo? Porque hoy jugaste como para ponerle tu numero.", "#a_pic# ¿cuanto tiene que ver el {articulo} con lo bien que andas?"],
+  "pic_pareja_real": ["#a_pic# ¿estaba {pareja} mirando? ¿Le dedicas el partido?", "#a_pic# ¿que tan importante es {pareja} en este momento de tu carrera?", "#a_pic# ¿que te dijo {pareja} despues del partido?"],
+  "pic_pareja_famosa": ["#a_pic# ¿{pareja} estaba en el palco? Las camaras la buscaron todo el partido.", "#a_pic# ser pareja de {pareja}, {oficio}, te pone en todas las revistas. ¿Te molesta tanta atencion?", "#a_pic# ¿que opina {pareja} de tu momento futbolistico?"],
+  "pic_rumor": ["#a_pic# te vieron otra vez con {pareja}, {oficio}. ¿Hay algo que quieras confirmar?", "#a_pic# ¿que hay entre vos y {pareja}? Las redes no hablan de otra cosa.", "#a_pic# los rumores con {pareja} crecen. ¿Lo vas a hacer oficial?"],
+  "pic_crisis": ["#a_pic# se habla de una crisis con {pareja}. ¿Te afecto en la cancha?", "#a_pic# las revistas dicen que con {pareja} no andan bien. ¿Algo que aclarar?"],
+  "pic_evento_malo": ["#a_pic# despues de que {evento}, ¿sentis que la gente te mira distinto?", "#a_pic# muchos conectan lo de que {evento} con tu rendimiento. ¿Que respondes?", "#a_pic# lo de que {evento} sigue dando vueltas. ¿Te desconcentro esta semana?"],
+  "pic_evento_bueno": ["#a_pic# se viralizo que {evento}. ¿Te gusta mostrar ese lado?", "#a_pic# todos hablan de que {evento}. ¿Como lo viviste?"],
+  "pic_ex_club_traidor": ["#a_pic# ¿te dolio que en {ex_club} te digan traidor?", "#a_pic# ¿volverias algun dia a {ex_club} sabiendo como te tratan?"],
+  "pic_hinchada_contra": ["#a_pic# en las redes de {club} hay hashtags pidiendo tu salida. ¿Los leiste?", "#a_pic# ¿pensaste en irte de {club}?"],
+  "pic_polemico": ["#a_pic# siempre das titulares. ¿Hoy tambien vas a encender las redes?", "#a_pic# tus declaraciones siempre generan ruido. ¿Lo haces a proposito?", "#a_pic# ¿con quien te peleaste esta semana en las redes?"],
+  "pic_generico": ["#a_pic# ¿cuanto lees de lo que se dice de vos en las redes?", "#a_pic# ¿como manejas la presion mediatica?", "#a_pic# si tuvieras que mandarle un mensaje a tus criticos, ¿que les dirias?", "#a_pic# ¿que haces para desconectarte del futbol?", "#a_pic# ¿que te falta para ser una estrella de verdad?", "#a_pic# ¿te imaginas jugando en otra liga?", "#a_pic# #q_vida#", "#a_pic# #ctx_vida# #q_vida#"],
   "_pv_tac_tabla": "Solo si estan CERCA en la tabla (previa.py elige: cerca, favorito o abajo con la diferencia real)",
-  "pv_tac_tabla_favorito": [
-    "#a_tac# llegan {posicion} y {rival} esta {posicion_rival}, {diferencia} puntos abajo. ¿Como se evita el exceso de confianza?",
-    "#a_tac# todos los dan como favoritos: {diferencia} puntos de diferencia con {rival}. ¿Hay riesgo de relajarse?",
-    "#a_tac# {rival} viene {posicion_rival} en la tabla. ¿Es de esos partidos que solo se pueden perder?",
-    "#a_tac# con {diferencia} puntos de ventaja sobre {rival}, ¿pensas en golear o en no correr riesgos?"
-  ],
-  "pv_tac_tabla_abajo": [
-    "#a_tac# {rival} les saca {diferencia} puntos y llega {posicion_rival}. ¿Es el partido para achicar la diferencia?",
-    "#a_tac# llegan {posicion} y enfrente esta el {posicion_rival}. ¿Les toca jugar de punto?",
-    "#a_tac# {rival} esta {diferencia} puntos arriba. ¿Que hay que hacer para ganarle a un equipo asi?"
-  ],
-  "pv_tac_tabla": [
-    "#a_tac# {club} llega {posicion} y {rival} {posicion_rival}. ¿Es un partido de seis puntos?",
-    "#a_tac# la tabla los pone {posicion} contra el {posicion_rival}. ¿Como se juega un partido asi?",
-    "#a_tac# con {rival} tan cerca en la tabla, ¿salen a buscarlo o a no perder?"
-  ],
-  "pv_tac_racha": [
-    "#a_tac# {club} llega con {racha_club} en los ultimos partidos y {rival} con {racha_rival}. ¿Quien llega mejor?",
-    "#a_tac# mirando las rachas, {racha_club} ustedes y {racha_rival} ellos. ¿Pesa el momento?"
-  ],
-  "pv_tac_cruce": [
-    "#a_tac# ya se cruzaron con {rival} esta temporada: {cruce}. ¿Que aprendieron de ese partido?",
-    "#a_tac# el antecedente de la temporada es {cruce}. ¿Se esperan otro partido igual?"
-  ],
-  "pv_tac_goleador": [
-    "#a_tac# {goleador} viene encendido con {goles_goleador} goles. ¿Como se lo neutraliza?",
-    "#a_tac# ¿que tanto les preocupa {goleador}, el goleador de {rival}?"
-  ],
-  "pv_tac_generico": [
-    "#a_tac# ¿que partido esperas ante {rival}?",
-    "#a_tac# ¿como se le gana a {rival}?",
-    "#a_tac# ¿donde puede estar la clave del partido con {rival}?"
-  ],
-  "pv_ves_meta_cerca": [
-    "#a_ves# te faltan {faltan} {unidad} para cumplir tu meta. ¿Te ves cerrandola ante {rival}?",
-    "#a_ves# {actual} de {objetivo}: ¿el partido con {rival} puede ser el de la meta?"
-  ],
-  "pv_ves_ex_club_traidor": [
-    "#a_ves# vuelve el cruce con {ex_club}, donde te dicen traidor. ¿Como esperas el recibimiento?",
-    "#a_ves# en {ex_club} ya preparan el recibimiento. ¿Te preocupa?"
-  ],
-  "pv_ves_ex_club_idolo": [
-    "#a_ves# te toca {ex_club}, donde dejaste un gran recuerdo. ¿Vas a celebrar si les haces un gol?",
-    "#a_ves# reencuentro con {ex_club}. ¿Que esperas de la gente?"
-  ],
-  "pv_ves_generico": [
-    "#a_ves# ¿como llega el grupo al partido?",
-    "#a_ves# ¿que le pedis a la hinchada para este partido?",
-    "#a_ves# ¿como se vive la semana previa en el vestuario?"
-  ],
-
+  "pv_tac_tabla_favorito": ["#a_tac# llegan {posicion} y {rival} esta {posicion_rival}, {diferencia} puntos abajo. ¿Como se evita el exceso de confianza?", "#a_tac# todos los dan como favoritos: {diferencia} puntos de diferencia con {rival}. ¿Hay riesgo de relajarse?", "#a_tac# {rival} viene {posicion_rival} en la tabla. ¿Es de esos partidos que solo se pueden perder?", "#a_tac# con {diferencia} puntos de ventaja sobre {rival}, ¿pensas en golear o en no correr riesgos?"],
+  "pv_tac_tabla_abajo": ["#a_tac# {rival} les saca {diferencia} puntos y llega {posicion_rival}. ¿Es el partido para achicar la diferencia?", "#a_tac# llegan {posicion} y enfrente esta el {posicion_rival}. ¿Les toca jugar de punto?", "#a_tac# {rival} esta {diferencia} puntos arriba. ¿Que hay que hacer para ganarle a un equipo asi?"],
+  "pv_tac_tabla": ["#a_tac# {club} llega {posicion} y {rival} {posicion_rival}. ¿Es un partido de seis puntos?", "#a_tac# la tabla los pone {posicion} contra el {posicion_rival}. ¿Como se juega un partido asi?", "#a_tac# con {rival} tan cerca en la tabla, ¿salen a buscarlo o a no perder?"],
+  "pv_tac_racha": ["#a_tac# {club} llega con {racha_club} en los ultimos partidos y {rival} con {racha_rival}. ¿Quien llega mejor?", "#a_tac# mirando las rachas, {racha_club} ustedes y {racha_rival} ellos. ¿Pesa el momento?"],
+  "pv_tac_cruce": ["#a_tac# ya se cruzaron con {rival} esta temporada: {cruce}. ¿Que aprendieron de ese partido?", "#a_tac# el antecedente de la temporada es {cruce}. ¿Se esperan otro partido igual?"],
+  "pv_tac_goleador": ["#a_tac# {goleador} viene encendido con {goles_goleador} goles. ¿Como se lo neutraliza?", "#a_tac# ¿que tanto les preocupa {goleador}, el goleador de {rival}?"],
+  "pv_tac_generico": ["#a_tac# ¿que partido esperas ante {rival}?", "#a_tac# ¿como se le gana a {rival}?", "#a_tac# ¿donde puede estar la clave del partido con {rival}?", "#a_tac# #q_previa_tac#"],
+  "pv_ves_meta_cerca": ["#a_ves# te faltan {faltan} {unidad} para cumplir tu meta. ¿Te ves cerrandola ante {rival}?", "#a_ves# {actual} de {objetivo}: ¿el partido con {rival} puede ser el de la meta?"],
+  "pv_ves_ex_club_traidor": ["#a_ves# vuelve el cruce con {ex_club}, donde te dicen traidor. ¿Como esperas el recibimiento?", "#a_ves# en {ex_club} ya preparan el recibimiento. ¿Te preocupa?"],
+  "pv_ves_ex_club_idolo": ["#a_ves# te toca {ex_club}, donde dejaste un gran recuerdo. ¿Vas a celebrar si les haces un gol?", "#a_ves# reencuentro con {ex_club}. ¿Que esperas de la gente?"],
+  "pv_ves_generico": ["#a_ves# ¿como llega el grupo al partido?", "#a_ves# ¿que le pedis a la hinchada para este partido?", "#a_ves# ¿como se vive la semana previa en el vestuario?", "#a_ves# #q_previa_ves#"],
   "r_apertura_victoria": ["Tras el {marcador} ante {rival},", "Con la victoria todavia fresca,", "Despues del triunfo ante {rival},", "Con los tres puntos en el bolsillo,", "Tras ganarle a {rival},"],
   "r_apertura_derrota": ["Tras la caida {marcador} ante {rival},", "Con la derrota todavia doliendo,", "Despues del golpe ante {rival},", "Tras perder con {rival},"],
   "r_apertura_empate": ["Tras el {marcador} ante {rival},", "Con sabor a empate,", "Despues de igualar con {rival},"],
   "r_apertura_previa": ["En la previa ante {rival},", "A dias del duelo con {rival},", "En la conferencia previa,", "Antes del partido con {rival},"],
-
-  "r_humildad_bien": [
-    "{apellido} hablo de equipo: «{cita}». La frase cayo muy bien en el vestuario y en la tribuna.",
-    "{apellido} se corrio del centro de la escena: «{cita}». Los hinchas valoraron la humildad.",
-    "{apellido} repartio meritos con todos y la gente lo aplaudio en redes.",
-    "«{cita}», dijo {apellido}, y en el club destacaron su perfil de grupo."
-  ],
-  "r_humildad_mal": [
-    "{apellido} asumio la derrota en grupo: «{cita}». Pocos le reprocharon algo.",
-    "{apellido} dio la cara por el equipo: «{cita}». Al menos nadie le discute la actitud.",
-    "{apellido} no busco excusas y hablo de grupo. La hinchada, golpeada, lo respeto."
-  ],
-  "r_hinchada_bien": [
-    "{apellido} le hablo directo a la gente: «{cita}». En la tribuna ya lo cantan.",
-    "«{cita}». El mensaje de {apellido} a los hinchas se compartio por todos lados.",
-    "{apellido} se acordo de la gente y la gente se acordo de el: aplausos en redes."
-  ],
-  "r_hinchada_mal": [
-    "{apellido} pidio aguante a los hinchas: «{cita}». Algunos lo valoraron; otros esperan hechos.",
-    "{apellido} le hablo a la tribuna despues de perder. El mensaje sirvio para bajar la tension."
-  ],
-  "r_ego_bien": [
-    "{apellido} no se guardo nada: «{cita}». Con estos numeros, pocos se animan a discutirle.",
-    "«{cita}». {apellido} saco pecho y los hinchas lo festejaron; los rivales, no tanto.",
-    "{apellido} se mostro seguro de si mismo y, por ahora, la cancha le da la razon."
-  ],
-  "r_ego_mal": [
-    "{apellido} saco pecho en el peor momento: «{cita}». Las redes no lo perdonaron.",
-    "«{cita}», dijo {apellido} despues de un partido para el olvido. La frase se volvio meme en minutos.",
-    "{apellido} hablo como figura en un dia en que no lo fue, y la prensa se lo hizo notar."
-  ],
-  "r_excusa_bien": [
-    "{apellido} igual apunto contra afuera: «{cita}». En pleno festejo, la frase hizo ruido.",
-    "Aun ganando, {apellido} se quejo: «{cita}». La polemica le robo protagonismo al triunfo."
-  ],
-  "r_excusa_mal": [
-    "{apellido} busco culpables afuera: «{cita}». La prensa lo leyo como una excusa.",
-    "«{cita}». Las palabras de {apellido} encendieron la polemica y dividieron a los hinchas.",
-    "{apellido} apunto contra todos menos contra el equipo. No cayo bien."
-  ],
-  "r_ambicion_bien": [
-    "{apellido} ya piensa en lo que viene: «{cita}». La mentalidad ganadora entusiasma a la gente.",
-    "«{cita}». {apellido} no se conforma y eso, en el club, se celebra.",
-    "{apellido} dejo claro que va por mas. La hinchada se ilusiona."
-  ],
-  "r_ambicion_mal": [
-    "{apellido} prefirio mirar adelante: «{cita}». Hay quienes piden autocritica primero.",
-    "{apellido} hablo de objetivos despues de perder. Para algunos, falto mirar lo que paso."
-  ],
-  "r_neutro": [
-    "{apellido} respondio sin salirse del libreto: respuestas de manual que no movieron la aguja.",
-    "Conferencia tranquila: {apellido} no dejo titulares.",
-    "{apellido} fue cuidadoso con cada palabra. Nada para los titulares."
-  ],
-  "r_vacio": [
-    "{apellido} hablo poco y nada. La prensa se quedo con las ganas.",
-    "Respuestas cortas de {apellido}: no tenia ganas de hablar."
-  ],
-
+  "r_humildad_bien": ["{apellido} hablo de equipo: «{cita}». La frase cayo muy bien en el vestuario y en la tribuna.", "{apellido} se corrio del centro de la escena: «{cita}». Los hinchas valoraron la humildad.", "{apellido} repartio meritos con todos y la gente lo aplaudio en redes.", "«{cita}», dijo {apellido}, y en el club destacaron su perfil de grupo."],
+  "r_humildad_mal": ["{apellido} asumio la derrota en grupo: «{cita}». Pocos le reprocharon algo.", "{apellido} dio la cara por el equipo: «{cita}». Al menos nadie le discute la actitud.", "{apellido} no busco excusas y hablo de grupo. La hinchada, golpeada, lo respeto."],
+  "r_hinchada_bien": ["{apellido} le hablo directo a la gente: «{cita}». En la tribuna ya lo cantan.", "«{cita}». El mensaje de {apellido} a los hinchas se compartio por todos lados.", "{apellido} se acordo de la gente y la gente se acordo de el: aplausos en redes."],
+  "r_hinchada_mal": ["{apellido} pidio aguante a los hinchas: «{cita}». Algunos lo valoraron; otros esperan hechos.", "{apellido} le hablo a la tribuna despues de perder. El mensaje sirvio para bajar la tension."],
+  "r_ego_bien": ["{apellido} no se guardo nada: «{cita}». Con estos numeros, pocos se animan a discutirle.", "«{cita}». {apellido} saco pecho y los hinchas lo festejaron; los rivales, no tanto.", "{apellido} se mostro seguro de si mismo y, por ahora, la cancha le da la razon."],
+  "r_ego_mal": ["{apellido} saco pecho en el peor momento: «{cita}». Las redes no lo perdonaron.", "«{cita}», dijo {apellido} despues de un partido para el olvido. La frase se volvio meme en minutos.", "{apellido} hablo como figura en un dia en que no lo fue, y la prensa se lo hizo notar."],
+  "r_excusa_bien": ["{apellido} igual apunto contra afuera: «{cita}». En pleno festejo, la frase hizo ruido.", "Aun ganando, {apellido} se quejo: «{cita}». La polemica le robo protagonismo al triunfo."],
+  "r_excusa_mal": ["{apellido} busco culpables afuera: «{cita}». La prensa lo leyo como una excusa.", "«{cita}». Las palabras de {apellido} encendieron la polemica y dividieron a los hinchas.", "{apellido} apunto contra todos menos contra el equipo. No cayo bien."],
+  "r_ambicion_bien": ["{apellido} ya piensa en lo que viene: «{cita}». La mentalidad ganadora entusiasma a la gente.", "«{cita}». {apellido} no se conforma y eso, en el club, se celebra.", "{apellido} dejo claro que va por mas. La hinchada se ilusiona."],
+  "r_ambicion_mal": ["{apellido} prefirio mirar adelante: «{cita}». Hay quienes piden autocritica primero.", "{apellido} hablo de objetivos despues de perder. Para algunos, falto mirar lo que paso."],
+  "r_neutro": ["{apellido} respondio sin salirse del libreto: respuestas de manual que no movieron la aguja.", "Conferencia tranquila: {apellido} no dejo titulares.", "{apellido} fue cuidadoso con cada palabra. Nada para los titulares."],
+  "r_vacio": ["{apellido} hablo poco y nada. La prensa se quedo con las ganas.", "Respuestas cortas de {apellido}: no tenia ganas de hablar."],
   "r_cruce_compra_mal": ["Y el {articulo} de {precio} no ayuda: en redes se lo recuerdan a cada rato.", "Encima, el {articulo} recien comprado es el blanco de todas las bromas."],
   "r_cruce_compra_bien": ["De paso, el {articulo} nuevo ya es parte de la leyenda de esta racha.", "Y el {articulo} recien estrenado se lleva su parte de los memes buenos."],
   "r_cruce_pareja_real": ["Para {pareja}, un aplauso aparte: siempre esta.", "Y la dedicatoria, como siempre, fue para {pareja}."],
@@ -337,35 +84,22 @@
   "r_cruce_evento_bueno": ["El gesto de esta semana, cuando {evento}, suma puntos aparte."],
   "r_cruce_hinchada_contra": ["La relacion con la hinchada de {club} sigue tensa."],
   "r_cruce_idolo": ["En {club} ya es palabra mayor."],
-
   "r_cierre_positivo": ["Su imagen sale fortalecida.", "Suma puntos con la gente.", "Gano la conferencia.", "La tribuna toma nota.", ""],
   "r_cierre_negativo": ["Va a tener que responder en la cancha.", "La polemica recien empieza.", "Su imagen quedo golpeada.", "El proximo partido va a ser con lupa.", ""],
   "r_cierre_neutro": ["Nada que cambie el rumbo.", "Todo sigue igual.", ""],
-
   "gancho_promesa": ["Prometio en publico: «{promesa}».", "Quedo una promesa dando vueltas: «{promesa}».", "La gente se quedo con esta frase: «{promesa}»."],
-
-  "pv_titular_cita": [
-    "«{cita}»: {apellido} palpita el duelo ante {rival}",
-    "{apellido} calienta la previa con {rival}: «{cita}»",
-    "«{cita}»: el mensaje de {apellido} antes de enfrentar a {rival}",
-    "{apellido}, antes de {rival}: «{cita}»"
-  ],
-  "pv_titular": [
-    "{apellido} palpita el duelo ante {rival}",
-    "{apellido}: la previa del partido con {rival}",
-    "{club} se prepara para {rival}: hablo {apellido}"
-  ],
-
+  "pv_titular_cita": ["«{cita}»: {apellido} palpita el duelo ante {rival}", "{apellido} calienta la previa con {rival}: «{cita}»", "«{cita}»: el mensaje de {apellido} antes de enfrentar a {rival}", "{apellido}, antes de {rival}: «{cita}»"],
+  "pv_titular": ["{apellido} palpita el duelo ante {rival}", "{apellido}: la previa del partido con {rival}", "{club} se prepara para {rival}: hablo {apellido}"],
   "_temas": "Las 8 tematicas de la conferencia (servicios/entrevista.TEMAS); el codigo elige el tema y pasa los datos",
-  "tema_tactica": ["#a_tac# ¿que te pidio el entrenador para enfrentar a {rival}?", "#a_tac# ¿te sentis comodo en el sistema del DT? Hay quien dice que te saca de tu mejor posicion.", "#a_tac# ¿hubo charla con el tecnico sobre tu rol en el equipo?", "#a_tac# el DT movio piezas en las ultimas fechas. ¿Estas de acuerdo con como esta jugando {club}?", "#a_tac# ¿te sentis respaldado por el cuerpo tecnico o hay cosas para hablar puertas adentro?", "#a_tac# si fueras el entrenador, ¿que le cambiarias al planteo?"],
-  "tema_vestuario": ["#a_ves# ¿como esta el vestuario? Afuera se habla de internas.", "#a_ves# ¿quien es hoy el lider del grupo en {club}?", "#a_ves# hay companeros que no estan rindiendo. ¿Les hablaste vos como referente?", "#a_ves# ¿se nota un vestuario unido o cada uno tira para su lado?", "#a_ves# ¿que companero te sorprendio esta temporada?", "#a_ves# se dice que hay un grupo que no se lleva con el tecnico. ¿Es asi?"],
-  "tema_hinchada": ["#a_ves# la hinchada de {club} exige mucho. ¿Como manejas esa presion?", "#a_ves# ¿escuchaste lo que canto la tribuna?", "#a_ves# ¿que le decis a los hinchas que estan impacientes?", "#a_ves# ¿sentis el carino de la gente o pesa mas la exigencia?", "#a_ves# en las redes la hinchada esta dividida con vos. ¿Lo lees?"],
+  "tema_tactica": ["#a_tac# ¿que te pidio el entrenador para enfrentar a {rival}?", "#a_tac# ¿te sentis comodo en el sistema del DT? Hay quien dice que te saca de tu mejor posicion.", "#a_tac# ¿hubo charla con el tecnico sobre tu rol en el equipo?", "#a_tac# el DT movio piezas en las ultimas fechas. ¿Estas de acuerdo con como esta jugando {club}?", "#a_tac# ¿te sentis respaldado por el cuerpo tecnico o hay cosas para hablar puertas adentro?", "#a_tac# si fueras el entrenador, ¿que le cambiarias al planteo?", "#a_tac# #q_tactica#", "#a_tac# #ctx_tactica# #q_tactica#"],
+  "tema_vestuario": ["#a_ves# ¿como esta el vestuario? Afuera se habla de internas.", "#a_ves# ¿quien es hoy el lider del grupo en {club}?", "#a_ves# hay companeros que no estan rindiendo. ¿Les hablaste vos como referente?", "#a_ves# ¿se nota un vestuario unido o cada uno tira para su lado?", "#a_ves# ¿que companero te sorprendio esta temporada?", "#a_ves# se dice que hay un grupo que no se lleva con el tecnico. ¿Es asi?", "#a_ves# #q_vestuario#", "#a_ves# #ctx_vestuario# #q_vestuario#"],
+  "tema_hinchada": ["#a_ves# la hinchada de {club} exige mucho. ¿Como manejas esa presion?", "#a_ves# ¿escuchaste lo que canto la tribuna?", "#a_ves# ¿que le decis a los hinchas que estan impacientes?", "#a_ves# ¿sentis el carino de la gente o pesa mas la exigencia?", "#a_ves# en las redes la hinchada esta dividida con vos. ¿Lo lees?", "#a_ves# #q_hinchada#", "#a_ves# #ctx_hinchada# #q_hinchada#"],
   "tema_mercado_llega": ["#a_ves# {movimiento}. Juega en tu zona de la cancha: ¿lo ves como competencia o como un socio mas?", "#a_ves# con la llegada que todos comentan ({movimiento}), ¿sentis que se te viene competencia por el lugar?", "#a_ves# {movimiento}. Es {puesto_compartido}, igual que vos: ¿te preocupa perder minutos o te motiva?", "#a_ves# {movimiento}. ¿Te vas a tener que acomodar para jugar con el o te disputa el puesto?"],
   "tema_mercado_sale": ["#a_ves# {movimiento}. Era de tu zona de la cancha: ¿te toca asumir mas responsabilidad?", "#a_ves# {movimiento}. ¿Como cambia tu rol ahora que se fue?", "#a_ves# {movimiento}. Se va un socio de tu linea: ¿lo vas a extranar en la cancha?"],
-  "tema_mercado_futuro": ["#a_pic# hay clubes grandes preguntando por vos. ¿Escuchas ofertas?", "#a_pic# tu nombre suena fuerte en el mercado. ¿Te ves en {club} la temporada que viene?", "#a_pic# ¿que le decis a los que aseguran que este es tu ultimo anio en {club}?", "#a_pic# las paginas de fichajes ya te ponen en otro club. ¿Hay algo de cierto?"],
-  "tema_arbitraje": ["#a_pic# ¿como ves el arbitraje en esta liga?", "#a_pic# con {rival} siempre hay roces. ¿Como se manejan esos cruces en la cancha?", "#a_pic# ¿sentis que los arbitros te protegen poco?", "#a_pic# el VAR esta otra vez en el ojo de la tormenta. ¿Que opinas?", "#a_pic# hubo jugadas polemicas en los ultimos partidos. ¿Te quedo bronca?"],
-  "tema_vida": ["#a_pic# las paginas de futbol no paran de publicar sobre vos. ¿Como lo llevas?", "#a_pic# se habla mucho de tu vida fuera de la cancha. ¿Te molesta?", "#a_pic# ¿como separas la vida privada del futbol con tanta exposicion?", "#a_pic# ¿que haces para desconectarte cuando la presion aprieta?"],
-  "tema_contratos": ["#a_pic# ¿como esta tu contrato con {club}? ¿Hay charlas para renovar?", "#a_pic# ¿tu agente ya se sento con la directiva?", "#a_pic# ¿te ves terminando tu carrera en {club}?", "#a_pic# ¿que le pedis a la directiva para seguir creciendo?"],
+  "tema_mercado_futuro": ["#a_pic# hay clubes grandes preguntando por vos. ¿Escuchas ofertas?", "#a_pic# tu nombre suena fuerte en el mercado. ¿Te ves en {club} la temporada que viene?", "#a_pic# ¿que le decis a los que aseguran que este es tu ultimo anio en {club}?", "#a_pic# las paginas de fichajes ya te ponen en otro club. ¿Hay algo de cierto?", "#a_pic# #q_mercado#", "#a_pic# #ctx_mercado# #q_mercado#"],
+  "tema_arbitraje": ["#a_pic# ¿como ves el arbitraje en esta liga?", "#a_pic# con {rival} siempre hay roces. ¿Como se manejan esos cruces en la cancha?", "#a_pic# ¿sentis que los arbitros te protegen poco?", "#a_pic# el VAR esta otra vez en el ojo de la tormenta. ¿Que opinas?", "#a_pic# hubo jugadas polemicas en los ultimos partidos. ¿Te quedo bronca?", "#a_pic# #q_arbitraje#", "#a_pic# #ctx_arbitraje# #q_arbitraje#"],
+  "tema_vida": ["#a_pic# las paginas de futbol no paran de publicar sobre vos. ¿Como lo llevas?", "#a_pic# se habla mucho de tu vida fuera de la cancha. ¿Te molesta?", "#a_pic# ¿como separas la vida privada del futbol con tanta exposicion?", "#a_pic# ¿que haces para desconectarte cuando la presion aprieta?", "#a_pic# #q_vida#", "#a_pic# #ctx_vida# #q_vida#"],
+  "tema_contratos": ["#a_pic# ¿como esta tu contrato con {club}? ¿Hay charlas para renovar?", "#a_pic# ¿tu agente ya se sento con la directiva?", "#a_pic# ¿te ves terminando tu carrera en {club}?", "#a_pic# ¿que le pedis a la directiva para seguir creciendo?", "#a_pic# #q_contratos#"],
   "tema_patrocinio_campanas": ["#a_pic# ya te vimos en la campana de {marca}. ¿No te distrae del futbol?", "#a_pic# entre los partidos y las promos de {marca}, ¿te queda tiempo para descansar?"],
   "tema_patrocinio": ["#a_pic# firmaste con {marca}. ¿Te cambia la vida tanta exposicion?", "#a_pic# hay quien dice que pensas mas en {marca} que en la pelota. ¿Que le respondes?"],
   "_pv_pic": "Las de vida privada de la PREVIA: las de despues del partido (estaba mirando, le dedicas el partido, el palco) no van antes de jugar",
@@ -374,5 +108,47 @@
   "pv_pic_compra_bien": ["#a_pic# te vieron llegar en el {articulo} nuevo. ¿Es la cabala para este partido?", "#a_pic# ¿el {articulo} ya tiene apodo?"],
   "pv_pic_compra_mal": ["#a_pic# en las redes se habla mas de tu {articulo} que de este partido. ¿Te molesta?"],
   "pic_rumor_secreto": ["#a_pic# dicen que estas saliendo en secreto con alguien famoso. ¿Confirmas o desmentis?", "#a_pic# las redes estan seguras de que hay un romance escondido. ¿Que hay de cierto?", "#a_pic# te vieron salir de un hotel con alguien muy conocido. ¿Quien era?", "#a_pic# ¿hay romance secreto? La gente quiere nombres."],
-  "r_cruce_rumor_secreto": ["Y la pregunta por su supuesto romance secreto quedo flotando en la sala.", "Sobre el rumor de un romance escondido, prefirio no soltar ni un nombre.", "Del romance secreto que todos comentan, ni una palabra."]
+  "r_cruce_rumor_secreto": ["Y la pregunta por su supuesto romance secreto quedo flotando en la sala.", "Sobre el rumor de un romance escondido, prefirio no soltar ni un nombre.", "Del romance secreto que todos comentan, ni una palabra."],
+  "_piezas": "Piezas combinables (2026-10-20): los simbolos de relleno se arman como apertura + contexto + pregunta",
+  "q_tactica": ["¿que te pide el entrenador?", "¿en que posicion te sentis mas comodo?", "¿que te falta mejorar en lo tactico?", "¿con que companero te entendes mejor en la cancha?", "¿te gusta presionar arriba o prefieren esperar?", "¿cuanto hablas con el DT durante la semana?", "¿que rival te complico mas en la temporada?", "¿preferis jugar cerca del area o venir a buscar la pelota?"],
+  "ctx_tactica": ["Se habla mucho del sistema del DT.", "El entrenador viene probando variantes.", "Cada partido el DT cambia algo.", "Siempre se discute el planteo."],
+  "q_vestuario": ["¿quien es el que mas habla en el camarin?", "¿quien es el mas gracioso del plantel?", "¿con quien compartis la habitacion en las concentraciones?", "¿hay algun juvenil que te sorprenda?", "¿como es la relacion con los mas experimentados?", "¿quien pone la musica en el camarin?", "¿que companero merece mas reconocimiento?", "¿hay internas o esta todo tranquilo?"],
+  "ctx_vestuario": ["Afuera se habla mucho del grupo.", "Dicen que el camarin esta mas unido que nunca.", "Cada tanto aparecen rumores de internas.", "El plantel tiene mucha cara nueva."],
+  "q_hinchada": ["¿que significa para vos la gente de {club}?", "¿que le dirias al hincha que esta enojado?", "¿leiste lo que te escriben los hinchas en las redes?", "¿hay algun canto que te emocione?", "¿como manejas cuando la tribuna se impacienta?", "¿sentis que la gente ya te considera de la casa?", "¿que haces para devolverle el carino a la hinchada?"],
+  "ctx_hinchada": ["La hinchada de {club} es de las mas exigentes.", "La tribuna no perdona.", "Los hinchas estan pendientes de cada cosa que decis."],
+  "q_arbitraje": ["¿como ves el arbitraje esta temporada?", "¿el VAR ayuda o complica?", "¿sentis que los arbitros te cuidan poco?", "¿hablas con los arbitros durante el partido?", "¿que rival te pega mas fuerte?", "¿te mordes la lengua o decis lo que pensas de los arbitros?"],
+  "ctx_arbitraje": ["Hubo mucha polemica arbitral en la liga.", "El VAR esta en el centro de la discusion.", "Cada fecha aparecen jugadas discutidas."],
+  "q_vida": ["¿como llevas la fama?", "¿que haces para desconectarte del futbol?", "¿leiste lo que publican de vos las paginas de futbol?", "¿te molesta que te sigan los fotografos?", "¿que extranas de tu vida antes del futbol?", "¿que serie estas viendo?", "¿cual es tu cabala antes de los partidos?", "¿que te gustaria hacer cuando te retires?", "¿quien era tu idolo de chico?"],
+  "ctx_vida": ["Las redes no paran de hablar de vos.", "Tu vida fuera de la cancha tambien es noticia.", "Cada post tuyo junta miles de comentarios."],
+  "q_contratos": ["¿hay charlas para renovar con {club}?", "¿tu representante ya se sento con la directiva?", "¿te ves muchos anios en {club}?", "¿que pesa mas al firmar: la plata o el proyecto?", "¿pensas en jugar algun dia en otra liga?", "¿te gustaria retirarte en {club}?"],
+  "q_mercado": ["¿escuchas ofertas o estas cerrado en {club}?", "¿que le dirias a los clubes que preguntan por vos?", "¿que liga te gustaria conocer?", "¿te preocupa lo que se dice del mercado?", "¿el club te pidio algo para la proxima ventana?"],
+  "ctx_mercado": ["Tu nombre suena en el mercado.", "Se viene la ventana de pases.", "Los grandes de Europa miran lo que haces."],
+  "ctx_victoria_gol": ["ganaron {marcador} y marcaste {goles_texto}.", "{marcador} a {rival} con {goles_texto} tuyos.", "otra victoria, {marcador}, con tu firma en el marcador.", "{goles_texto} y tres puntos ante {rival}."],
+  "ctx_victoria": ["ganaron {marcador} a {rival}.", "victoria {marcador}.", "tres puntos mas, {marcador} ante {rival}."],
+  "q_victoria": ["¿que fue lo que mejor les salio?", "¿era el plan del entrenador o salio sobre la marcha?", "¿en que momento sentiste que el partido era suyo?", "¿que le corregirias igual al equipo?", "¿como te sentiste fisicamente?", "¿a quien le dedicas la victoria?", "¿que tan importante es ganar este tipo de partidos?"],
+  "ctx_derrota": ["perdieron {marcador} con {rival}.", "derrota {marcador}.", "{rival} se llevo el partido, {marcador}."],
+  "q_derrota": ["¿donde se les escapo el partido?", "¿que hay que corregir para el proximo?", "¿fue un problema de actitud o de futbol?", "¿como se levanta el grupo despues de esto?", "¿te sentis responsable de algo?", "¿que les dijo el entrenador en el camarin?"],
+  "ctx_empate": ["empate {marcador} ante {rival}.", "{marcador}, un punto para cada uno.", "igualaron {marcador} con {rival}."],
+  "q_empate": ["¿gusto a poco o punto valioso?", "¿que les falto para ganarlo?", "¿se puede rescatar algo positivo?", "¿el resultado es justo?", "¿que cambiarias si lo jugaras de nuevo?"],
+  "q_previa_tac": ["¿que partido esperas ante {rival}?", "¿como se le gana a {rival}?", "¿que te preocupa de {rival}?", "¿que vieron de {rival} en la semana?", "¿cuantos goles te pedis para este partido?", "¿que jugador de {rival} te preocupa mas?"],
+  "q_previa_ves": ["¿como llega el grupo?", "¿que le pedis a la hinchada?", "¿hay algun lesionado que preocupe?", "¿como se vivio la semana de entrenamiento?", "¿que se habla en el camarin antes de un partido asi?"],
+  "_datos": "Preguntas sobre los datos que junta la app (entrevista.temas_de_los_datos): goles, premios, ofertas, primas, familia",
+  "tac_goles_temporada": ["#a_tac# llevas {goles_temporada} goles en la temporada. ¿Te pusiste un numero?", "#a_tac# {goles_temporada} goles en lo que va del anio. ¿Te esperabas este nivel?", "#a_tac# con {goles_temporada} goles, ¿sentis que estas en tu mejor momento?"],
+  "tac_goles_carrera": ["#a_tac# ya son {goles_carrera} goles en {partidos_carrera} partidos de carrera. ¿Cual es el que mas recordas?", "#a_tac# {goles_carrera} goles desde que empezaste. ¿Cual fue el mas importante?", "#a_tac# llevas {goles_carrera} goles entre todos tus clubes. ¿Te imaginabas estos numeros?"],
+  "tac_asistencias": ["#a_tac# ademas de los goles, llevas {asistencias} asistencias. ¿Disfrutas mas dar un pase de gol?", "#a_tac# {asistencias} asistencias en la temporada. ¿Te ves mas generoso que antes?"],
+  "tac_invicto": ["#a_tac# {club} lleva {invicto} partidos sin perder. ¿Cual es la clave?", "#a_tac# {invicto} partidos invictos. ¿Les pesa cuidar la racha?"],
+  "pic_premio_reciente": ["#a_pic# te dieron el {premio}. ¿A quien se lo dedicas?", "#a_pic# con el {premio} en la vitrina, ¿que premio te falta?", "#a_pic# ganaste el {premio}. ¿Lo esperabas?"],
+  "tema_oferta_filtrada": ["#a_pic# se filtro que {club_oferta} te hizo una oferta. ¿Que hay de cierto?", "#a_pic# dicen que {club_oferta} te quiere. ¿Lo escuchaste?", "#a_pic# {club_oferta} pregunto por vos. ¿Te tienta?"],
+  "tema_primas": ["#a_pic# cerraste tus primas con {club}. ¿Quedaste conforme?", "#a_pic# firmaste las nuevas condiciones con {club}. ¿Eso te ata al club?"],
+  "tema_negociacion_rota": ["#a_pic# se rompieron las charlas con la directiva de {club}. ¿Que paso?", "#a_pic# dicen que la directiva se levanto de la mesa. ¿Hay enojo?"],
+  "pic_hijo": ["#a_pic# felicitaciones por {bebe}. ¿Como te cambio la vida?", "#a_pic# sos papa de {bebe}. ¿Duermen algo en casa?", "#a_pic# ¿se viene un festejo especial para {bebe} si haces un gol?"],
+  "pic_boda": ["#a_pic# felicitaciones por el casamiento con {pareja}. ¿Como fue el gran dia?", "#a_pic# recien casado con {pareja}. ¿Hubo luna de miel?"],
+  "pic_seguidores": ["#a_pic# ya tenes {seguidores} seguidores en Instagram. ¿Los lees?", "#a_pic# {seguidores} seguidores. ¿Te pesa ser tan seguido?"],
+  "_rep": "Repreguntas: lo que dijo en la conferencia anterior (entrevista.repregunta), segun el eje del lexico",
+  "rep_excusa_polemica": ["#a_pic# la vez pasada, contra {rival_anterior}, dijiste «{cita_anterior}». ¿Seguis pensando lo mismo?", "#a_pic# despues del partido con {rival_anterior} te quejaste: «{cita_anterior}». ¿Te arrepentiste?"],
+  "rep_ego_confianza": ["#a_pic# contra {rival_anterior} dijiste «{cita_anterior}». ¿Lo sostenes?", "#a_pic# hace poco dijiste «{cita_anterior}». ¿No te parece mucho?"],
+  "rep_amor_hinchada": ["#a_ves# la vez pasada le dijiste a la gente «{cita_anterior}». ¿Que te respondieron?", "#a_ves# despues de {rival_anterior} dijiste «{cita_anterior}». ¿Sentis que la hinchada te lo devolvio?"],
+  "rep_humildad_equipo": ["#a_ves# contra {rival_anterior} dijiste «{cita_anterior}». ¿El grupo sigue igual de unido?", "#a_ves# vos siempre hablas del grupo: «{cita_anterior}». ¿Quien te sorprendio esta semana?"],
+  "rep_ambicion_foco": ["#a_tac# la vez pasada dijiste «{cita_anterior}». ¿Van por buen camino?", "#a_tac# despues de {rival_anterior} dijiste «{cita_anterior}». ¿Sigue siendo el objetivo?"],
+  "rep_promesa": ["#a_pic# la vez pasada prometiste «{cita_anterior}». ¿Lo cumpliste?", "#a_pic# contra {rival_anterior} dijiste «{cita_anterior}». Te lo vamos a recordar: ¿estas cumpliendo?"]
 }

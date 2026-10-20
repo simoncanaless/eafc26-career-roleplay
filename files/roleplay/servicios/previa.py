@@ -172,8 +172,9 @@ def generar_previa(perfil: PlayerProfile, previa: PreviaPartido) -> list[str]:
     datos = {"nombre": perfil.nombre_jugador, "apellido": entrevista.apellido(perfil), "club": previa.club,
              "rival": previa.rival, **{k: v for k, v in sueltos.items() if v}}
     cruces = cruce.cruces(perfil.id, previa.rival, None, entrevista._carrera())
-    candidatos, pesos = entrevista.temas_comunes(perfil, datos, cruces, entrevista.contexto_de_club(perfil, entrevista._carrera()),
-                                                 previa=True)
+    carrera = entrevista._carrera()
+    candidatos, pesos = entrevista.temas_comunes(perfil, datos, cruces, entrevista.contexto_de_club(perfil, carrera),
+                                                 previa=True, carrera=carrera)
     candidatos["tactica"] += [(1, "pv_tac_generico", datos)]
     simbolo, diferencia = como_llegan(previa)
     if simbolo:  # la pregunta de la tabla sale de la diferencia REAL (no "tan cerca" contra el ultimo)

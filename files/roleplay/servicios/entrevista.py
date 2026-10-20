@@ -179,12 +179,27 @@ def _memoria(stats: MatchStats, historial: list[MatchInterviewRecord]) -> dict:
     return memoria
 
 
-def _elegir(candidatas: list[tuple[float, str, dict]], escritor, reserva: list) -> tuple[str, dict]:
-    """La de mas prioridad que el corpus pueda escribir (entre empatadas, al azar)."""
+PENALIDAD_RECIENTE = 0.1  # una pregunta (simbolo) de las ultimas conferencias pesa 10 veces menos
+
+
+def _elegir(candidatas: list[tuple[float, str, dict]], escritor, reserva: list,
+            recientes=(), la_mejor: bool = False) -> tuple[str, dict]:
+    """Lo obligatorio (prioridad >= OBLIGATORIO_DESDE: el hat-trick, la roja) va si o si; lo demas se
+    sortea por prioridad, y lo que se pregunto hace poco (`recientes`, los simbolos) casi no sale."""
     posibles = [(p, s, d) for p, s, d in candidatas if escritor.puede(s, **d)]
     posibles = posibles or [(p, s, d) for p, s, d in reserva if escritor.puede(s, **d)]
     tope = max(p for p, _, _ in posibles)
-    _, simbolo, datos = escritor.dado.choice([c for c in posibles if c[0] == tope])
+    if la_mejor:  # la pregunta del partido: la de mas datos que no se hizo hace poco
+        orden = sorted(posibles, key=lambda c: -c[0])
+        _, simbolo, datos = next((c for c in orden if c[1] not in recientes), orden[0])
+        return simbolo, datos
+    if tope >= OBLIGATORIO_DESDE:
+        mejores = [c for c in posibles if c[0] == tope]
+        frescas = [c for c in mejores if c[1] not in recientes]
+        _, simbolo, datos = escritor.dado.choice(frescas or mejores)
+        return simbolo, datos
+    pesos = [max(p, 0.2) * (PENALIDAD_RECIENTE if s in recientes else 1) for p, s, _ in posibles]
+    _, simbolo, datos = escritor.dado.choices(posibles, weights=pesos)[0]
     return simbolo, datos
 
 
@@ -237,7 +252,7 @@ def periodista_para(tema: str, usados: set, dado) -> tuple[str, str]:
 DEL_PARTIDO = ("tactica", "racha")  # siempre va al menos una pregunta sobre el partido
 
 
-def _sortear_temas(candidatos: dict, pesos: dict, escritor) -> list[str]:
+def _sortear_temas(candidatos: dict, pesos: dict, escritor, temas_recientes=()) -> list[str]:
     """Los obligatorios (lo mas jugoso) y el resto por sorteo ponderado por el
     contexto; si no salio ninguna sobre el partido, la ultima sorteada se cambia."""
     prioridad = {}
@@ -250,7 +265,9 @@ def _sortear_temas(candidatos: dict, pesos: dict, escritor) -> list[str]:
     resto = [t for t in prioridad if t not in elegidos]
     obligatorios = len(elegidos)
     while len(elegidos) < PREGUNTAS_POR_CONFERENCIA and resto:
-        tema = escritor.dado.choices(resto, weights=[pesos.get(t, 1.0) for t in resto])[0]
+        # los temas de la conferencia anterior pesan menos: que no sean siempre los mismos tres
+        tema = escritor.dado.choices(resto, weights=[pesos.get(t, 1.0) * (0.4 if t in temas_recientes else 1)
+                                                     for t in resto])[0]
         elegidos.append(tema)
         resto.remove(tema)
     del_partido = [t for t in DEL_PARTIDO if t in prioridad]
@@ -262,15 +279,34 @@ def _sortear_temas(candidatos: dict, pesos: dict, escritor) -> list[str]:
 def armar_conferencia(perfil: PlayerProfile, candidatos: dict, pesos: dict, contexto: str, cruces) -> list[str]:
     """Tres preguntas de tres periodistas distintos sobre tres temas distintos
     (y, si hay IA, reescritas sobre los mismos temas y hechos)."""
-    preguntas, usados = [], set()
+    from roleplay import database
+
+    memoria = database.get_memoria_conferencias(perfil.id) if perfil.id else {}
+    recientes = set(memoria.get("simbolos", []))
+    temas_recientes = set((memoria.get("temas") or [[]])[0])
+    preguntas, usados, simbolos = [], set(), []
     with narrador(perfil.id, "entrevista") as escritor:
-        temas = _sortear_temas(candidatos, pesos, escritor)
+        temas = _sortear_temas(candidatos, pesos, escritor, temas_recientes)
+        del_partido = next((t for t in temas if t in DEL_PARTIDO), None)  # una pregunta siempre con datos reales
         for tema in temas:
-            simbolo, datos = _elegir(candidatos[tema], escritor, candidatos[tema])
+            simbolo, datos = _elegir(candidatos[tema], escritor, candidatos[tema], recientes, la_mejor=tema == del_partido)
+            simbolos.append(simbolo)
             nombre, medio = periodista_para(tema, usados, escritor.dado)
             usados.add(nombre.split(" @")[0])
             preguntas.append(f"{nombre} ({medio}): {escritor.decir(simbolo, **datos)}")
-    return preguntas_con_ia(perfil, contexto, preguntas, cruces, temas) or preguntas
+    finales = preguntas_con_ia(perfil, contexto, preguntas, cruces, temas, memoria.get("preguntas", [])) or preguntas
+    if perfil.id:
+        database.set_memoria_conferencias(perfil.id, {
+            "simbolos": (simbolos + memoria.get("simbolos", []))[:MEMORIA_SIMBOLOS],
+            "temas": ([temas] + memoria.get("temas", []))[:MEMORIA_CONFERENCIAS],
+            "preguntas": ([p.split(": ", 1)[-1] for p in finales] + memoria.get("preguntas", []))[:MEMORIA_PREGUNTAS],
+        })
+    return finales
+
+
+MEMORIA_SIMBOLOS = 12  # las preguntas (simbolos) de las ultimas ~4 conferencias
+MEMORIA_CONFERENCIAS = 4
+MEMORIA_PREGUNTAS = 15  # los textos, para que la IA no las repita
 
 
 # la linea de cada posicion (carrera.POSICIONES): un fichaje solo le toca al jugador si es de su linea
@@ -327,7 +363,7 @@ SOLO_DESPUES_DEL_PARTIDO = {"pareja_real", "pareja_famosa", "compra_bien", "comp
 
 
 def temas_comunes(perfil: PlayerProfile, base: dict, cruces, extra: dict,
-                  previa: bool = False) -> tuple[dict, dict]:
+                  previa: bool = False, carrera=None) -> tuple[dict, dict]:
     """Los candidatos y pesos que valen igual antes y despues del partido (`previa`: sin preguntar
     por lo que paso en un partido que todavia no se jugo)."""
     candidatos = {t: [] for t in TEMAS}
@@ -355,6 +391,9 @@ def temas_comunes(perfil: PlayerProfile, base: dict, cruces, extra: dict,
         if extra.get("marca_campanas"):
             candidatos["contratos"].append((5, "tema_patrocinio_campanas", {**base, "marca": extra["marca"]}))
         pesos["contratos"] += 1.5
+    for tema, prioridad, simbolo, datos in temas_de_los_datos(perfil, carrera, base) + repregunta(perfil, base):
+        candidatos[tema].append((prioridad, simbolo, datos))
+        pesos[tema] += 0.5
     for c in cruces:
         datos = {**base, **c.datos}
         if c.tipo in TIPOS_VIDA:
@@ -365,6 +404,99 @@ def temas_comunes(perfil: PlayerProfile, base: dict, cruces, extra: dict,
             candidatos["hinchada"] += [(c.peso, f"ves_{c.tipo}", datos), (c.peso - 0.5, f"pic_{c.tipo}", datos)]
             pesos["hinchada"] += 2
     return candidatos, pesos
+
+
+def _compacto(n: int) -> str:
+    return f"{n / 1_000_000:.1f} millones".replace(".0 ", " ").replace(".", ",") if n >= 1_000_000 else f"{n // 1000} mil"
+
+
+def temas_de_los_datos(perfil: PlayerProfile, carrera, base: dict) -> list[tuple[str, float, str, dict]]:
+    """Preguntas sobre lo que la app sabe de verdad: goles de la temporada y de la carrera, asistencias,
+    racha sin perder del club, el ultimo premio, ofertas de clubes que se filtraron, las primas (firmadas o
+    la negociacion rota), un hijo o una boda recientes y los seguidores. [(tema, prioridad, simbolo, datos)]."""
+    if not perfil.id:
+        return []
+    from datetime import date
+
+    from roleplay import database
+    from roleplay.servicios import ecosistema
+    from roleplay.servicios.partida_real import temporada_de
+
+    resultado = []
+    hoy = (carrera.fecha_actual() if carrera is not None else None) or date.today()
+
+    def dias(fecha: str) -> int:
+        try:
+            return (hoy - date.fromisoformat(fecha[:10])).days
+        except (TypeError, ValueError):
+            return 9999
+
+    if carrera is not None and carrera.usuario_id is not None:
+        goles = ecosistema.goles_de_la_temporada(carrera)
+        if goles >= 5:
+            resultado.append(("racha", 3, "tac_goles_temporada", {**base, "goles_temporada": goles}))
+        asistencias = ecosistema.asistencias_de_la_temporada(carrera)
+        if asistencias >= 5:
+            resultado.append(("tactica", 2.5, "tac_asistencias", {**base, "asistencias": asistencias}))
+        goles_carrera = sum(e.goles for e in carrera.etapas)
+        if goles_carrera >= 20:
+            resultado.append(("racha", 2.5, "tac_goles_carrera", {
+                **base, "goles_carrera": goles_carrera, "partidos_carrera": sum(e.partidos for e in carrera.etapas)}))
+        equipo = carrera.equipo_usuario()
+        invicto = 0
+        for partido in reversed(carrera.partidos_de(equipo, jugados=True) if equipo is not None else []):
+            if partido.resultado_para(equipo) == "derrota":
+                break
+            invicto += 1
+        if invicto >= 5:
+            resultado.append(("tactica", 3.5, "tac_invicto", {**base, "invicto": invicto}))
+    temporada = temporada_de(hoy)
+    vitrina = [p for p in database.get_estado_prensa(perfil.id).get("vitrina", []) if p.get("temporada") == temporada]
+    if vitrina:
+        resultado.append(("racha", 4, "pic_premio_reciente", {**base, "premio": vitrina[-1]["premio"]}))
+    e = database.get_economia(perfil.id)
+    for oferta in ((e.get("ofertas") or {}).get("lista") or [])[:3]:
+        if oferta.get("tier", 3) <= 2 and dias(oferta.get("fecha", "")) <= 30:  # la de un grande se filtra
+            resultado.append(("mercado", 6, "tema_oferta_filtrada", {**base, "club_oferta": oferta["club"]}))
+            break
+    contrato = e.get("contrato") or {}
+    if contrato and dias(contrato.get("desde", "")) <= 60:
+        resultado.append(("contratos", 4, "tema_primas", base))
+    if (e.get("negociacion_rota") or {}).get("temporada") == temporada:
+        resultado.append(("contratos", 5, "tema_negociacion_rota", base))
+    amor = database.get_estado_amor(perfil.id)
+    bebe = next((h for h in reversed(amor.get("hijos") or []) if dias(h.get("nacimiento", "")) <= 90), None)
+    if bebe:
+        resultado.append(("vida_privada", 6, "pic_hijo", {**base, "bebe": bebe["nombre"]}))
+    if amor.get("estado") == "casado" and amor.get("pareja") and dias(amor.get("casados", "")) <= 90:
+        resultado.append(("vida_privada", 5, "pic_boda", {**base, "pareja": amor["pareja"]["nombre"]}))
+    seguidores = database.get_seguidores(perfil.id)
+    if seguidores >= 100_000:
+        resultado.append(("vida_privada", 1.5, "pic_seguidores", {**base, "seguidores": _compacto(seguidores)}))
+    return resultado
+
+
+# la repregunta: de que tema es lo que dijo la vez pasada (segun el eje del lexico)
+TEMA_DE_EJE = {"excusa_polemica": "arbitraje", "ego_confianza": "vida_privada", "amor_hinchada": "hinchada",
+               "humildad_equipo": "vestuario", "ambicion_foco": "racha", "promesa": "racha"}
+
+
+def repregunta(perfil: PlayerProfile, base: dict) -> list[tuple[str, float, str, dict]]:
+    """Lo que dijo en la conferencia anterior, de vuelta: "la vez pasada dijiste «...». ¿Lo sostenes?"."""
+    if not perfil.id:
+        return []
+    from roleplay import database
+
+    anterior = next((r for r in database.load_match_interviews(perfil.id) if any(r.respuestas_jugador or [])), None)
+    if anterior is None:
+        return []
+    lectura = lexico.leer(anterior.respuestas_jugador)
+    cita = lectura.promesa or lectura.cita
+    eje = "promesa" if lectura.promesa else lectura.eje
+    if not cita or len(cita) < 15 or eje not in TEMA_DE_EJE:
+        return []
+    datos = {**base, "cita_anterior": cita.strip().rstrip(".")[:140], "rival_anterior": anterior.equipo_rival or "el rival"}
+    return [(TEMA_DE_EJE[eje], 6 if eje == "promesa" else 5, f"rep_{eje}", datos)]
 
 
 def generar_entrevista(perfil: PlayerProfile, stats: MatchStats) -> list[str]:
@@ -384,7 +516,7 @@ def generar_entrevista(perfil: PlayerProfile, stats: MatchStats) -> list[str]:
     cruces = cruce.cruces(perfil.id, stats.equipo_rival, stats.rating_jugador or None, carrera)
     tabla = _tabla(carrera, stats)
     extra = contexto_de_club(perfil, carrera)
-    candidatos, pesos = temas_comunes(perfil, base, cruces, extra)
+    candidatos, pesos = temas_comunes(perfil, base, cruces, extra, carrera=carrera)
 
     candidatos["tactica"].append((1, f"tac_{resultado}" if resultado != "victoria" else "tac_victoria_sin_gol", base))
     candidatos["vestuario"] += [(1, f"ves_{resultado}", base), (0.5, "ves_generico", base)]
@@ -467,8 +599,9 @@ SISTEMA_REACCION = (
 
 
 def preguntas_con_ia(perfil: PlayerProfile, contexto: str, preguntas: list[str], cruces,
-                     temas: Optional[list[str]] = None) -> Optional[list[str]]:
-    """Las mismas preguntas (mismo periodista, mismo tema) reescritas por la IA, o None."""
+                     temas: Optional[list[str]] = None, recientes: Optional[list[str]] = None) -> Optional[list[str]]:
+    """Las mismas preguntas (mismo periodista, mismo tema) reescritas por la IA, o None. `recientes`: las de
+    las ultimas conferencias, que no tiene que repetir ni parafrasear."""
     partes = [p.split(": ", 1) for p in preguntas]
     temas = list(temas or [])
     lista = "\n".join(
@@ -480,7 +613,9 @@ def preguntas_con_ia(perfil: PlayerProfile, contexto: str, preguntas: list[str],
     datos = ia.pedir_json(
         SISTEMA_PREGUNTAS,
         f"{ia.ficha(perfil)}\n{contexto}\nLo que pasa en su vida:\n{ia.describir_cruces(cruces)}\n\n"
-        f"Las preguntas base:\n{lista}",
+        + (f"Preguntas de sus ultimas conferencias (NO las repitas ni las parafrasees, busca otro angulo):\n"
+           + "\n".join(f"- {r[:200]}" for r in (recientes or [])[:MEMORIA_PREGUNTAS]) + "\n\n" if recientes else "")
+        + f"Las preguntas base:\n{lista}",
         {"preguntas": [f"pregunta {i + 1}" for i in range(len(partes))]},
     )
     nuevas = datos.get("preguntas") if datos else None
