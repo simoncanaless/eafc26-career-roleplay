@@ -45,6 +45,8 @@ DESCRIPCIONES_HITOS = {
     "campeon": "su equipo salio campeon de la {valor}",
     "maximo_goleador": "termino la temporada como maximo goleador de la {valor}",
     "jugador_del_mes": "fue elegido jugador del mes: {valor}",
+    "premio_global": "gano el {valor} (la votacion de la temporada, con los numeros reales de su partida)",
+    "candidato_premio": "quedo en el podio del {valor}",
     "nuevo_club": "fue transferido {valor} (dato real de su partida: es su nuevo club)",
     "fin_de_temporada": "termino la {valor}. Escribi el balance de su temporada",
     "meta_cumplida": "cumplio la meta que se habia propuesto publicamente: {valor}",
@@ -54,7 +56,7 @@ DESCRIPCIONES_HITOS = {
 # Los premios y logros reales tambien mueven la reputacion (la sala de
 # prensa aplica la suma cuando guarda las noticias).
 BONOS_REPUTACION = {
-    "jugador_del_mes": 5, "campeon": 10, "maximo_goleador": 8, "meta_cumplida": 4, "meta_fallida": -4,
+    "jugador_del_mes": 5, "premio_global": 6, "candidato_premio": 2, "campeon": 10, "maximo_goleador": 8, "meta_cumplida": 4, "meta_fallida": -4,
 }
 
 
@@ -172,12 +174,12 @@ def detectar_nuevos_hitos(stats: dict, estado_prensa: dict) -> tuple[list[dict],
 TONO_HITO = {
     "hito_goles_totales": "positiva", "racha_goleadora": "positiva", "buen_momento": "positiva",
     "goles_temporada": "positiva", "lider_goleadores": "positiva", "partidazo": "positiva", "lider_liga": "positiva",
-    "campeon": "positiva", "maximo_goleador": "positiva", "jugador_del_mes": "positiva", "meta_cumplida": "positiva",
+    "premio_global": "positiva", "candidato_premio": "positiva", "campeon": "positiva", "maximo_goleador": "positiva", "jugador_del_mes": "positiva", "meta_cumplida": "positiva",
     "racha_sin_gol": "negativa", "mal_momento": "negativa", "perdio_liderato": "negativa", "meta_fallida": "negativa",
 }
 # el titular sale del hito mas importante
 PRIORIDAD_HITOS = (
-    "campeon", "maximo_goleador", "jugador_del_mes", "nuevo_club", "fin_de_temporada", "meta_cumplida", "meta_fallida",
+    "premio_global", "campeon", "maximo_goleador", "candidato_premio", "jugador_del_mes", "nuevo_club", "fin_de_temporada", "meta_cumplida", "meta_fallida",
     "partidazo", "lider_goleadores", "hito_goles_totales", "racha_goleadora", "lider_liga", "perdio_liderato",
     "goles_temporada", "buen_momento", "racha_sin_gol", "mal_momento",
 )

@@ -104,14 +104,15 @@ class TestPrensaConPremios(ayuda.PruebaConBase):
         resultado = partida_real.revisar_prensa_con_partida(
             self.perfil, [], {"mes": ENERO_DESDE_CERO}, carrera_en_febrero()
         )
-        self.assertIn({"tipo": "jugador_del_mes", "valor": "enero de 2027 en la Premier League, con 6 goles"},
-                      resultado["hitos"])
+        self.assertIn({"tipo": "jugador_del_mes", "valor": "enero de 2027 en la Premier League, con 6 goles",
+                       "liga": "Premier League"}, resultado["hitos"])
         self.assertIn("enero de 2027 en la Premier League", ayuda.texto_de_noticias(resultado["noticias"]))
         self.assertEqual(resultado["delta_reputacion"], prensa.BONOS_REPUTACION["jugador_del_mes"])
         estado = resultado["estado_prensa"]
         self.assertEqual(estado["mes"]["mes"], "2027-02")
-        self.assertEqual(estado["vitrina"], [{
-            "premio": "Jugador del mes", "detalle": "enero de 2027 en la Premier League, con 6 goles",
+        self.assertEqual(estado["vitrina"], [{  # con el nombre que tiene en su liga
+            "tipo": "jugador_del_mes", "premio": "Jugador del Mes de la Premier League",
+            "detalle": "enero de 2027 en la Premier League, con 6 goles",
             "temporada": "2026/27",
         }])
 

@@ -70,6 +70,12 @@
     "El mes de {apellido}: premio al mejor",
     "{apellido} se queda con el premio al jugador del mes"
   ],
+  "t_premio_global": ["{apellido} gana el {valor}", "El mundo a sus pies: {apellido} se lleva el {valor}", "Noche de gala: {apellido}, {valor}"],
+  "n_premio_global": ["{apellido} gano el {valor}.", "{apellido} se quedo con el {valor}, el premio a su temporada."],
+  "t_candidato_premio": ["{apellido}, en el podio de los mejores del mundo", "{apellido} roza la gloria en la gala"],
+  "n_candidato_premio": ["{apellido} quedo en el podio: {valor}.", "En la gala, {apellido} estuvo entre los mejores ({valor})."],
+  "t_gala": ["{jugador} gana el {premio}", "Noche de gala: {jugador} se lleva el {premio}", "El {premio} es para {jugador} ({equipo})"],
+  "c_mundo_gala": ["La votacion premio una temporada enorme.", "Una noche para el recuerdo en {equipo}.", "El debate sobre el mejor del mundo sigue abierto."],
   "t_nuevo_club": [
     "{apellido} tiene nuevo club",
     "Bomba en el mercado: {apellido} cambia de camiseta",

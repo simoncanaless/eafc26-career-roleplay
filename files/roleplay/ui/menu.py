@@ -236,6 +236,14 @@ class PaginaResumen(QWidget):
         self.metas.hide()
         contenido.addWidget(self.metas)
 
+        # ---- la carrera entera, club por club (de la partida) ----
+        self.carrera_completa = Tarjeta("Tu carrera en FC 26")
+        self.carrera_label = QLabel()
+        self.carrera_label.setWordWrap(True)
+        self.carrera_completa.cuerpo.addWidget(self.carrera_label)
+        self.carrera_completa.hide()
+        contenido.addWidget(self.carrera_completa)
+
         # ---- premios de verdad (jugador del mes, campeon...) ----
         self.vitrina = Tarjeta("Vitrina")
         self.vitrina_layout = QVBoxLayout()
@@ -444,6 +452,36 @@ class PaginaResumen(QWidget):
         self.trayectoria_grilla.setColumnStretch(7, 1)
         self.trayectoria.setVisible(bool(temporadas))
 
+    def _mostrar_carrera(self, etapas: list):
+        if not etapas:
+            self.carrera_completa.hide()
+            return
+        suave = estilos.TEXTO_SUAVE
+        total = {k: sum(e[k] for e in etapas) for k in ("partidos", "ganados", "empatados", "perdidos", "goles",
+                                                         "asistencias", "amarillas")}
+        semana = sum(e["premios"].get("equipo_de_la_semana", 0) for e in etapas)
+        mes = sum(e["premios"].get("jugador_del_mes", 0) for e in etapas)
+        titulos = [t for e in etapas for t in e["titulos"]]
+        lineas = [
+            f"<b>{len(etapas)} club{'es' if len(etapas) > 1 else ''}</b> · {total['partidos']} PJ "
+            f"({total['ganados']}G {total['empatados']}E {total['perdidos']}P) · <b>{total['goles']} goles</b> · "
+            f"{total['asistencias']} asistencias · {total['amarillas']} amarillas",
+            f"Titulos: <b>{len(titulos)}</b>" + (f" ({esc(', '.join(titulos))})" if titulos else "")
+            + f" · Equipo de la semana: <b>{semana}</b> · Jugador del mes: <b>{mes}</b>",
+        ]
+        for e in etapas:
+            nota = f" · nota {e['nota']:.1f}" if e.get("nota") else ""
+            lineas.append(
+                f"<span style='color:{estilos.ACENTO}'>▸</span> <b>{esc(e['club'])}</b>"
+                f"<span style='color:{suave}'> ({esc(e['liga'])})</span>: {e['partidos']} PJ, {e['goles']} goles, "
+                f"{e['asistencias']} asist.{nota}"
+                + (f" · <span style='color:{estilos.MIXTO}'>★ {esc(', '.join(e['titulos']))}</span>" if e["titulos"] else "")
+                + f"<span style='color:{suave}'> · equipo de la semana {e['premios'].get('equipo_de_la_semana', 0)}, "
+                  f"jugador del mes {e['premios'].get('jugador_del_mes', 0)}</span>"
+            )
+        self.carrera_label.setText("<br>".join(lineas))
+        self.carrera_completa.show()
+
     def _cargar_vitrina(self, estado_prensa: dict):
         limpiar_layout(self.vitrina_layout)
         premios = estado_prensa.get("vitrina", [])
@@ -485,6 +523,7 @@ class PaginaResumen(QWidget):
             self.metas.hide()  # sin partida no hay con que seguirlas
             return
         self._temporada_actual = resumen.temporada
+        self._mostrar_carrera(resumen.etapas)
         self._mostrar_metas(resumen.progreso_metas)
         perfil = self._perfil
         if resumen.club != perfil.club_actual:

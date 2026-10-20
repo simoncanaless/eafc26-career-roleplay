@@ -242,7 +242,8 @@ class PaginaVida(QWidget):
         self.negociar_btn = boton("Negociar con la directiva", primario=True)
         self.negociar_btn.clicked.connect(self.negociar_contrato)
         self.balon_btn = boton("Gane el Balon de Oro")
-        self.balon_btn.setToolTip("La partida no lo guarda: si lo ganaste en el juego, anotalo aca (una vez por temporada)")
+        self.balon_btn.setToolTip("La gala de fin de temporada lo entrega sola (con los numeros de toda la partida). "
+                                  "Si el juego te lo dio y la app no, anotalo aca (una vez por temporada)")
         self.balon_btn.clicked.connect(self.anotar_balon_de_oro)
         self.contrato.cuerpo.addLayout(fila(self.balon_btn, None, self.negociar_btn))
         self.contrato.hide()

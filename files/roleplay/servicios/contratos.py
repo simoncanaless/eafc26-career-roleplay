@@ -266,7 +266,10 @@ def cobrar(e: Optional[dict], club: str, hoy: date, goles: int, vitrina: list[di
     e = copy.deepcopy(e or {})
     cobros: list = []
     contrato = e.get("contrato")
-    if not contrato:
+    balones = e.setdefault("balones_de_oro", [])
+    if not contrato:  # sin contrato no hay prima, pero el Balon de Oro de la gala queda anotado
+        balones += [p["temporada"] for p in vitrina if p.get("tipo") == "balon_de_oro" and p.get("temporada")
+                    and p["temporada"] not in balones]
         return e, cobros
     if contrato.get("club") != club:  # se fue (o lo vendieron): el contrato con ese club termina
         e["contrato_anterior"] = contrato
@@ -301,11 +304,16 @@ def cobrar(e: Optional[dict], club: str, hoy: date, goles: int, vitrina: list[di
         clave = f"{premio.get('premio')}:{premio.get('detalle')}:{premio.get('temporada')}"
         if clave in ya or (premio.get("temporada") or "") < _temporada(date.fromisoformat(contrato["desde"])):
             continue
-        clausula = {"Jugador del mes": "mes", "Campeon": "titulo"}.get(premio.get("premio"))
+        tipo = premio.get("tipo") or {"Jugador del mes": "jugador_del_mes", "Campeon": "campeon"}.get(premio.get("premio"))
+        clausula = {"jugador_del_mes": "mes", "campeon": "titulo", "balon_de_oro": "balon_oro"}.get(tipo)
         if clausula is None:
             continue
         ya.add(clave)
-        nombre = "jugador del mes" if clausula == "mes" else "el titulo de liga"
+        if clausula == "balon_oro":
+            if premio.get("temporada") in balones:
+                continue  # ya lo anoto a mano (y ya cobro)
+            balones.append(premio.get("temporada"))
+        nombre = {"mes": "jugador del mes", "titulo": "el titulo de liga", "balon_oro": "el Balon de Oro"}[clausula]
         _cobrar(e, hoy, f"Prima por {nombre} (neto)", _semanas(e, condiciones[clausula]), cobros)
     pagado["premios"] = sorted(ya)
     return e, cobros

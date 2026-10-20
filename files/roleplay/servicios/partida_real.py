@@ -301,6 +301,10 @@ def revisar_prensa_con_partida(
     from roleplay.servicios import metas as servicio_metas  # (metas importa este modulo)
 
     premio, estado_mes = premio_del_mes(carrera, estado_prensa.get("mes"))
+    hitos_juego, estado_juego = premios_del_juego(carrera, estado_prensa.get("premios_juego"))
+    if carrera.etapas and premio is not None and (premio.es_usuario or hitos_juego):
+        premio = None  # el jugador del mes del usuario lo dice el juego, no la cuenta de la app
+    hitos_gala, gala, temporada_gala = gala_de_la_temporada(carrera, estado_prensa.get("gala"))
     terminada, en_curso = archivar_temporada(carrera, estado_prensa.get("temporada_en_curso"))
     metas = database.get_metas(perfil.id) if perfil.id is not None else []
     hitos_metas, cambios_metas = servicio_metas.evaluar_metas(carrera, metas)
@@ -308,12 +312,13 @@ def revisar_prensa_con_partida(
     traspasos = mercado.detectar_traspasos(carrera, anteriores)[: mercado.TRASPASOS_EN_LA_NOTICIA]
     propio = mercado.traspaso_del_usuario(carrera, anteriores)
     ids = {h.figura for h in hechos} | ({premio.jugador} if premio else set()) | {t.jugador for t in traspasos}
+    ids |= {r.ganador.jugador for r in gala if r.ganador}
     for c in competiciones_del_usuario(carrera):
         if carrera.competiciones[c].es_liga:
             ids |= {e.jugador for e in carrera.goleadores(c, 3)}
     nombres = nombres_de_jugadores(carrera, ids)
     hitos_reales, estado_reales = detectar_hitos_reales(carrera, estado_prensa.get("reales"))
-    hitos_reales += hitos_metas
+    hitos_reales += hitos_metas + hitos_juego + hitos_gala
     if terminada is not None:
         hitos_reales.append({"tipo": "fin_de_temporada", "valor": describir_temporada(terminada)})
     if propio is not None:
@@ -323,8 +328,11 @@ def revisar_prensa_con_partida(
     # las noticias del mundo, por importancia: el premio que gano otro, el
     # mercado y el partido destacado (solo las primeras salen)
     hechos_mundo = []
+    balon = next((r for r in gala if r.premio.id == "balon_de_oro" and r.ganador), None)
+    if balon is not None and balon.ganador.jugador != carrera.usuario_id:
+        hechos_mundo.append(gala_para_prensa(carrera, balon, nombres))
     if premio is not None and premio.es_usuario:
-        hitos_reales.append({"tipo": "jugador_del_mes", "valor": premio.detalle})
+        hitos_reales.append({"tipo": "jugador_del_mes", "valor": premio.detalle, "liga": premio.liga})
     elif premio is not None:
         hechos_mundo.append(premio_para_prensa(carrera, premio, nombres))
     if traspasos:
@@ -343,12 +351,15 @@ def revisar_prensa_con_partida(
     )
     resultado["estado_prensa"]["reales"] = estado_reales
     resultado["estado_prensa"]["mes"] = estado_mes
+    resultado["estado_prensa"]["premios_juego"] = estado_juego
+    if temporada_gala:
+        resultado["estado_prensa"]["gala"] = temporada_gala
     resultado["metas"] = cambios_metas  # la sala las guarda (database.actualizar_metas)
     vitrina = list(estado_prensa.get("vitrina", []))
     for hito in hitos_reales:
-        if hito["tipo"] in PREMIOS_DE_VITRINA:
-            vitrina.append({"premio": PREMIOS_DE_VITRINA[hito["tipo"]], "detalle": hito["valor"],
-                            "temporada": temporada_de(carrera.fecha_actual())})
+        if hito["tipo"] in PREMIOS_DE_VITRINA or hito["tipo"] == "premio_global":
+            vitrina.append({"tipo": hito.get("premio", hito["tipo"]), "premio": nombre_en_vitrina(hito),
+                            "detalle": hito["valor"], "temporada": temporada_de(carrera.fecha_actual())})
     resultado["estado_prensa"]["vitrina"] = vitrina
     if en_curso:
         resultado["estado_prensa"]["temporada_en_curso"] = en_curso
@@ -421,6 +432,7 @@ class ResumenTemporada:
     proximo: str
     temporada: str = ""
     progreso_metas: dict = field(default_factory=dict)  # id de meta -> lo que lleva (o el puesto)
+    etapas: list = field(default_factory=list)  # la carrera entera, club por club (carrera_completa)
 
 
 def resumen_temporada(metas: Optional[list] = None) -> Optional[ResumenTemporada]:
@@ -483,7 +495,79 @@ def resumen_temporada(metas: Optional[list] = None) -> Optional[ResumenTemporada
         ),
         temporada=temporada_de(hoy) if hoy else "",
         progreso_metas={m["id"]: progreso(carrera, m) for m in (metas or []) if m.get("estado") == "en_curso"},
+        etapas=carrera_completa(carrera),
     )
+
+
+def carrera_completa(carrera: Carrera) -> list[dict]:
+    """La carrera entera del usuario, club por club, como la muestra el "Resumen de carrera" del juego."""
+    titulos = sorted({t for e in carrera.etapas for t in e.titulos if t not in carrera.nombres_competiciones})
+    copas = {i: n for i, (n, _) in identificar_competiciones([{"id": i} for i in titulos]).items() if n}
+    resultado = []
+    for e in carrera.etapas:
+        resultado.append({
+            "club": carrera.equipo(e.equipo), "liga": e.liga or "", "partidos": e.partidos, "ganados": e.ganados,
+            "empatados": e.empatados, "perdidos": e.perdidos, "goles": e.goles, "asistencias": e.asistencias,
+            "amarillas": e.amarillas, "nota": e.nota, "traspaso": e.traspaso, "sueldo": e.sueldo,
+            "titulos": [carrera.nombres_competiciones.get(t) or copas.get(t) or "un titulo" for t in e.titulos],
+            "premios": dict(e.premios),
+        })
+    return resultado
+
+
+def premios_del_juego(carrera: Carrera, estado: Optional[dict] = None) -> tuple[list[dict], dict]:
+    """El jugador del mes que entrega EL JUEGO (cPet, por etapa): si el contador de su club sube, lo gano.
+    La primera vez (o al cambiar de club) solo se anota desde donde contar. Sin las tablas, nada."""
+    if not carrera.etapas:
+        return [], dict(estado or {})
+    etapa = max(carrera.etapas, key=lambda e: e.orden)
+    nuevo = {"etapa": etapa.orden, **etapa.premios}
+    estado = estado or {}
+    if estado.get("etapa") != etapa.orden:
+        return [], nuevo
+    hitos = []
+    ganados = etapa.premios.get("jugador_del_mes", 0) - estado.get("jugador_del_mes", 0)
+    hoy = carrera.fecha_actual()
+    if ganados > 0 and hoy is not None:
+        mes_pasado = (hoy.replace(day=1) - timedelta(days=1))
+        liga = etapa.liga or ""
+        hitos.append({"tipo": "jugador_del_mes", "liga": liga,
+                      "valor": f"{MESES[mes_pasado.month - 1]} de {mes_pasado.year}" + (f" en la {liga}" if liga else "")})
+    return hitos, nuevo
+
+
+def gala_de_la_temporada(carrera: Carrera, ya: Optional[str]) -> tuple[list[dict], list, Optional[str]]:
+    """Cuando termina la liga del usuario, una vez por temporada: (hitos del usuario, resultados, temporada)."""
+    from roleplay.servicios import premios
+
+    hoy = carrera.fecha_actual()
+    ligas = [c for c in competiciones_del_usuario(carrera) if carrera.competiciones[c].es_liga]
+    if hoy is None or not ligas or ya == temporada_de(hoy) or not liga_terminada(carrera, ligas[0]):
+        return [], [], ya
+    resultados = premios.gala(carrera)
+    hitos = []
+    for r in resultados:
+        puesto = r.puesto(carrera.usuario_id)
+        if puesto == 1:
+            hitos.append({"tipo": "premio_global", "premio": r.premio.id, "valor": premios.nombre_completo(r.premio)})
+        elif puesto in (2, 3) and r.premio.id in ("balon_de_oro", "the_best"):
+            hitos.append({"tipo": "candidato_premio",
+                          "valor": f"{premios.nombre_completo(r.premio)}: termino en el puesto {puesto}"})
+    return hitos, resultados, temporada_de(hoy)
+
+
+def gala_para_prensa(carrera: Carrera, resultado, nombres: dict[int, str]) -> dict:
+    from roleplay.servicios import premios
+
+    ganador = resultado.ganador
+    jugador = describir_jugador(carrera, ganador.jugador, nombres)
+    return {
+        "tipo": "gala", "premio": premios.nombre_completo(resultado.premio), "jugador": jugador,
+        "equipo": carrera.equipo(ganador.equipo),
+        "texto": (f"{jugador} ({carrera.equipo(ganador.equipo)}) gano el {premios.nombre_completo(resultado.premio)}: "
+                  f"{cantidad(ganador.goles, 'gol', 'goles')} y "
+                  f"{cantidad(ganador.asistencias, 'asistencia', 'asistencias')} en la temporada."),
+    }
 
 
 # ---- hitos reales: lo que la partida dice del jugador ----
@@ -571,6 +655,16 @@ def detectar_hitos_reales(carrera: Carrera, estado: Optional[dict] = None) -> tu
 MESES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
          "septiembre", "octubre", "noviembre", "diciembre")
 MINIMO_PARTIDOS_MES = 2  # partidos de liga del club en el mes para que haya premio
+def nombre_en_vitrina(hito: dict) -> str:
+    """El nombre del premio como se llama en su liga (Bota de Oro de la Premier, Pichichi...) o el global."""
+    from roleplay.servicios import premios
+
+    if hito["tipo"] == "premio_global":
+        return hito["valor"]
+    liga = hito.get("liga") or (hito["valor"] if hito["tipo"] in ("campeon", "maximo_goleador") else "")
+    return premios.nombre_premio(hito["tipo"], liga) if liga else PREMIOS_DE_VITRINA[hito["tipo"]]
+
+
 PREMIOS_DE_VITRINA = {
     "jugador_del_mes": "Jugador del mes",
     "campeon": "Campeon",

@@ -28,6 +28,22 @@ C_POSICION_PREFERIDA = "wZQU"  # mismos numeros que POSICIONES (Haaland 25, Vini
 T_VINCULOS, C_VINCULO_EQUIPO, C_VINCULO_POSICION = "RrqT", "mCXg", "vjla"  # equipo + 1
 T_LIGAS, C_LIGA_ID, C_LIGA_NOMBRE = "onMQ", "aQrQ", "HEQX"  # id + 1
 T_NOMBRES_EDITADOS, C_NOMBRE, C_APODO, C_APELLIDO = "nQVU", "HdeP", "xnfZ", "rREd"
+# La carrera ENTERA del usuario, por club (base de carrera; 2026-10-20, verificado con el "Resumen de carrera" del
+# juego de Simon: 42 + 36 partidos = 78, 152 + 112 goles = 264, 35 + 26 asistencias = 61, 33 + 30 ganados = 63,
+# 7 + 1 empates = 8, 2 + 5 derrotas = 7, 3 amarillas). `vojK` = el numero de etapa (1 = su primer club) y une
+# las tres tablas. Ojo: en YMgA el club y la liga vienen corridos en 1 (12 = Man Utd, que es el 11).
+T_ETAPAS = "YMgA"
+C_ETAPA, C_ETAPA_CLUB, C_ETAPA_LIGA = "vojK", "mCXg", "aQrQ"  # club + 1, liga (id + 1) + 1
+C_ETAPA_PJ, C_ETAPA_G, C_ETAPA_E, C_ETAPA_P = "nVWT", "zjtP", "EBvI", "BsgO"
+C_ETAPA_GOLES, C_ETAPA_ASIST, C_ETAPA_AMARILLAS = "MERA", "xEsZ", "isoi"
+C_ETAPA_SUELDO, C_ETAPA_TRASPASO, C_ETAPA_MEDIA, C_ETAPA_NOTA = "cmGX", "SbfX", "VvuV", "qnUa"  # nota x10
+# competiciones que jugo en cada etapa: `OvfW` la competicion, `SDel` 1 = salio campeon (el titulo del Palermo)
+T_COMPETICIONES_ETAPA, C_CE_COMPETICION, C_CE_CAMPEON = "NgwF", "OvfW", "SDel"
+# premios del juego por etapa: `Bwgx` el tipo, `ytjZ` cuantos. 0 = equipo de la semana (en el Man Utd: 15, las
+# mismas 15 filas suyas de TtHG, que es el equipo de cada semana), 1 = jugador del mes (5 en el Man Utd; la
+# pantalla del juego dice 6 con un guardado posterior). 2-4 sin confirmar: no se muestran
+T_PREMIOS_ETAPA, C_PE_TIPO, C_PE_CANTIDAD = "cPet", "Bwgx", "ytjZ"
+PREMIOS_DEL_JUEGO = {0: "equipo_de_la_semana", 1: "jugador_del_mes"}
 T_USUARIO = "mPrV"  # el jugador de la carrera: mismos campos de nombre
 # su sueldo por semana (el mismo campo en los contratos del plantel, DvsP:
 # correlaciona 0,89 con la media; Bruno Fernandes 87 -> 220.000)
@@ -149,6 +165,28 @@ class Competicion:
 
 
 @dataclass
+class Etapa:
+    """Un club en la carrera del usuario, con sus numeros de TODA la etapa (no solo esta temporada)."""
+
+    orden: int
+    equipo: int
+    liga: Optional[str]
+    partidos: int
+    ganados: int
+    empatados: int
+    perdidos: int
+    goles: int
+    asistencias: int
+    amarillas: int
+    sueldo: int
+    traspaso: int
+    nota: Optional[float]
+    titulos: list[int] = field(default_factory=list)  # competiciones que gano
+    competiciones: list[int] = field(default_factory=list)
+    premios: dict[str, int] = field(default_factory=dict)  # "equipo_de_la_semana" / "jugador_del_mes" -> cuantas
+
+
+@dataclass
 class Carrera:
     partida: str
     archivo: str
@@ -169,6 +207,8 @@ class Carrera:
     mujeres: set[int] = field(default_factory=set)
     posiciones: dict[int, int] = field(default_factory=dict)  # posicion preferida
     ids_de_nombre: dict[int, tuple[int, int, int]] = field(default_factory=dict)  # (nombre, apellido, comun)
+    etapas: list[Etapa] = field(default_factory=list)  # la carrera entera del usuario, club por club
+    nombres_competiciones: dict[int, str] = field(default_factory=dict)  # las ligas de las etapas (C<n>)
     memo: dict = field(default_factory=dict, repr=False, compare=False)  # calculos caros (diccionario de nombres)
 
     # ---- tiempo ----
@@ -341,7 +381,9 @@ def construir(datos: bytes, archivo: str = "", guardada_en: Optional[datetime] =
     if faltan:
         raise FormatoDesconocido(f"Faltan tablas en el guardado: {sorted(faltan)}")
     base_carrera = formato.base_con_tabla(datos, T_USUARIO)
-    usuario = formato.leer_tablas(datos, base_carrera, {T_USUARIO})[T_USUARIO].registros
+    tablas_carrera = formato.leer_tablas(datos, base_carrera, {T_USUARIO, T_ETAPAS, T_COMPETICIONES_ETAPA,
+                                                               T_PREMIOS_ETAPA})
+    usuario = tablas_carrera[T_USUARIO].registros
 
     equipos = {f[C_EQUIPO_ID] + 1: f[C_EQUIPO_NOMBRE] for f in mundo[T_EQUIPOS].registros}
     nombres_ligas = {f[C_LIGA_ID] + 1: f[C_LIGA_NOMBRE] for f in mundo[T_LIGAS].registros}
@@ -431,6 +473,15 @@ def construir(datos: bytes, archivo: str = "", guardada_en: Optional[datetime] =
                 vistas.add(clave)
                 actuaciones.append(Actuacion(r.jugador, r.equipo, r.competicion, _fecha(u.fecha), u.minutos, u.nota, u.goles))
 
+    etapas = _etapas(tablas_carrera, nombres_ligas)
+    nombres_competiciones = {}
+    for etapa in etapas:
+        for competicion_id in etapa.competiciones:
+            cruda = competiciones_crudas.get(competicion_id)
+            codigo = cruda.codigo if cruda else ""
+            if codigo[:1] == "C" and codigo[1:].isdigit() and nombres_ligas.get(int(codigo[1:])):
+                nombres_competiciones[competicion_id] = nombres_ligas[int(codigo[1:])]
+
     return Carrera(
         partida=partida,
         archivo=archivo,
@@ -451,4 +502,40 @@ def construir(datos: bytes, archivo: str = "", guardada_en: Optional[datetime] =
         mujeres=mujeres,
         posiciones=posiciones,
         ids_de_nombre=ids_de_nombre,
+        etapas=etapas,
+        nombres_competiciones=nombres_competiciones,
     )
+
+
+def _etapas(tablas: dict, nombres_ligas: dict[int, str]) -> list[Etapa]:
+    """La carrera entera del usuario (YMgA + NgwF + cPet, unidas por la etapa). Sin las tablas, vacia."""
+    if T_ETAPAS not in tablas:
+        return []
+    competiciones: dict[int, list] = defaultdict(list)
+    clubes: dict[int, int] = {}
+    if T_COMPETICIONES_ETAPA in tablas:
+        for f in tablas[T_COMPETICIONES_ETAPA].registros:
+            competiciones[f[C_ETAPA]].append((f[C_CE_COMPETICION], bool(f.get(C_CE_CAMPEON))))
+            clubes.setdefault(f[C_ETAPA], f[C_ETAPA_CLUB])
+    premios: dict[int, dict] = defaultdict(dict)
+    if T_PREMIOS_ETAPA in tablas:
+        for f in tablas[T_PREMIOS_ETAPA].registros:
+            tipo = PREMIOS_DEL_JUEGO.get(f.get(C_PE_TIPO))
+            if tipo:
+                premios[f[C_ETAPA]][tipo] = f.get(C_PE_CANTIDAD) or 0
+    etapas = []
+    for f in sorted(tablas[T_ETAPAS].registros, key=lambda f: f[C_ETAPA]):
+        orden = f[C_ETAPA]
+        jugadas = competiciones.get(orden, [])
+        nota = f.get(C_ETAPA_NOTA)
+        etapas.append(Etapa(
+            orden=orden, equipo=clubes.get(orden, f[C_ETAPA_CLUB] - 1),
+            liga=nombres_ligas.get(f.get(C_ETAPA_LIGA, 0) - 1), partidos=f.get(C_ETAPA_PJ) or 0,
+            ganados=f.get(C_ETAPA_G) or 0, empatados=f.get(C_ETAPA_E) or 0, perdidos=f.get(C_ETAPA_P) or 0,
+            goles=f.get(C_ETAPA_GOLES) or 0, asistencias=f.get(C_ETAPA_ASIST) or 0,
+            amarillas=f.get(C_ETAPA_AMARILLAS) or 0, sueldo=f.get(C_ETAPA_SUELDO) or 0,
+            traspaso=f.get(C_ETAPA_TRASPASO) or 0, nota=nota / 10 if nota else None,
+            titulos=[c for c, campeon in jugadas if campeon], competiciones=[c for c, _ in jugadas],
+            premios=dict(premios.get(orden, {})),
+        ))
+    return etapas
