@@ -77,6 +77,7 @@ from roleplay.ui.ajustes import DialogoAjustes, abrir_juego_o_preguntar
 from roleplay.ui.personaje import CharacterWizard
 from roleplay.ui.atajo import ATAJO_TEXTO, AtajoGlobal
 from roleplay.ui.overlay import SalaFlotante
+from roleplay.ui.overlay_completo import OverlayCompleto, configuracion as configuracion_overlay
 from roleplay.ui.vigilante import VigilantePartida, mostrar_flotante_sola, preparar_entrevista_sola
 
 NOTICIAS_EN_RESUMEN = 5
@@ -742,13 +743,38 @@ class MainMenuWindow(QMainWindow):
         layout_principal.setSpacing(0)
         layout_principal.addWidget(lateral)
         layout_principal.addWidget(fondo, 1)
-        self.setCentralWidget(contenedor)
+
+        # ---- la barra del overlay completo (solo encima del juego) ----
+        self.barra_overlay = QFrame()
+        self.barra_overlay.setObjectName("barraOverlay")
+        self.barra_overlay.setStyleSheet(
+            f"QFrame#barraOverlay {{ background-color: {estilos.ACENTO}; }} "
+            f"QFrame#barraOverlay QLabel {{ color: {estilos.FONDO}; font-weight: 700; }}"
+        )
+        barra = QHBoxLayout(self.barra_overlay)
+        barra.setContentsMargins(18, 6, 12, 6)
+        barra.addWidget(QLabel(f"EAFC 26 ROLEPLAY · OVERLAY  —  {ATAJO_TEXTO} o ESC para volver al juego"))
+        barra.addStretch()
+        self.volver_al_juego_btn = boton("Volver al juego")
+        barra.addWidget(self.volver_al_juego_btn)
+        self.barra_overlay.hide()
+        raiz = QWidget()
+        layout_raiz = QVBoxLayout(raiz)
+        layout_raiz.setContentsMargins(0, 0, 0, 0)
+        layout_raiz.setSpacing(0)
+        layout_raiz.addWidget(self.barra_overlay)
+        layout_raiz.addWidget(contenedor, 1)
+        self.setCentralWidget(raiz)
 
         # ---- sala flotante (encima del juego) y su atajo global ----
         self.sala_flotante = SalaFlotante(self.pagina_entrevistas)
+        # el overlay completo (como Overwolf): la app entera encima del juego (ui/overlay_completo.py)
+        self.overlay = OverlayCompleto(self)
+        self.overlay.cambio.connect(self._on_overlay)
+        self.volver_al_juego_btn.clicked.connect(self.overlay.cerrar)
         self.atajo = AtajoGlobal(self)
-        if self.atajo.registrar():  # HUD <-> interactivo
-            self.atajo.presionado.connect(self.sala_flotante.atajo_presionado)
+        if self.atajo.registrar():  # overlay completo (o la sala flotante, segun Ajustes)
+            self.atajo.presionado.connect(self._on_atajo)
         else:
             self.sala_flotante.click_a_traves = False  # sin atajo no habria como volver a usarla
 
@@ -761,7 +787,8 @@ class MainMenuWindow(QMainWindow):
             self.bandeja.activated.connect(self._on_bandeja_activada)
             menu = QMenu(self)
             for texto, accion in (
-                (f"Sala flotante ({ATAJO_TEXTO})", self.sala_flotante.alternar),
+                (f"Overlay ({ATAJO_TEXTO})", self.overlay.alternar),
+                ("Sala flotante", self.sala_flotante.alternar),
                 ("Abrir la app", self._traer_al_frente),
                 ("Salir", QApplication.quit),
             ):
@@ -778,6 +805,21 @@ class MainMenuWindow(QMainWindow):
         self.vigilante.iniciar()
 
         self._ir_a(pagina_inicial)
+
+    # ---- el overlay ----
+
+    def _on_atajo(self):
+        if configuracion_overlay()["modo"] == "sala":
+            self.sala_flotante.atajo_presionado()
+        else:
+            self.overlay.alternar()
+
+    def _on_overlay(self, abierto: bool):
+        self.barra_overlay.setVisible(abierto)
+        if abierto:
+            if self.sala_flotante.isVisible():
+                self.sala_flotante.hide()  # el overlay ya muestra todo
+            self._paginas[self.stack.currentIndex()][2].actualizar()
 
     def _ir_a(self, indice: int):
         if indice == self.PAGINA_ENTREVISTAS:
@@ -810,6 +852,10 @@ class MainMenuWindow(QMainWindow):
             self._traer_al_frente()
 
     def closeEvent(self, evento):
+        if self.overlay.abierto:  # cerrar la ventana en el overlay = volver al juego (la app sigue en la bandeja)
+            evento.ignore()
+            self.overlay.cerrar()
+            return
         self.atajo.liberar()
         self.sala_flotante.close()
         if self.bandeja is not None:

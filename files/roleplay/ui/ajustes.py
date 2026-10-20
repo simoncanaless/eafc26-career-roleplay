@@ -12,12 +12,14 @@ import sys
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDialog,
     QFileDialog,
     QInputDialog,
     QLineEdit,
     QMessageBox,
     QPlainTextEdit,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -28,7 +30,7 @@ from roleplay.ui.atajo import ATAJO_TEXTO
 from roleplay.servicios.accesos import crear_accesos
 from roleplay.servicios.juego import abrir_juego, elegir_a_mano, juego_configurado, olvidar_eleccion
 from roleplay.ui.comun import ejecutar_en_hilo, esc
-from roleplay.ui.componentes import Tarjeta, boton, fila, texto_suave, titulo_pagina
+from roleplay.ui.componentes import Tarjeta, boton, etiqueta_campo, fila, texto_suave, titulo_pagina
 
 FILTRO_JUEGO = "El juego o su acceso directo (*.exe *.lnk *.url)"
 
@@ -127,13 +129,30 @@ class DialogoAjustes(QDialog):
         for casilla in (self.vigilar_check, self.preguntas_check, self.flotante_check):
             casilla.toggled.connect(self._on_en_vivo)
             en_vivo.cuerpo.addWidget(casilla)
-        en_vivo.cuerpo.addWidget(
-            texto_suave(
-                f"La sala flotante se abre y se cierra con {ATAJO_TEXTO}, aunque estes jugando. "
-                "Para que se vea encima del juego, usa FC 26 en \"Ventana sin bordes\"."
-            )
-        )
         layout.addWidget(en_vivo)
+
+        from roleplay.ui import overlay_completo
+
+        overlay = Tarjeta("Overlay encima del juego")
+        overlay.cuerpo.addWidget(texto_suave(
+            f"{ATAJO_TEXTO} abre la app entera a pantalla completa encima del juego (como Overwolf): la usas al "
+            "toque, y con el mismo atajo o Esc volves al juego. Para que se vea encima, pone FC 26 en "
+            "\"Ventana sin bordes\" (en pantalla completa exclusiva ninguna app puede dibujarse encima)."
+        ))
+        configurado = overlay_completo.configuracion()
+        self.overlay_modo = QComboBox()
+        self.overlay_modo.addItem("La app entera (pantalla completa)", "completo")
+        self.overlay_modo.addItem("Solo la sala de prensa flotante (chica)", "sala")
+        self.overlay_modo.setCurrentIndex(0 if configurado["modo"] == "completo" else 1)
+        self.overlay_opacidad = QSpinBox()
+        self.overlay_opacidad.setRange(round(overlay_completo.OPACIDAD_MINIMA * 100), 100)
+        self.overlay_opacidad.setSuffix("% opaco")
+        self.overlay_opacidad.setValue(round(configurado["opacidad"] * 100))
+        self.overlay_modo.currentIndexChanged.connect(self._on_overlay)
+        self.overlay_opacidad.valueChanged.connect(self._on_overlay)
+        overlay.cuerpo.addLayout(fila(etiqueta_campo("El atajo abre"), self.overlay_modo, None,
+                                      etiqueta_campo("Transparencia"), self.overlay_opacidad))
+        layout.addWidget(overlay)
 
         motor = Tarjeta("Motor narrativo e IA hibrida")
         motor.cuerpo.addWidget(
@@ -232,6 +251,10 @@ class DialogoAjustes(QDialog):
         except ValueError as exc:
             QMessageBox.warning(self, "No se pudo elegir", str(exc))
         self._refrescar()
+
+    def _on_overlay(self, *_):
+        ajustes.guardar(overlay={"modo": self.overlay_modo.currentData(),
+                                 "opacidad": self.overlay_opacidad.value() / 100})
 
     def _on_en_vivo(self, *_):
         ajustes.guardar(en_vivo={
