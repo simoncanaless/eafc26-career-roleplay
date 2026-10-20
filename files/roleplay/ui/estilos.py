@@ -7,10 +7,13 @@ mezcle el tema del sistema con la hoja de estilos, quedan labels o campos
 invisibles. Los colores viven aca y en ningun otro lado.
 """
 
+import ctypes
+import sys
 from pathlib import Path
 
-from PySide6.QtGui import QColor, QFont, QPalette
-from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QEvent, QLibraryInfo, QObject, Qt, QTranslator
+from PySide6.QtGui import QColor, QFont, QGuiApplication, QPalette
+from PySide6.QtWidgets import QApplication, QWidget
 
 ICONOS = Path(__file__).resolve().parent / "iconos"
 
@@ -119,6 +122,80 @@ QPushButton#primario:pressed {{
 QPushButton#primario:disabled {{
     background-color: #173826;
     color: #3F6B54;
+}}
+
+/* el boton principal de los pop-ups (Aceptar, Si...): como los primarios de la app */
+QDialogButtonBox QPushButton:default {{
+    background-color: {ACENTO};
+    color: {TEXTO_SOBRE_ACENTO};
+    border: none;
+}}
+QDialogButtonBox QPushButton:default:hover {{
+    background-color: {ACENTO_HOVER};
+}}
+QDialogButtonBox QPushButton {{
+    min-width: 90px;
+}}
+QMessageBox QLabel {{
+    min-width: 280px;
+}}
+
+/* menus (la bandeja, clic derecho) */
+QMenu {{
+    background-color: {PANEL_ALTO};
+    border: 1px solid {BORDE_FUERTE};
+    border-radius: 8px;
+    padding: 6px;
+}}
+QMenu::item {{
+    padding: 7px 22px 7px 14px;
+    border-radius: 5px;
+}}
+QMenu::item:selected {{
+    background-color: {ACENTO};
+    color: {TEXTO_SOBRE_ACENTO};
+}}
+QMenu::separator {{
+    height: 1px;
+    background: {BORDE};
+    margin: 5px 8px;
+}}
+
+/* listas y tablas (el explorador de archivos, los calendarios) */
+QAbstractItemView {{
+    background-color: {CAMPO};
+    alternate-background-color: {PANEL};
+    border: 1px solid {BORDE};
+    selection-background-color: {ACENTO};
+    selection-color: {TEXTO_SOBRE_ACENTO};
+    outline: none;
+}}
+QHeaderView::section {{
+    background-color: {PANEL_ALTO};
+    color: {TEXTO_SUAVE};
+    border: none;
+    border-right: 1px solid {BORDE};
+    padding: 5px 8px;
+}}
+QToolButton {{
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 4px;
+}}
+QToolButton:hover {{
+    background-color: {PANEL_ALTO};
+    border-color: {BORDE_FUERTE};
+}}
+QCalendarWidget QWidget#qt_calendar_navigationbar {{
+    background-color: {PANEL_ALTO};
+}}
+QCalendarWidget QToolButton {{
+    color: {TEXTO};
+    font-weight: 600;
+}}
+QCalendarWidget QAbstractItemView {{
+    border: none;
 }}
 
 /* opciones que se prenden y apagan (tarjetas, figura del partido) */
@@ -354,6 +431,24 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
     height: 0px;
     background: transparent;
 }}
+QScrollBar:horizontal {{
+    background: transparent;
+    height: 10px;
+    margin: 0px 4px 2px 4px;
+}}
+QScrollBar::handle:horizontal {{
+    background: {BORDE_FUERTE};
+    border-radius: 4px;
+    min-width: 40px;
+}}
+QScrollBar::handle:horizontal:hover {{
+    background: {TEXTO_APAGADO};
+}}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal,
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{
+    width: 0px;
+    background: transparent;
+}}
 """
 
 
@@ -382,11 +477,73 @@ def _paleta() -> QPalette:
     return paleta
 
 
+def _colorref(hexa: str) -> int:
+    """'#0A0E14' -> el COLORREF de Windows (0x00BBGGRR)."""
+    color = QColor(hexa)
+    return color.red() | (color.green() << 8) | (color.blue() << 16)
+
+
+def barra_oscura(ventana: QWidget) -> None:
+    """La barra de titulo de Windows con los colores de la app (modo oscuro; en Windows 11, el color
+    exacto del fondo y del borde). Solo con la plataforma "windows": en las pruebas (offscreen) no hace nada."""
+    if sys.platform != "win32" or QGuiApplication.platformName() != "windows":
+        return
+    try:
+        hwnd = int(ventana.winId())
+        dwm = ctypes.windll.dwmapi
+        for atributo, valor in ((20, 1), (35, _colorref(FONDO)), (34, _colorref(BORDE)), (36, _colorref(TEXTO))):
+            dato = ctypes.c_int(valor)  # 20 modo oscuro, 35 color de la barra, 34 del borde, 36 del titulo
+            dwm.DwmSetWindowAttribute(hwnd, atributo, ctypes.byref(dato), ctypes.sizeof(dato))
+    except (OSError, AttributeError):
+        pass  # Windows viejo: queda la barra de siempre
+
+
+class _BarrasOscuras(QObject):
+    """Cada ventana (la app, los dialogos, los pop-ups) se abre con la barra de titulo oscura."""
+
+    def eventFilter(self, objeto, evento):
+        if evento.type() == QEvent.Type.Show and isinstance(objeto, QWidget):
+            if objeto.isWindow() and objeto.windowType() in (Qt.WindowType.Window, Qt.WindowType.Dialog):
+                barra_oscura(objeto)
+            # un calendario suelto, o el que despliega un campo de fecha
+            calendario = objeto if type(objeto).__name__ == "QCalendarWidget" else (
+                objeto.calendarWidget() if type(objeto).__name__ == "QDateEdit" and objeto.calendarPopup() else None)
+            if calendario is not None and not calendario.property("conEstilo"):
+                calendario_con_estilo(calendario)  # los fines de semana en el color de la app
+                calendario.setProperty("conEstilo", True)
+        return False
+
+
+def _en_espanol(app: QApplication) -> None:
+    """Los botones de Qt (Aceptar, Cancelar, Si, No, Siguiente...) en espanol."""
+    for nombre in ("qtbase_es", "qt_es"):
+        traductor = QTranslator(app)
+        if traductor.load(nombre, QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath)):
+            app.installTranslator(traductor)
+            return
+
+
 def aplicar_estilo(app: QApplication) -> None:
-    """Fusion + paleta oscura forzada + hoja de estilos compartida."""
+    """Fusion + paleta oscura forzada + hoja de estilos compartida; los pop-ups en espanol, el
+    explorador de archivos de Qt (el de Windows no toma el tema) y las barras de titulo oscuras."""
     app.setStyle("Fusion")
     app.setPalette(_paleta())
+    app.setAttribute(Qt.ApplicationAttribute.AA_DontUseNativeDialogs)
+    _en_espanol(app)
+    if not hasattr(app, "_barras_oscuras"):
+        app._barras_oscuras = _BarrasOscuras(app)
+        app.installEventFilter(app._barras_oscuras)
     fuente = QFont(FUENTE_TEXTO)
     fuente.setPixelSize(13)
     app.setFont(fuente)
     app.setStyleSheet(STYLESHEET)
+
+
+def calendario_con_estilo(calendario) -> None:
+    """Los fines de semana en el color de la app (Qt los pinta rojos por defecto)."""
+    from PySide6.QtGui import QTextCharFormat
+
+    formato = QTextCharFormat()
+    formato.setForeground(QColor(SECUNDARIO))
+    for dia in (Qt.DayOfWeek.Saturday, Qt.DayOfWeek.Sunday):
+        calendario.setWeekdayTextFormat(dia, formato)

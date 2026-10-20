@@ -50,6 +50,10 @@ class PreviaPartido:
     cruce: str = ""
     goleador: str = ""
     goles_goleador: int = 0
+    puesto: int = 0  # en la tabla (0 = no es de liga)
+    puesto_rival: int = 0
+    puntos: int = 0
+    puntos_rival: int = 0
 
     @property
     def resumen(self) -> str:
@@ -89,7 +93,10 @@ def previa_del_proximo(
                 f"En la tabla: {club} {p_club}° con {f_club.pts} pts, {nombre_rival} {p_rival}° con "
                 f"{f_rival.pts} pts (de {len(tabla)} equipos)."
             )
-            sueltos.update(posicion=f"{p_club}°", posicion_rival=f"{p_rival}°")
+            sueltos.update(posicion=f"{p_club}°", posicion_rival=f"{p_rival}°", puesto=p_club, puesto_rival=p_rival,
+                           puntos=f_club.pts, puntos_rival=f_rival.pts)
+            if p_rival == len(tabla):
+                sueltos["posicion_rival"] = f"{p_rival}° (ultimo)"
 
     for nombre, id_equipo, clave in ((club, equipo, "racha_club"), (nombre_rival, rival, "racha_rival")):
         racha = _racha(carrera, id_equipo)
@@ -165,8 +172,12 @@ def generar_previa(perfil: PlayerProfile, previa: PreviaPartido) -> list[str]:
     datos = {"nombre": perfil.nombre_jugador, "apellido": entrevista.apellido(perfil), "club": previa.club,
              "rival": previa.rival, **{k: v for k, v in sueltos.items() if v}}
     cruces = cruce.cruces(perfil.id, previa.rival, None, entrevista._carrera())
-    candidatos, pesos = entrevista.temas_comunes(perfil, datos, cruces, entrevista.contexto_de_club(perfil, entrevista._carrera()))
-    candidatos["tactica"] += [(1, "pv_tac_generico", datos), (5, "pv_tac_tabla", datos)]
+    candidatos, pesos = entrevista.temas_comunes(perfil, datos, cruces, entrevista.contexto_de_club(perfil, entrevista._carrera()),
+                                                 previa=True)
+    candidatos["tactica"] += [(1, "pv_tac_generico", datos)]
+    simbolo, diferencia = como_llegan(previa)
+    if simbolo:  # la pregunta de la tabla sale de la diferencia REAL (no "tan cerca" contra el ultimo)
+        candidatos["tactica"].append((5, simbolo, {**datos, "diferencia": diferencia}))
     candidatos["racha"] += [(4, "pv_tac_racha", datos), (6, "pv_tac_cruce", datos), (5, "pv_tac_goleador", datos)]
     candidatos["vestuario"].append((1, "pv_ves_generico", datos))
     for c in cruces:
@@ -176,6 +187,19 @@ def generar_previa(perfil: PlayerProfile, previa: PreviaPartido) -> list[str]:
     pesos["tactica"] += 1  # en la previa, el rival y la tabla mandan
     pesos["racha"] += 1
     return entrevista.armar_conferencia(perfil, candidatos, pesos, _contexto(previa), cruces)
+
+
+CERCA_PUESTOS, CERCA_PUNTOS = 3, 6
+
+
+def como_llegan(previa: PreviaPartido) -> tuple[str, int]:
+    """El simbolo de la pregunta de la tabla y la diferencia de puntos: parejos, favoritos o de abajo."""
+    if not previa.puesto or not previa.puesto_rival:
+        return "", 0
+    diferencia = abs(previa.puntos - previa.puntos_rival)
+    if abs(previa.puesto - previa.puesto_rival) <= CERCA_PUESTOS or diferencia <= CERCA_PUNTOS:
+        return "pv_tac_tabla", diferencia
+    return ("pv_tac_tabla_favorito" if previa.puesto < previa.puesto_rival else "pv_tac_tabla_abajo"), diferencia
 
 
 def _contexto(previa: PreviaPartido) -> str:

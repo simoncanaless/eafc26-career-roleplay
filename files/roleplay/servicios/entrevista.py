@@ -315,12 +315,21 @@ def contexto_de_club(perfil: PlayerProfile, carrera=None) -> dict:
         break
     contratos = (database.get_economia(perfil.id).get("patrocinios") or {}).get("contratos") or []
     if contratos:
-        extra["marca"] = contratos[-1]["nombre"]
+        from roleplay.servicios import patrocinios
+
+        extra["marca"] = patrocinios.nombre_de(contratos[-1])  # el nombre de hoy (no "una bebida isotonica")
+        extra["marca_campanas"] = contratos[-1].get("cumplidas", 0) > 0  # ya hizo promos: "te vimos en la campana"
     return extra
 
 
-def temas_comunes(perfil: PlayerProfile, base: dict, cruces, extra: dict) -> tuple[dict, dict]:
-    """Los candidatos y pesos que valen igual antes y despues del partido."""
+# preguntas que solo tienen sentido DESPUES del partido: en la previa van sus versiones pv_pic_*
+SOLO_DESPUES_DEL_PARTIDO = {"pareja_real", "pareja_famosa", "compra_bien", "compra_mal"}
+
+
+def temas_comunes(perfil: PlayerProfile, base: dict, cruces, extra: dict,
+                  previa: bool = False) -> tuple[dict, dict]:
+    """Los candidatos y pesos que valen igual antes y despues del partido (`previa`: sin preguntar
+    por lo que paso en un partido que todavia no se jugo)."""
     candidatos = {t: [] for t in TEMAS}
     pesos = {t: 1.0 for t in TEMAS}
     candidatos["vestuario"].append((2, "tema_vestuario", base))
@@ -343,11 +352,14 @@ def temas_comunes(perfil: PlayerProfile, base: dict, cruces, extra: dict) -> tup
         pesos["mercado"] += 3
     if extra.get("marca"):
         candidatos["contratos"].append((5, "tema_patrocinio", {**base, "marca": extra["marca"]}))
+        if extra.get("marca_campanas"):
+            candidatos["contratos"].append((5, "tema_patrocinio_campanas", {**base, "marca": extra["marca"]}))
         pesos["contratos"] += 1.5
     for c in cruces:
         datos = {**base, **c.datos}
         if c.tipo in TIPOS_VIDA:
-            candidatos["vida_privada"].append((c.peso - 0.5, f"pic_{c.tipo}", datos))
+            simbolo = f"pv_pic_{c.tipo}" if previa and c.tipo in SOLO_DESPUES_DEL_PARTIDO else f"pic_{c.tipo}"
+            candidatos["vida_privada"].append((c.peso - 0.5, simbolo, datos))
             pesos["vida_privada"] += 2
         if c.tipo in TIPOS_HINCHADA:
             candidatos["hinchada"] += [(c.peso, f"ves_{c.tipo}", datos), (c.peso - 0.5, f"pic_{c.tipo}", datos)]
@@ -437,7 +449,10 @@ SISTEMA_PREGUNTAS = (
     "tema que ya se eligio, con variedad y gancho (1 a 2 oraciones, tuteando al jugador), con el tono del "
     "periodismo deportivo actual (streaming, debates, zona mixta): directo y picante. Usa los hechos dados "
     "tal cual: nunca le atribuyas al jugador una posicion, un rol o una zona de la cancha distinta de la que "
-    "dicen los datos. Devolve las preguntas en el mismo orden, sin el nombre del periodista adelante."
+    "dicen los datos. Los numeros (la tabla, los puntos, las rachas, los goles) son SOLO los de los datos: no "
+    "digas que dos equipos estan cerca en la tabla si los datos dicen lo contrario, ni inventes resultados. Si "
+    "la conferencia es PREVIA, el partido todavia no se jugo: no preguntes por como jugo, a quien le dedico el "
+    "partido ni quien estaba mirando. Devolve las preguntas en el mismo orden, sin el nombre del periodista adelante."
 )
 SISTEMA_REACCION = (
     "Sos la prensa deportiva que cubre la conferencia de un futbolista en un juego de roleplay. "

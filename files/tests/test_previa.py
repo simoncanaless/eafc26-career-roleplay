@@ -69,7 +69,8 @@ class TestPreguntasYEvaluacion(ayuda.PruebaConBase):
         self.perfil.id = database.save_profile(self.perfil)
         self.previa = PreviaPartido("clave", "Man Utd", "Spurs", True, "Premier League", "24-01-2027",
                                     ["En la tabla: Man Utd 2° con 55 pts, Spurs 8° con 32 pts (de 20 equipos)."],
-                                    posicion="2°", posicion_rival="8°", racha_club="G G E", racha_rival="P P G")
+                                    posicion="2°", posicion_rival="8°", racha_club="G G E", racha_rival="P P G",
+                                    puesto=2, puesto_rival=8, puntos=55, puntos_rival=32)
 
     def test_tres_periodistas_con_los_datos_reales(self):
         preguntas = previa.generar_previa(self.perfil, self.previa)

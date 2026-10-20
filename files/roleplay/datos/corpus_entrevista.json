@@ -207,6 +207,18 @@
     "#a_pic# ¿te imaginas jugando en otra liga?"
   ],
 
+  "_pv_tac_tabla": "Solo si estan CERCA en la tabla (previa.py elige: cerca, favorito o abajo con la diferencia real)",
+  "pv_tac_tabla_favorito": [
+    "#a_tac# llegan {posicion} y {rival} esta {posicion_rival}, {diferencia} puntos abajo. ¿Como se evita el exceso de confianza?",
+    "#a_tac# todos los dan como favoritos: {diferencia} puntos de diferencia con {rival}. ¿Hay riesgo de relajarse?",
+    "#a_tac# {rival} viene {posicion_rival} en la tabla. ¿Es de esos partidos que solo se pueden perder?",
+    "#a_tac# con {diferencia} puntos de ventaja sobre {rival}, ¿pensas en golear o en no correr riesgos?"
+  ],
+  "pv_tac_tabla_abajo": [
+    "#a_tac# {rival} les saca {diferencia} puntos y llega {posicion_rival}. ¿Es el partido para achicar la diferencia?",
+    "#a_tac# llegan {posicion} y enfrente esta el {posicion_rival}. ¿Les toca jugar de punto?",
+    "#a_tac# {rival} esta {diferencia} puntos arriba. ¿Que hay que hacer para ganarle a un equipo asi?"
+  ],
   "pv_tac_tabla": [
     "#a_tac# {club} llega {posicion} y {rival} {posicion_rival}. ¿Es un partido de seis puntos?",
     "#a_tac# la tabla los pone {posicion} contra el {posicion_rival}. ¿Como se juega un partido asi?",
@@ -354,7 +366,13 @@
   "tema_arbitraje": ["#a_pic# ¿como ves el arbitraje en esta liga?", "#a_pic# con {rival} siempre hay roces. ¿Como se manejan esos cruces en la cancha?", "#a_pic# ¿sentis que los arbitros te protegen poco?", "#a_pic# el VAR esta otra vez en el ojo de la tormenta. ¿Que opinas?", "#a_pic# hubo jugadas polemicas en los ultimos partidos. ¿Te quedo bronca?"],
   "tema_vida": ["#a_pic# las paginas de futbol no paran de publicar sobre vos. ¿Como lo llevas?", "#a_pic# se habla mucho de tu vida fuera de la cancha. ¿Te molesta?", "#a_pic# ¿como separas la vida privada del futbol con tanta exposicion?", "#a_pic# ¿que haces para desconectarte cuando la presion aprieta?"],
   "tema_contratos": ["#a_pic# ¿como esta tu contrato con {club}? ¿Hay charlas para renovar?", "#a_pic# ¿tu agente ya se sento con la directiva?", "#a_pic# ¿te ves terminando tu carrera en {club}?", "#a_pic# ¿que le pedis a la directiva para seguir creciendo?"],
-  "tema_patrocinio": ["#a_pic# firmaste con {marca}. ¿Te cambia la vida tanta exposicion?", "#a_pic# te vemos en todas las campanas de {marca}. ¿No te distrae del futbol?", "#a_pic# hay quien dice que pensas mas en {marca} que en la pelota. ¿Que le respondes?"],
+  "tema_patrocinio_campanas": ["#a_pic# ya te vimos en la campana de {marca}. ¿No te distrae del futbol?", "#a_pic# entre los partidos y las promos de {marca}, ¿te queda tiempo para descansar?"],
+  "tema_patrocinio": ["#a_pic# firmaste con {marca}. ¿Te cambia la vida tanta exposicion?", "#a_pic# hay quien dice que pensas mas en {marca} que en la pelota. ¿Que le respondes?"],
+  "_pv_pic": "Las de vida privada de la PREVIA: las de despues del partido (estaba mirando, le dedicas el partido, el palco) no van antes de jugar",
+  "pv_pic_pareja_real": ["#a_pic# ¿va a estar {pareja} en la tribuna?", "#a_pic# ¿que tan importante es {pareja} en este momento de tu carrera?", "#a_pic# si haces un gol, ¿se lo dedicas a {pareja}?"],
+  "pv_pic_pareja_famosa": ["#a_pic# ¿va a estar {pareja} en el palco? Las camaras ya la estan buscando.", "#a_pic# ser pareja de {pareja}, {oficio}, te pone en todas las revistas. ¿Te molesta tanta atencion?", "#a_pic# ¿que opina {pareja} de tu momento futbolistico?"],
+  "pv_pic_compra_bien": ["#a_pic# te vieron llegar en el {articulo} nuevo. ¿Es la cabala para este partido?", "#a_pic# ¿el {articulo} ya tiene apodo?"],
+  "pv_pic_compra_mal": ["#a_pic# en las redes se habla mas de tu {articulo} que de este partido. ¿Te molesta?"],
   "pic_rumor_secreto": ["#a_pic# dicen que estas saliendo en secreto con alguien famoso. ¿Confirmas o desmentis?", "#a_pic# las redes estan seguras de que hay un romance escondido. ¿Que hay de cierto?", "#a_pic# te vieron salir de un hotel con alguien muy conocido. ¿Quien era?", "#a_pic# ¿hay romance secreto? La gente quiere nombres."],
   "r_cruce_rumor_secreto": ["Y la pregunta por su supuesto romance secreto quedo flotando en la sala.", "Sobre el rumor de un romance escondido, prefirio no soltar ni un nombre.", "Del romance secreto que todos comentan, ni una palabra."]
 }
