@@ -444,6 +444,157 @@ def oficializar(estado: dict, e: dict, hoy: date) -> tuple[dict, dict, Suceso]:
     return elegir(estado, e, "publico", hoy)
 
 
+# ---- interactuar con la pareja (como en BitLife o Los Sims) ----
+
+INTERACCION_CADA_DIAS = 7  # cada cosa, una vez por semana del juego
+
+
+@dataclass(frozen=True)
+class Accion:
+    id: str
+    texto: str  # el boton
+    titulo: str  # para la prensa: {pareja}
+    detalle: str  # tercera persona, despues del nombre del jugador
+    relacion: int
+    semanas: float  # cuanto cuesta, en semanas de sueldo neto
+    seguidores: float  # veces la escala de la hinchada (x3 con una pareja famosa)
+    publica: bool = False  # se publica en redes: con un romance secreto no se puede
+    solo_casados: bool = False  # y una sola vez (la foto de la boda)
+
+
+ACCIONES = {
+    "cena": Accion("cena", "Invitar a cenar", "Cena con {pareja}", "salio a cenar con {pareja}", 4, 0.05, 0.2),
+    "regalo": Accion("regalo", "Hacer un regalo", "Un regalo para {pareja}", "le hizo un regalo a {pareja}", 6, 0.3, 0.1),
+    "regalo_lujo": Accion("regalo_lujo", "Regalo de lujo", "Una joya para {pareja}", "le regalo una joya a {pareja}", 12,
+                          2.0, 0.6),
+    "escapada": Accion("escapada", "Escapada de fin de semana", "Escapada con {pareja}",
+                       "se escapo un fin de semana con {pareja}", 10, 1.0, 0.8),
+    "foto": Accion("foto", "Subir una foto juntos", "{pareja} y el, la foto del dia",
+                   "subio una foto con {pareja} y las redes explotaron", 5, 0.0, 2.5, publica=True),
+    "foto_boda": Accion("foto_boda", "Subir la boda a Instagram", "Las fotos de la boda con {pareja}",
+                        "subio las fotos de su boda con {pareja}", 5, 0.0, 4.0, publica=True, solo_casados=True),
+}
+PAREJA_ACTIVA = ("pareja", "secreto", "comprometido", "casado")
+
+
+def _sin_espera() -> bool:
+    return os.environ.get("EAFC_DM_SIN_ESPERA") == "1"  # la partida de prueba: el juego no avanza
+
+
+def _dias_desde(fecha: str, hoy: date) -> int:
+    try:
+        return (hoy - date.fromisoformat(fecha)).days
+    except (TypeError, ValueError):
+        return 0
+
+
+def puede_interactuar(estado: Optional[dict], accion_id: str, hoy: date) -> tuple[bool, str]:
+    """(si se puede, por que no)."""
+    estado = estado or {}
+    accion = ACCIONES[accion_id]
+    if estado.get("estado") not in PAREJA_ACTIVA or not estado.get("pareja"):
+        return False, "No estas en pareja."
+    if accion.publica and estado["estado"] == "secreto":
+        return False, "Es un romance secreto: para publicar juntos, primero hacelo oficial."
+    ultima = (estado.get("interacciones") or {}).get(accion_id)
+    if accion.solo_casados:
+        if estado["estado"] != "casado":
+            return False, "Primero, la boda."
+        if ultima and _dias_desde(ultima, hoy) >= 0 and ultima >= estado.get("casados", ""):
+            return False, "Ya subiste las fotos de la boda."
+    elif ultima and not _sin_espera() and _dias_desde(ultima, hoy) < INTERACCION_CADA_DIAS:
+        return False, "Ya lo hiciste esta semana del juego."
+    return True, ""
+
+
+def interactuar(estado: dict, e: dict, accion_id: str, hoy: date) -> tuple[dict, dict, Suceso]:
+    ok, motivo = puede_interactuar(estado, accion_id, hoy)
+    if not ok:
+        raise ValueError(motivo)
+    estado, e = copy.deepcopy(estado), copy.deepcopy(e or {})
+    accion = ACCIONES[accion_id]
+    costo = round(accion.semanas * e.get("sueldo", 0) * economia.NETO)
+    if costo > e.get("saldo", 0):
+        raise ValueError("No te alcanza la plata.")
+    pareja = estado["pareja"]
+    datos = {"pareja": pareja["nombre"]}
+    famosa = not pareja.get("real")
+    secreto = estado["estado"] == "secreto"
+    seguidores = 0 if secreto else accion.seguidores * (3 if famosa and accion.publica else 1)
+    suceso = Suceso(accion.titulo.format(**datos), accion.detalle.format(**datos), "positiva", seguidores,
+                    accion.relacion, -costo, fecha=hoy,
+                    clave=f"amor:{accion_id}", privado=secreto)
+    pareja["relacion"] = max(0, min(100, pareja.get("relacion", 50) + accion.relacion))
+    estado.setdefault("interacciones", {})[accion_id] = hoy.isoformat()
+    _cobrar(e, suceso)
+    _anotar(estado, suceso, {"accion": accion_id})
+    return estado, e, suceso
+
+
+def costo_de(accion_id: str, e: Optional[dict]) -> int:
+    return round(ACCIONES[accion_id].semanas * (e or {}).get("sueldo", 0) * economia.NETO)
+
+
+def puede_proponer(estado: Optional[dict], hoy: date) -> tuple[bool, str]:
+    estado = estado or {}
+    pareja = estado.get("pareja") or {}
+    if estado.get("estado") != "pareja" or not pareja:
+        return False, "Para proponer casamiento tienen que estar en pareja (y no en secreto)."
+    if _sin_espera():
+        return True, ""
+    if pareja.get("relacion", 0) < PROPONER_DESDE_RELACION:
+        return False, f"La relacion tiene que estar en {PROPONER_DESDE_RELACION} o mas."
+    if _dias_desde(pareja.get("desde", ""), hoy) < PROPONER_DESDE_DIAS:
+        return False, f"Tienen que llevar {PROPONER_DESDE_DIAS} dias juntos."
+    return True, ""
+
+
+def proponer(estado: dict, e: dict, hoy: date) -> tuple[dict, dict, Suceso]:
+    ok, motivo = puede_proponer(estado, hoy)
+    if not ok:
+        raise ValueError(motivo)
+    estado = copy.deepcopy(estado)
+    estado["decision"] = {"tipo": "proponer", "fecha": hoy.isoformat()}
+    return elegir(estado, e, "anillo", hoy)
+
+
+def puede_casarse(estado: Optional[dict], hoy: date) -> tuple[bool, str]:
+    estado = estado or {}
+    if estado.get("estado") != "comprometido":
+        return False, "Primero, el anillo."
+    if not _sin_espera() and _dias_desde(estado.get("comprometidos", ""), hoy) < BODA_DESDE_DIAS:
+        return False, f"La boda se organiza: {BODA_DESDE_DIAS} dias despues del compromiso."
+    return True, ""
+
+
+def casarse(estado: dict, e: dict, hoy: date, a_lo_grande: bool = True) -> tuple[dict, dict, Suceso]:
+    ok, motivo = puede_casarse(estado, hoy)
+    if not ok:
+        raise ValueError(motivo)
+    estado = copy.deepcopy(estado)
+    estado["decision"] = {"tipo": "boda", "fecha": hoy.isoformat()}
+    return elegir(estado, e, "grande" if a_lo_grande else "intima", hoy)
+
+
+def terminar(estado: dict, e: dict, hoy: date) -> tuple[dict, dict, Suceso]:
+    """Terminar la relacion cuando quiera (con una persona real, sin drama en la prensa)."""
+    if (estado or {}).get("estado") not in PAREJA_ACTIVA + ("conociendo",) or not estado.get("pareja"):
+        raise ValueError("No estas en pareja.")
+    estado, e = copy.deepcopy(estado), copy.deepcopy(e or {})
+    pareja = estado["pareja"]
+    divorcio = estado["estado"] == "casado"
+    real, secreto = pareja.get("real"), estado["estado"] in ("secreto", "conociendo")
+    detalle = (f"se divorcio de {pareja['nombre']}" if divorcio else f"termino su relacion con {pareja['nombre']}")
+    suceso = Suceso(("Se divorcio de {p}" if divorcio else "Termino con {p}").format(p=pareja["nombre"]), detalle,
+                    "neutral" if real else "mixta", 0 if secreto else 1.0,
+                    dinero=-round((10 if divorcio else 0) * e.get("sueldo", 0) * economia.NETO), fecha=hoy,
+                    clave="amor:fin", privado=secreto)
+    estado.update(estado="soltero", pareja=None, decision=None)
+    _cobrar(e, suceso)
+    _anotar(estado, suceso, {"fin": True})
+    return estado, e, suceso
+
+
 # ---- contestar una decision ----
 
 
@@ -461,7 +612,8 @@ def elegir(estado: dict, e: dict, opcion_id: str, hoy: date) -> tuple[dict, dict
     opcion = next(o for o in decision.opciones if o.id == opcion_id)
     pareja = estado["pareja"]
     nombre = pareja["nombre"]
-    suceso = Suceso(opcion.texto, opcion.noticia.format(pareja=nombre), opcion.tono, opcion.seguidores, opcion.relacion,
+    hecho = opcion.noticia.format(pareja=nombre)
+    suceso = Suceso(hecho[:1].upper() + hecho[1:], hecho, opcion.tono, opcion.seguidores, opcion.relacion,
                     round(opcion.semanas * e.get("sueldo", 0) * economia.NETO), opcion.reputacion, fecha=hoy,
                     clave=f"amor:{tipo}:{opcion.id}", privado=opcion.privado)
     pareja["relacion"] = max(0, min(100, pareja["relacion"] + opcion.relacion))
@@ -475,6 +627,8 @@ def elegir(estado: dict, e: dict, opcion_id: str, hoy: date) -> tuple[dict, dict
         estado["secreto_revisado"] = hoy.isoformat()
     if opcion.estado == "comprometido":
         estado["comprometidos"] = hoy.isoformat()
+    if opcion.estado == "casado":
+        estado["casados"] = hoy.isoformat()
     if opcion.estado:
         estado["estado"] = opcion.estado
     estado["decision"] = None

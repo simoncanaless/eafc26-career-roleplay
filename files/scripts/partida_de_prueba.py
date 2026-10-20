@@ -31,7 +31,7 @@ from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
 CARPETA = RAIZ / "prueba"
-NOMBRE = "Prueba Parejas"
+NOMBRE = "Tomas Ferreyra"  # (antes "Prueba Parejas": la prensa usaba "Parejas" como apellido)
 
 
 def entorno(carpeta: Path) -> dict:

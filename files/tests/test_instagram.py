@@ -55,6 +55,26 @@ class TestComentariosDelAmbiente(ConEcosistema):
         self.assertLessEqual(len(guino["texto"]), 4)  # un emoji, nada mas
         self.assertTrue(any("@actriz" in c["texto"] for c in dichos))  # "ojo que @actriz..."
 
+    def test_solo_comentan_famosos_del_deporte(self):
+        """Una cantante o una actriz sin relacion con el futbol no aparece en sus posts (si un deportista)."""
+        from roleplay.servicios import ecosistema
+
+        deportista = {"nombre": "Tenista Top", "usuario_ig": "@tenista", "categoria": "deportista", "exigencia": 10}
+        with mock.patch.object(ecosistema, "celebridades", return_value=CELEBRIDADES + [deportista]):
+            autores = {c["autor"] for semilla in range(40)
+                       for c in instagram.comentarios_del_ambiente(self.perfil, 99, {}, random.Random(semilla))}
+        self.assertIn("@tenista", autores)
+        self.assertFalse(autores & {c["usuario_ig"] for c in CELEBRIDADES})
+
+    def test_el_post_con_la_pareja(self):
+        texto = instagram.post_con_pareja(self.perfil, "Actriz Conocida")
+        self.assertIn("Actriz Conocida", texto)
+        self.assertIn("Actriz Conocida", instagram.post_con_pareja(self.perfil, "Actriz Conocida", boda=True))
+        comun = instagram.generar_reaccion_post(self.perfil, texto, 70, 100_000)
+        with mock.patch.object(instagram, "generar_reaccion_post", return_value=comun.model_copy(deep=True)):
+            famosa = instagram.reaccion_post_con_pareja(self.perfil, texto, 70, 100_000, famosa=True)
+        self.assertEqual(famosa.crecimiento_seguidores, round(abs(comun.crecimiento_seguidores) * 4))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -16,6 +16,7 @@ TASA_LIKES = 0.05  # un post normal: ~5% de los seguidores, mas con reputacion
 MAXIMO_COLEGAS = 2
 PROBABILIDAD_FAMOSA = 0.3
 MAXIMO_LIKES_VERIFICADOS = 3
+CATEGORIAS_QUE_COMENTAN = {"deportista"}  # (ademas de los futbolistas y de su pareja)
 
 
 class ComentarioIA(BaseModel):  # (el nombre quedo de cuando lo escribia la IA)
@@ -101,7 +102,9 @@ def comentarios_del_ambiente(perfil: PlayerProfile, fama: int, estado_amor: dict
             if secreto:
                 resultado.append(hincha("com_nota_famosa", famosa=pareja["usuario_ig"]))
         elif dado.random() < PROBABILIDAD_FAMOSA:
+            # solo deportistas: una cantante de jazz no tiene nada que hacer en los posts de un futbolista
             de_su_nivel = [c for c in ecosistema.celebridades() if c.get("usuario_ig")
+                           and c.get("categoria") in CATEGORIAS_QUE_COMENTAN
                            and ecosistema.numero(c.get("exigencia"), 101) <= fama]
             if de_su_nivel:
                 famosa = dado.choice(de_su_nivel)
@@ -112,6 +115,7 @@ def comentarios_del_ambiente(perfil: PlayerProfile, fama: int, estado_amor: dict
         ya = {c["autor"] for c in resultado}
         verificados = [c["usuario_ig"] for c in colegas if c["usuario_ig"] not in ya]
         verificados += [c["usuario_ig"] for c in ecosistema.celebridades() if c.get("usuario_ig")
+                        and c.get("categoria") in CATEGORIAS_QUE_COMENTAN
                         and c["usuario_ig"] not in ya and ecosistema.numero(c.get("exigencia"), 101) <= fama]
         for usuario in dado.sample(verificados, min(len(verificados), dado.randint(0, MAXIMO_LIKES_VERIFICADOS))):
             resultado.append({"autor": usuario, "texto": "le dio like ❤️ (verificado)", "tono": "like"})
@@ -158,6 +162,29 @@ def post_de_compra(perfil: PlayerProfile, objeto: str, tienda: str = "") -> str:
     personalidad = perfil.personalidad if perfil.personalidad in ("reservado", "carismatico", "polemico", "humilde") else "reservado"
     with narrador(perfil.id, "redes") as escritor:
         return escritor.decir(f"presumir_{personalidad}", **datos)
+
+
+FACTOR_PAREJA = 2.0  # un post con la pareja mueve mas que uno comun (x2 mas con una famosa)
+
+
+def post_con_pareja(perfil: PlayerProfile, pareja: str, boda: bool = False) -> str:
+    """El texto del post con su pareja (o de la boda), con su voz. Queda editable."""
+    from roleplay.servicios.hinchada import datos_de_redes
+
+    datos = {**datos_de_redes(perfil), "pareja": pareja.strip()}
+    personalidad = perfil.personalidad if perfil.personalidad in ("reservado", "carismatico", "polemico", "humilde") else "reservado"
+    with narrador(perfil.id, "redes") as escritor:
+        return escritor.decir(f"post_{'boda' if boda else 'pareja'}_{personalidad}", **datos)
+
+
+def reaccion_post_con_pareja(perfil: PlayerProfile, texto: str, reputacion: int, seguidores: int,
+                             famosa: bool) -> InstagramReaccionIA:
+    """Corre en un hilo: la reaccion de un post con la pareja (mas seguidores y likes)."""
+    reaccion = generar_reaccion_post(perfil, texto, reputacion, seguidores)
+    factor = FACTOR_PAREJA * (2 if famosa else 1)
+    reaccion.crecimiento_seguidores = round(abs(reaccion.crecimiento_seguidores) * factor)
+    reaccion.likes_estimados = round(reaccion.likes_estimados * factor)
+    return reaccion
 
 
 def sugerir_post(perfil: PlayerProfile, ultimo_partido: str = "") -> str:

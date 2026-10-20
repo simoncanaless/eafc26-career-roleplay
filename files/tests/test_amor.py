@@ -95,6 +95,59 @@ class TestConLaNoviaReal(ayuda.PruebaConBase):
         self.assertEqual((estado["estado"], estado["pareja"], suceso.tono), ("soltero", None, "neutral"))
 
 
+class TestConTuPareja(ayuda.PruebaConBase):
+    """Interactuar como en BitLife: citas, regalos, la foto, el anillo, la boda y terminar."""
+
+    def setUp(self):
+        super().setUp()
+        self.estado = amor.inicial(perfil(), HOY)
+        self.e = plata()
+
+    def test_un_regalo_cuesta_y_mejora_la_relacion_una_vez_por_semana(self):
+        saldo = self.e["saldo"]
+        estado, e, suceso = amor.interactuar(self.estado, self.e, "regalo", HOY)
+        self.assertEqual(estado["pareja"]["relacion"], amor.RELACION_INICIAL + amor.ACCIONES["regalo"].relacion)
+        self.assertEqual(e["saldo"], saldo - amor.costo_de("regalo", self.e))
+        self.assertLess(suceso.dinero, 0)
+        self.assertFalse(amor.puede_interactuar(estado, "regalo", HOY + timedelta(days=3))[0])
+        self.assertTrue(amor.puede_interactuar(estado, "regalo", HOY + timedelta(days=7))[0])
+        self.assertTrue(amor.puede_interactuar(estado, "cena", HOY)[0])  # cada cosa por su lado
+
+    def test_sin_plata_no_hay_regalo_de_lujo(self):
+        with self.assertRaises(ValueError):
+            amor.interactuar(self.estado, {**self.e, "saldo": 0}, "regalo_lujo", HOY)
+
+    def test_en_secreto_no_se_publica_la_foto(self):
+        estado = {**self.estado, "estado": "secreto"}
+        self.assertFalse(amor.puede_interactuar(estado, "foto", HOY)[0])
+        _, _, suceso = amor.interactuar(estado, self.e, "cena", HOY)
+        self.assertTrue(suceso.privado)
+
+    def test_proponer_y_casarse_cuando_se_cumple(self):
+        self.assertFalse(amor.puede_proponer(self.estado, HOY)[0])  # recien empiezan
+        estado = {**self.estado, "pareja": {**self.estado["pareja"], "relacion": 90, "desde": "2026-01-01"}}
+        estado, e, suceso = amor.proponer(estado, self.e, HOY)
+        self.assertEqual(estado["estado"], "comprometido")
+        self.assertEqual(suceso.titulo, "Le propuso casamiento a Denisse")
+        self.assertFalse(amor.puede_casarse(estado, HOY + timedelta(days=30))[0])
+        boda = HOY + timedelta(days=amor.BODA_DESDE_DIAS)
+        estado, e, suceso = amor.casarse(estado, e, boda, a_lo_grande=False)
+        self.assertEqual(estado["estado"], "casado")
+        self.assertIn("ceremonia intima", suceso.detalle)
+        self.assertTrue(amor.puede_interactuar(estado, "foto_boda", boda)[0])
+        estado, _, _ = amor.interactuar(estado, e, "foto_boda", boda)
+        self.assertFalse(amor.puede_interactuar(estado, "foto_boda", boda + timedelta(days=30))[0])  # una vez
+
+    def test_terminar_cuando_quiera(self):
+        estado, _, suceso = amor.terminar(self.estado, self.e, HOY)
+        self.assertEqual(estado["estado"], "soltero")
+        self.assertIsNone(estado["pareja"])
+        self.assertEqual(suceso.tono, "neutral")  # una persona real: sin drama
+        self.assertEqual(suceso.titulo, "Termino con Denisse")
+        with self.assertRaises(ValueError):
+            amor.terminar(estado, self.e, HOY)
+
+
 class TestConUnaFamosa(ayuda.PruebaConBase):
     def test_lo_ven_con_una_famosa_inventada_y_lo_hace_oficial(self):
         estado = amor.inicial(perfil("celebridad", ""), HOY)
@@ -174,6 +227,33 @@ class TestTarjetaEnVida(ayuda.PruebaDeInterfaz):
         noticia = database.load_noticias_prensa(self.pid)[0]
         self.assertEqual(noticia.hitos, ["amor:proponer:anillo"])
         self.assertEqual([a.tipo for a in database.load_actividad_instagram(self.pid)], ["amor"])
+
+    def test_botones_con_la_pareja(self):
+        botones = {b.property("accion_amor"): b for b in self.pagina.findChildren(type(self.pagina.oficializar_btn))
+                   if b.property("accion_amor")}
+        self.assertEqual(set(botones), {"cena", "regalo", "regalo_lujo", "escapada", "foto"})
+        botones["cena"].click()
+        ayuda.esperar_tareas()
+        self.assertEqual(database.load_noticias_prensa(self.pid)[0].hitos, ["amor:cena"])
+        self.assertIn("Canales salio a cenar con Denisse", database.load_noticias_prensa(self.pid)[0].titular)
+
+    def test_la_foto_juntos_va_a_su_instagram(self):
+        with mock.patch.object(type(self.pagina), "_texto_del_post", return_value="Con Denisse ❤️"):
+            self.pagina.interactuar_amor("foto")
+            ayuda.esperar_tareas()
+        post = database.load_instagram_posts(self.pid)[0]
+        self.assertEqual(post.texto, "Con Denisse ❤️")
+        self.assertGreater(post.crecimiento_seguidores, 0)
+
+    def test_terminar_pide_confirmacion(self):
+        with mock.patch.object(type(self.pagina), "_confirmar", return_value=False):
+            self.pagina.terminar_relacion()
+        self.assertEqual(database.get_estado_amor(self.pid)["estado"], "pareja")
+        with mock.patch.object(type(self.pagina), "_confirmar", return_value=True):
+            self.pagina.terminar_relacion()
+            ayuda.esperar_tareas()
+        self.assertEqual(database.get_estado_amor(self.pid)["estado"], "soltero")
+        self.assertIn("<b>Soltero</b>", self.pagina.amor_label.text())
 
 
 # ---- parejas del catalogo, DMs y romance secreto (datos de prueba: tests/datos_ecosistema.py) ----
@@ -273,7 +353,7 @@ class TestPartidaDePrueba(ayuda.PruebaConBase):
         with sqlite3.connect(carpeta / "career_roleplay.db") as conn:
             nombre, relacion, reputacion = conn.execute(
                 "SELECT nombre_jugador, estado_relacion, reputacion_inicial FROM player_profile").fetchone()
-        self.assertEqual((nombre, relacion, reputacion), ("Prueba Parejas", "soltero", 90))
+        self.assertEqual((nombre, relacion, reputacion), ("Tomas Ferreyra", "soltero", 90))
 
     def test_en_la_de_prueba_no_hay_espera_entre_dms(self):
         estado = {"estado": "soltero", "ultimo_dm": "2026-10-01", "decision": None}

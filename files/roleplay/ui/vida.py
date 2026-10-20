@@ -65,7 +65,7 @@ from roleplay.servicios import amor, autos, clubes, economia, ecosistema, evento
 from roleplay.servicios.hinchada import _escala
 from roleplay.servicios.economia import CATALOGO, CATEGORIAS, POR_ID, dinero
 from roleplay.ui import estilos
-from roleplay.ui.comun import ejecutar_en_hilo, esc
+from roleplay.ui.comun import ejecutar_en_hilo, esc, miles
 from roleplay.ui.configurador import Configurador, guardar_foto, miniatura, miniatura_de_archivo
 from roleplay.ui.componentes import (
     Mosaico,
@@ -198,6 +198,14 @@ class PaginaVida(QWidget):
         self.oficializar_btn.clicked.connect(self.oficializar_romance)
         self.oficializar_btn.hide()
         self.amor.cuerpo.addLayout(fila(None, self.oficializar_btn))
+        # con la pareja, como en BitLife o Los Sims: citas, regalos, fotos, el anillo, la boda o terminar
+        self.amor_acciones = QHBoxLayout()
+        self.amor_acciones.setSpacing(8)
+        self.amor.cuerpo.addLayout(self.amor_acciones)
+        self.amor_pasos = QHBoxLayout()
+        self.amor_pasos.setSpacing(8)
+        self.amor.cuerpo.addLayout(self.amor_pasos)
+        self._post_pareja = None
         self.amor_historial = QVBoxLayout()
         self.amor_historial.setSpacing(6)
         self.amor.cuerpo.addLayout(self.amor_historial)
@@ -723,8 +731,10 @@ class PaginaVida(QWidget):
         sumar_reputacion_y_seguidores(perfil.id, suceso.reputacion, seguidores, motivo=suceso.titulo)
         self.compra_hecha.emit()
         descripcion = f"{perfil.nombre_jugador} {suceso.detalle}"  # (con pareja real, amor.py ya no arma crisis)
+        apellido = (perfil.nombre_jugador.split() or [""])[-1]
+        titular = f"{apellido} {suceso.detalle}" if apellido else suceso.titulo  # lo que paso, con quien
         ejecutar_en_hilo(
-            eventos.contar, perfil, suceso.titulo, descripcion, suceso.tono, seguidores,
+            eventos.contar, perfil, titular, descripcion, suceso.tono, seguidores,
             suceso.fecha.isoformat(), suceso.clave, "amor",
             al_completar=self._on_repercusion_amor, al_fallar=self._on_repercusion_error,
         )
@@ -794,6 +804,7 @@ class PaginaVida(QWidget):
             linea.setWordWrap(True)
             self.amor_historial.addWidget(linea)
         self.oficializar_btn.setVisible(estado.get("estado") == "secreto" and bool(estado.get("pareja")))
+        self._mostrar_acciones_amor(estado)
         self._mostrar_dm(estado)
         self.amor.show()
 
@@ -866,6 +877,190 @@ class PaginaVida(QWidget):
         self.amor_eleccion.show()
         self._mostrar()
 
+    # ---- con la pareja ----
+
+    def _mostrar_acciones_amor(self, estado: dict):
+        limpiar_layout(self.amor_acciones)
+        limpiar_layout(self.amor_pasos)
+        if estado.get("estado") not in amor.PAREJA_ACTIVA + ("conociendo",) or not estado.get("pareja"):
+            return
+        e = get_economia(self.perfil.id)
+        hoy = self._hoy(e)
+        if hoy is None:
+            return
+        moneda = self._moneda()
+        if estado["estado"] != "conociendo":
+            for accion in amor.ACCIONES.values():
+                if accion.solo_casados and estado["estado"] != "casado":
+                    continue
+                puede, motivo = amor.puede_interactuar(estado, accion.id, hoy)
+                costo = amor.costo_de(accion.id, e)
+                if puede and costo > e.get("saldo", 0):
+                    puede, motivo = False, "No te alcanza la plata."
+                b = boton(accion.texto)
+                b.setProperty("accion_amor", accion.id)
+                b.setEnabled(puede)
+                b.setToolTip(motivo or (f"Relacion +{accion.relacion}" + (f" · {dinero(costo, moneda)}" if costo else "")))
+                b.clicked.connect(lambda _=False, a=accion.id: self.interactuar_amor(a))
+                self.amor_acciones.addWidget(b)
+            self.amor_acciones.addStretch()
+        if estado["estado"] == "pareja":
+            puede, motivo = amor.puede_proponer(estado, hoy)
+            b = boton("Proponer casamiento", primario=puede)
+            b.setProperty("paso_amor", "proponer")
+            b.setEnabled(puede)
+            b.setToolTip(motivo or "El anillo cuesta 6 semanas de sueldo")
+            b.clicked.connect(self.proponer_casamiento)
+            self.amor_pasos.addWidget(b)
+        elif estado["estado"] == "comprometido":
+            puede, motivo = amor.puede_casarse(estado, hoy)
+            for grande, texto in ((True, "Boda a lo grande"), (False, "Boda intima")):
+                b = boton(texto, primario=puede and grande)
+                b.setProperty("paso_amor", "boda_grande" if grande else "boda_intima")
+                b.setEnabled(puede)
+                b.setToolTip(motivo or ("25 semanas de sueldo, y todo el mundo se entera" if grande else
+                                        "5 semanas de sueldo, solo la familia"))
+                b.clicked.connect(lambda _=False, g=grande: self.casarse(g))
+                self.amor_pasos.addWidget(b)
+        self.amor_pasos.addStretch()
+        fin = boton("Divorciarse" if estado["estado"] == "casado" else "Terminar la relacion")
+        fin.setProperty("paso_amor", "terminar")
+        fin.clicked.connect(self.terminar_relacion)
+        self.amor_pasos.addWidget(fin)
+
+    def _aplicar_amor(self, perfil, estado: dict, e: dict, suceso) -> int:
+        set_estado_amor(perfil.id, estado)
+        set_economia(perfil.id, e)
+        return self._contar_amor(perfil, suceso, estado)
+
+    def _resultado_amor(self, suceso, seguidores: int):
+        partes = [f"<b>{esc(suceso.titulo)}</b>"]
+        if suceso.relacion:
+            partes.append(f"relacion {_con_signo(suceso.relacion)}")
+        if seguidores:
+            partes.append(f"{_con_signo(seguidores)} seguidores")
+        if suceso.dinero:
+            partes.append(dinero(suceso.dinero, self._moneda()))
+        self.amor_eleccion.setText(" · ".join(partes))
+        self.amor_eleccion.show()
+        self._mostrar()
+
+    def _texto_del_post(self, sugerido: str) -> Optional[str]:
+        """El post queda editable antes de publicarse (None: cancelado)."""
+        from PySide6.QtWidgets import QInputDialog
+
+        texto, ok = QInputDialog.getMultiLineText(self, "Publicar en Instagram", "Tu post:", sugerido)
+        return texto.strip() if ok and texto.strip() else None
+
+    def _confirmar(self, titulo: str, texto: str) -> bool:
+        return QMessageBox.question(self, titulo, texto) == QMessageBox.StandardButton.Yes
+
+    def interactuar_amor(self, accion_id: str):
+        perfil = self.perfil
+        if perfil is None:
+            return
+        estado, e = get_estado_amor(perfil.id), get_economia(perfil.id)
+        hoy = self._hoy(e)
+        if hoy is None:
+            return
+        accion = amor.ACCIONES[accion_id]
+        texto = ""
+        if accion.publica:
+            from roleplay.servicios import instagram
+
+            texto = self._texto_del_post(instagram.post_con_pareja(perfil, estado["pareja"]["nombre"],
+                                                                    boda=accion.solo_casados))
+            if texto is None:
+                return
+        try:
+            estado, e, suceso = amor.interactuar(estado, e, accion_id, hoy)
+        except ValueError as exc:
+            QMessageBox.information(self, "Ahora no", str(exc))
+            return
+        if not accion.publica:
+            self._resultado_amor(suceso, self._aplicar_amor(perfil, estado, e, suceso))
+            return
+        # la foto: un post de verdad en su Instagram (los comentarios y los seguidores, de la reaccion)
+        set_estado_amor(perfil.id, estado)
+        set_economia(perfil.id, e)
+        from roleplay.servicios import instagram
+
+        self._post_pareja = (perfil, texto, suceso)
+        ejecutar_en_hilo(
+            instagram.reaccion_post_con_pareja, perfil, texto, get_reputacion_actual(perfil.id),
+            get_seguidores(perfil.id), not estado["pareja"].get("real"),
+            al_completar=self._on_post_pareja, al_fallar=self._on_repercusion_error,
+        )
+        self.amor_eleccion.setText(f"<b>{esc(suceso.titulo)}</b> · publicando...")
+        self.amor_eleccion.show()
+        self._mostrar()
+
+    def _on_post_pareja(self, reaccion):
+        from roleplay.database import save_instagram_post, sumar_seguidores
+        from roleplay.models import InstagramPost
+
+        if self._post_pareja is None:
+            return
+        perfil, texto, suceso = self._post_pareja
+        self._post_pareja = None
+        sumar_seguidores(perfil.id, reaccion.crecimiento_seguidores)
+        save_instagram_post(InstagramPost(
+            player_id=perfil.id, texto=texto, likes=reaccion.likes_estimados,
+            crecimiento_seguidores=reaccion.crecimiento_seguidores,
+            comentarios=[c.model_dump() for c in reaccion.comentarios],
+        ))
+        self.compra_hecha.emit()
+        if self.perfil is not None and self.perfil.id == perfil.id:
+            self.amor_eleccion.setText(
+                f"<b>{esc(suceso.titulo)}</b> · {miles(reaccion.likes_estimados)} likes · "
+                f"{_con_signo(reaccion.crecimiento_seguidores)} seguidores"
+                f"<br><span style='color:{estilos.TEXTO_SUAVE}'>Esta en tu Instagram, con los comentarios.</span>")
+            self.amor_eleccion.show()
+
+    def proponer_casamiento(self):
+        perfil = self.perfil
+        if perfil is None:
+            return
+        e = get_economia(perfil.id)
+        hoy = self._hoy(e)
+        try:
+            estado, e, suceso = amor.proponer(get_estado_amor(perfil.id), e, hoy)
+        except (ValueError, TypeError) as exc:
+            QMessageBox.information(self, "Todavia no", str(exc))
+            return
+        self._resultado_amor(suceso, self._aplicar_amor(perfil, estado, e, suceso))
+
+    def casarse(self, a_lo_grande: bool = True):
+        perfil = self.perfil
+        if perfil is None:
+            return
+        e = get_economia(perfil.id)
+        hoy = self._hoy(e)
+        try:
+            estado, e, suceso = amor.casarse(get_estado_amor(perfil.id), e, hoy, a_lo_grande)
+        except (ValueError, TypeError) as exc:
+            QMessageBox.information(self, "Todavia no", str(exc))
+            return
+        self._resultado_amor(suceso, self._aplicar_amor(perfil, estado, e, suceso))
+
+    def terminar_relacion(self):
+        perfil = self.perfil
+        estado = get_estado_amor(perfil.id) if perfil is not None else {}
+        pareja = (estado or {}).get("pareja")
+        if not pareja:
+            return
+        divorcio = estado.get("estado") == "casado"
+        pregunta = (f"Seguro que te queres divorciar de {pareja['nombre']}? Te cuesta 10 semanas de sueldo."
+                    if divorcio else f"Seguro que queres terminar con {pareja['nombre']}?")
+        if not self._confirmar("Divorciarse" if divorcio else "Terminar la relacion", pregunta):
+            return
+        e = get_economia(perfil.id)
+        hoy = self._hoy(e)
+        if hoy is None:
+            return
+        estado, e, suceso = amor.terminar(estado, e, hoy)
+        self._resultado_amor(suceso, self._aplicar_amor(perfil, estado, e, suceso))
+
     def mandar_dm(self, indice: int):
         perfil = self.perfil
         if perfil is None or indice >= len(self._resultados_dm):
@@ -902,7 +1097,7 @@ class PaginaVida(QWidget):
         set_estado_amor(perfil.id, estado)
         set_economia(perfil.id, e)
         seguidores = self._contar_amor(perfil, suceso, estado)
-        partes = [f"<b>Elegiste: {esc(suceso.titulo)}</b>"]
+        partes = [f"<b>{esc(suceso.titulo)}</b>"]
         if seguidores:
             partes.append(f"{_con_signo(seguidores)} seguidores")
         if suceso.dinero:
