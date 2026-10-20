@@ -4,6 +4,8 @@ los decide el codigo: el evaluador lexico lee el post (servicios/lexico.py).
 Los comentarios: la IA hibrida (servicios/ia.py) si esta, contestando al
 post textual; si no, el motor narrativo (roleplay/datos/corpus_redes.json)."""
 
+import random
+
 from pydantic import BaseModel
 
 from roleplay.models import PlayerProfile
@@ -11,6 +13,8 @@ from roleplay.servicios import ia, lexico
 from roleplay.servicios.narrador import narrador
 
 TASA_LIKES = 0.05  # un post normal: ~5% de los seguidores, mas con reputacion
+MAXIMO_COLEGAS = 2
+PROBABILIDAD_FAMOSA = 0.3
 
 
 class ComentarioIA(BaseModel):  # (el nombre quedo de cuando lo escribia la IA)
@@ -50,11 +54,59 @@ def generar_reaccion_post(
         else:
             dichos += comentarios(escritor, "post", 1, datos)[:1]
     dichos = _comentarios_con_ia(perfil, texto_post, crecimiento, polemico) or dichos
+    if perfil.id:
+        from roleplay import database
+        from roleplay.servicios import ecosistema
+
+        fama = ecosistema.calcular_fama_jugador(perfil.id)["fama"]
+        dichos += comentarios_del_ambiente(perfil, fama, database.get_estado_amor(perfil.id), random.Random())
     return InstagramReaccionIA(
         comentarios=[ComentarioIA(**c) for c in dichos],
         likes_estimados=max(0, round(seguidores_actuales * tasa)),
         crecimiento_seguidores=crecimiento,
     )
+
+
+def comentarios_del_ambiente(perfil: PlayerProfile, fama: int, estado_amor: dict, dado: random.Random) -> list[dict]:
+    """Lo que dejan en sus posts los futbolistas y las celebridades del catalogo
+    de Simon (servicios/ecosistema.py): los colegas, si su fama supera la que
+    piden para comentar; su pareja (un guino si es secreto: los hinchas lo
+    notan); o alguna celebridad de su nivel. El texto, del corpus."""
+    from roleplay.servicios import ecosistema
+    from roleplay.servicios.hinchada import datos_de_redes
+
+    datos = datos_de_redes(perfil)
+    resultado = []
+    with narrador(perfil.id, "redes") as escritor:
+        def hincha(simbolo: str, **extra) -> dict:
+            return {"autor": escritor.elegir("autor_hincha", **datos, n=dado.randint(7, 99)),
+                    "texto": escritor.decir(simbolo, **datos, **extra), "tono": "gracioso"}
+
+        colegas = [c for c in ecosistema.futbolistas_ig() if c.get("usuario_ig")
+                   and ecosistema.numero(c.get("fama_minima_para_comentar"), 101) <= fama]
+        elegidos = dado.sample(colegas, min(len(colegas), MAXIMO_COLEGAS, dado.randint(0, 1 + fama // 40)))
+        for colega in elegidos:
+            resultado.append({"autor": colega["usuario_ig"], "texto": escritor.decir("com_colega"), "tono": "positivo"})
+        if elegidos and dado.random() < 0.5:
+            resultado.append(hincha("com_nota_colega", colega=elegidos[0]["usuario_ig"]))
+
+        estado = (estado_amor or {}).get("estado", "soltero")
+        pareja = (estado_amor or {}).get("pareja") or {}
+        if pareja.get("usuario_ig") and estado in ("secreto", "pareja", "comprometido", "casado"):
+            secreto = estado == "secreto"
+            resultado.append({"autor": pareja["usuario_ig"],
+                              "texto": escritor.decir("com_pareja_secreta" if secreto else "com_pareja"),
+                              "tono": "positivo"})
+            if secreto:
+                resultado.append(hincha("com_nota_famosa", famosa=pareja["usuario_ig"]))
+        elif dado.random() < PROBABILIDAD_FAMOSA:
+            de_su_nivel = [c for c in ecosistema.celebridades() if c.get("usuario_ig")
+                           and ecosistema.numero(c.get("exigencia"), 101) <= fama]
+            if de_su_nivel:
+                famosa = dado.choice(de_su_nivel)
+                resultado.append({"autor": famosa["usuario_ig"], "texto": escritor.decir("com_famosa"), "tono": "positivo"})
+                resultado.append(hincha("com_nota_famosa", famosa=famosa["usuario_ig"]))
+    return resultado
 
 
 SISTEMA_COMENTARIOS = (

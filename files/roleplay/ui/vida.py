@@ -13,16 +13,27 @@ el juego; lo que provocan pasa cuando llegan (acreditar_con los entrega).
 
 Con los dias del juego tambien pasan cosas sin que uno las compre: los
 eventos inesperados (servicios/eventos.py), en la tarjeta "Lo que te paso",
-y la vida sentimental (servicios/amor.py), con sus decisiones.
+y la vida sentimental (servicios/amor.py), con sus decisiones: si esta
+soltero, puede buscar en el catalogo de famosas de Simon y mandar un DM
+(segun su fama: servicios/ecosistema.py), y un romance puede ser secreto.
+
+Ademas: los patrocinios (servicios/patrocinios.py: ofertas de marcas que
+pagan por semana con el sueldo) y el marketplace de autos de culto
+(servicios/marketplace.py, categoria "Usados y de culto" de la tienda).
 """
+
+from datetime import date
+from typing import Optional
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
+    QComboBox,
     QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMessageBox,
     QProgressBar,
     QVBoxLayout,
@@ -45,12 +56,12 @@ from roleplay.database import (
     set_estado_eventos,
     sumar_reputacion_y_seguidores,
 )
-from roleplay.servicios import amor, autos, clubes, economia, eventos
+from roleplay.servicios import amor, autos, clubes, economia, ecosistema, eventos, marketplace, patrocinios
 from roleplay.servicios.hinchada import _escala
 from roleplay.servicios.economia import CATALOGO, CATEGORIAS, POR_ID, dinero
 from roleplay.ui import estilos
 from roleplay.ui.comun import ejecutar_en_hilo, esc
-from roleplay.ui.configurador import Configurador, guardar_foto, miniatura
+from roleplay.ui.configurador import Configurador, guardar_foto, miniatura, miniatura_de_archivo
 from roleplay.ui.componentes import (
     Mosaico,
     Tarjeta,
@@ -65,7 +76,20 @@ from roleplay.ui.componentes import (
 )
 
 MOVIMIENTOS_VISIBLES = 12
+
+
+def _fila_ancha(texto: QLabel, *derecha, foto=None) -> QHBoxLayout:
+    """[foto] texto (ocupa todo el ancho, si no se parte en una columna angosta) [botones]."""
+    linea = QHBoxLayout()
+    linea.setSpacing(12)
+    if foto is not None:
+        linea.addWidget(foto)
+    linea.addWidget(texto, 1)
+    for widget in derecha:
+        linea.addWidget(widget)
+    return linea
 EVENTOS_VISIBLES = 6
+RESULTADOS_DM = 15
 
 
 def _con_signo(numero: int) -> str:
@@ -86,6 +110,8 @@ class PaginaVida(QWidget):
         self._categoria = "casa"
         self._ultima_compra = None  # la repercusion que llega tarde de otra compra no pisa la tarjeta
         self._botones_categoria = {}
+        self._ofertas_nicho: dict[str, dict] = {}
+        self._resultados_dm: list[dict] = []
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 34, 40, 34)
@@ -166,8 +192,33 @@ class PaginaVida(QWidget):
         self.amor_historial = QVBoxLayout()
         self.amor_historial.setSpacing(6)
         self.amor.cuerpo.addLayout(self.amor_historial)
+        # soltero: buscar en el catalogo de famosas y mandar un DM
+        self.dm = QWidget()
+        dm = QVBoxLayout(self.dm)
+        dm.setContentsMargins(0, 6, 0, 0)
+        dm.setSpacing(8)
+        self.dm_fama_label = texto_suave()
+        dm.addWidget(self.dm_fama_label)
+        self.dm_buscar_edit = QLineEdit()
+        self.dm_buscar_edit.setPlaceholderText("Buscar por nombre o @usuario")
+        self.dm_buscar_edit.returnPressed.connect(self.buscar_famosas)
+        self.dm_categoria = QComboBox()
+        buscar = boton("Buscar")
+        buscar.clicked.connect(self.buscar_famosas)
+        dm.addLayout(fila(self.dm_buscar_edit, self.dm_categoria, buscar, espaciado=8))
+        self.dm_resultados = QVBoxLayout()
+        self.dm_resultados.setSpacing(6)
+        dm.addLayout(self.dm_resultados)
+        self.dm.hide()
+        self.amor.cuerpo.addWidget(self.dm)
         self.amor.hide()
         contenido.addWidget(self.amor)
+
+        self.marcas = Tarjeta("Patrocinios")
+        self.marcas_layout = QVBoxLayout()
+        self.marcas_layout.setSpacing(8)
+        self.marcas.cuerpo.addLayout(self.marcas_layout)
+        contenido.addWidget(self.marcas)
 
         tienda = Tarjeta("Tienda")
         self._grupo = QButtonGroup(self)
@@ -254,6 +305,7 @@ class PaginaVida(QWidget):
         if self.perfil is not None and hoy is not None and carrera.sueldo_usuario:
             self._revisar_eventos(carrera, hoy)
             self._revisar_amor(carrera, hoy)
+            self._revisar_patrocinios(hoy)
         self._mostrar()
 
     # ---- dibujo ----
@@ -288,6 +340,7 @@ class PaginaVida(QWidget):
         self.mosaico_patrimonio.poner(dinero(economia.patrimonio(e), moneda))
         self._mostrar_eventos()
         self._mostrar_amor()
+        self._mostrar_patrocinios(e)
         self._mostrar_tienda(e)
         self._mostrar_pedidos(e)
         self._mostrar_posesiones(e)
@@ -320,6 +373,9 @@ class PaginaVida(QWidget):
         if self._categoria == "auto":
             self._mostrar_concesionario()
             return
+        if self._categoria == "usados":
+            self._mostrar_marketplace(e)
+            return
         for articulo in CATALOGO:
             if articulo.categoria == self._categoria:
                 self.tienda_layout.addLayout(self._linea_articulo(articulo, e, "Comprar"))
@@ -341,6 +397,121 @@ class PaginaVida(QWidget):
                 configurar.setProperty("modelo", modelo.id)
                 configurar.clicked.connect(lambda _=False, i=modelo.id: self._on_configurar(i))
                 self.tienda_layout.addLayout(fila(textos, None, configurar))
+
+    def _hoy(self, e: Optional[dict] = None):
+        if self._carrera is not None and self._carrera.fecha_actual() is not None:
+            return self._carrera.fecha_actual()
+        hasta = (e or {}).get("hasta")
+        return date.fromisoformat(hasta) if hasta else None
+
+    def _mostrar_marketplace(self, e: dict):
+        hoy = self._hoy(e)
+        ofertas = marketplace.ofertas(self.perfil.id, hoy) if hoy is not None and self.perfil is not None else []
+        self._ofertas_nicho = {o["id"]: o for o in ofertas}
+        if not ofertas:
+            self.tienda_layout.addWidget(texto_suave(
+                "Sin el catalogo de autos de culto (roleplay/datos/autos_marketplace.json) no hay marketplace."
+            ))
+            return
+        moneda = self._moneda()
+        self.tienda_layout.addWidget(texto_suave(
+            "Usados y autos de culto: cambian cada semana del juego, se compran al instante y los de coleccion "
+            "se valorizan con el tiempo."
+        ))
+        for oferta in ofertas:
+            articulo = marketplace.articulo(oferta)
+            nota = f" · {oferta['nota']}" if oferta.get("nota") else ""
+            textos = QLabel(
+                f"<b>{esc(articulo.nombre)}</b> · {dinero(oferta['precio'], moneda)}<br>"
+                f"<span style='color:{estilos.TEXTO_SUAVE}'>{esc(oferta['categoria'])} · rareza {esc(oferta['rareza'])}"
+                f" · {esc(articulo.detalle)}{esc(nota)}</span>"
+            )
+            textos.setWordWrap(True)
+            ya = economia.tiene(e, articulo.id)
+            comprar = boton("Ya lo tenes" if ya else "Comprar", primario=not ya)
+            comprar.setProperty("nicho", oferta["id"])
+            comprar.setEnabled(not ya and e.get("saldo", 0) >= oferta["precio"])
+            comprar.clicked.connect(lambda _=False, i=oferta["id"]: self._on_comprar_nicho(i))
+            foto = miniatura_de_archivo(marketplace.ruta_imagen(oferta.get("imagen", "")))
+            self.tienda_layout.addLayout(_fila_ancha(textos, comprar, foto=foto))
+
+    def _on_comprar_nicho(self, oferta_id: str):
+        perfil, carrera = self.perfil, self._carrera
+        oferta = self._ofertas_nicho.get(oferta_id)
+        if perfil is None or carrera is None or carrera.fecha_actual() is None or oferta is None:
+            return
+        articulo = marketplace.articulo(oferta)
+        try:
+            nueva = economia.comprar(get_economia(perfil.id), articulo, carrera.fecha_actual(), marketplace.extra_de(oferta))
+        except economia.SinPlata as exc:
+            QMessageBox.information(self, "No te alcanza", str(exc))
+            return
+        set_economia(perfil.id, nueva)
+        self._aplicar_y_repercutir(perfil, carrera, articulo, "Compraste")
+        self._mostrar()
+
+    # ---- patrocinios ----
+
+    def _revisar_patrocinios(self, hoy):
+        perfil = self.perfil
+        escandalo = patrocinios.hubo_escandalo(get_estado_eventos(perfil.id), hoy)
+        e, novedades = patrocinios.revisar(get_economia(perfil.id), perfil.id, get_seguidores(perfil.id),
+                                           get_reputacion_actual(perfil.id), hoy, escandalo)
+        set_economia(perfil.id, e)
+        for novedad in novedades:
+            self._contar_marca(perfil, novedad, hoy)
+
+    def _contar_marca(self, perfil, novedad, hoy):
+        ejecutar_en_hilo(
+            eventos.contar, perfil, novedad.titulo, f"{perfil.nombre_jugador} {novedad.detalle}", novedad.tono, 0,
+            hoy.isoformat(), novedad.clave, "patrocinio",
+            al_completar=self._on_repercusion_amor, al_fallar=self._on_repercusion_error,
+        )
+
+    def _mostrar_patrocinios(self, e: dict):
+        limpiar_layout(self.marcas_layout)
+        moneda = self._moneda()
+        estado = e.get("patrocinios") or {}
+        for contrato in estado.get("contratos", []):
+            hasta = contrato["hasta"]
+            self.marcas_layout.addWidget(QLabel(
+                f"<b>{esc(contrato['nombre'])}</b> <span style='color:{estilos.TEXTO_SUAVE}'>· {esc(contrato['rubro'])}"
+                f" · {dinero(contrato['semanal'], moneda)} por semana (bruto) · hasta el "
+                f"{hasta[8:10]}/{hasta[5:7]}/{hasta[:4]}</span>"
+            ))
+        oferta = estado.get("oferta")
+        if oferta:
+            texto = QLabel(
+                f"<span style='color:{estilos.ACENTO}'>Te ofrecen un contrato</span><br><b>{esc(oferta['nombre'])}</b>"
+                f" ({esc(oferta['rubro'])}): {dinero(oferta['semanal'], moneda)} por semana, por "
+                f"{patrocinios.DURACION_DIAS // 365} anios"
+            )
+            texto.setWordWrap(True)
+            firmar = boton("Firmar", primario=True)
+            firmar.setProperty("patrocinio", "firmar")
+            firmar.clicked.connect(lambda: self.responder_patrocinio(True))
+            rechazar = boton("Rechazar")
+            rechazar.setProperty("patrocinio", "rechazar")
+            rechazar.clicked.connect(lambda: self.responder_patrocinio(False))
+            self.marcas_layout.addLayout(_fila_ancha(texto, firmar, rechazar))
+        if not estado.get("contratos") and not oferta:
+            self.marcas_layout.addWidget(texto_suave(
+                "Con mas seguidores y reputacion, las marcas te van a buscar. Un escandalo puede hacer que te dejen."
+            ))
+
+    def responder_patrocinio(self, aceptar: bool):
+        perfil = self.perfil
+        if perfil is None:
+            return
+        e = get_economia(perfil.id)
+        hoy = self._hoy(e)
+        if hoy is None:
+            return
+        e, novedad = patrocinios.responder(e, aceptar, hoy)
+        set_economia(perfil.id, e)
+        if novedad is not None:
+            self._contar_marca(perfil, novedad, hoy)
+        self._mostrar()
 
     def _mostrar_pedidos(self, e: dict):
         limpiar_layout(self.pedidos_layout)
@@ -375,10 +546,11 @@ class PaginaVida(QWidget):
         limpiar_layout(self.posesiones_layout)
         moneda = self._moneda()
         posesiones = e.get("posesiones", [])
+        hoy = self._hoy(e)
         for posesion in posesiones:
             articulo = economia.articulo_de_posesion(posesion)
             nombre = articulo.nombre if articulo else posesion["articulo"]
-            vender_btn = boton(f"Vender por {dinero(posesion['precio'] * economia.VENTA, moneda)}")
+            vender_btn = boton(f"Vender por {dinero(economia.valor_de_venta(posesion, hoy), moneda)}")
             vender_btn.clicked.connect(lambda _=False, i=posesion["id"]: self._on_vender(i))
             desde = posesion.get("desde", "")
             detalle = f"{esc(articulo.detalle)}<br>" if articulo is not None and articulo.detalle else ""
@@ -388,6 +560,10 @@ class PaginaVida(QWidget):
             partes = [texto, None, vender_btn]
             if posesion.get("config"):  # los autos del concesionario, con su foto (o su dibujo)
                 partes.insert(0, miniatura(autos.Configuracion.desde_dict(posesion["config"]), posesion.get("foto", "")))
+            elif posesion.get("imagen"):  # los del marketplace, con la foto del catalogo
+                foto = miniatura_de_archivo(marketplace.ruta_imagen(posesion["imagen"]))
+                if foto is not None:
+                    partes.insert(0, foto)
             self.posesiones_layout.addLayout(fila(*partes))
         if not posesiones:
             self.posesiones_layout.addWidget(texto_suave("Todavia no te compraste nada."))
@@ -473,7 +649,8 @@ class PaginaVida(QWidget):
     def _revisar_amor(self, carrera, hoy):
         perfil = self.perfil
         antes = get_estado_amor(perfil.id)
-        estado, e, sucesos = amor.revisar(perfil, antes, get_economia(perfil.id), hoy)
+        fama = ecosistema.calcular_fama_jugador(perfil.id, carrera)["fama"]
+        estado, e, sucesos = amor.revisar(perfil, antes, get_economia(perfil.id), hoy, fama)
         set_estado_amor(perfil.id, estado)
         set_economia(perfil.id, e)
         for suceso in sucesos:
@@ -484,6 +661,8 @@ class PaginaVida(QWidget):
             self.decision_pendiente.emit(decision.titulo.format(pareja=pareja))
 
     def _contar_amor(self, perfil, suceso, estado: dict) -> int:
+        if suceso.privado:  # un secreto (o un DM sin respuesta): queda en su historial, sin prensa
+            return 0
         seguidores = round(_escala(get_seguidores(perfil.id), get_reputacion_actual(perfil.id)) * suceso.seguidores)
         sumar_reputacion_y_seguidores(perfil.id, suceso.reputacion, seguidores, motivo=suceso.titulo)
         self.compra_hecha.emit()
@@ -508,7 +687,7 @@ class PaginaVida(QWidget):
         pareja = estado.get("pareja")
         textos = {
             "pareja": "En pareja con", "comprometido": "Comprometido con", "casado": "Casado con",
-            "conociendo": "Lo ven con",
+            "conociendo": "Conociendo a", "secreto": "En secreto con",
         }
         if pareja and estado["estado"] in textos:
             quien = f"<b>{esc(pareja['nombre'])}</b>" + (f", {esc(pareja['oficio'])}" if pareja.get("oficio") else "")
@@ -558,7 +737,80 @@ class PaginaVida(QWidget):
                                                      f"{esc(' · '.join(efectos))}</span>" if efectos else ""))
             linea.setWordWrap(True)
             self.amor_historial.addWidget(linea)
+        self._mostrar_dm(estado)
         self.amor.show()
+
+    # ---- mandar un DM (soltero, con el catalogo de famosas) ----
+
+    def _fama(self) -> int:
+        return ecosistema.calcular_fama_jugador(self.perfil.id, self._carrera, leer_partida=False)["fama"]
+
+    def _mostrar_dm(self, estado: dict):
+        hay_catalogo = bool(ecosistema.celebridades())
+        soltero = estado.get("estado", "soltero") == "soltero" and not estado.get("decision")
+        self.dm.setVisible(hay_catalogo and soltero)
+        if not (hay_catalogo and soltero):
+            return
+        if self.dm_categoria.count() == 0:
+            self.dm_categoria.addItem("Todas", "")
+            for categoria in amor.categorias():
+                self.dm_categoria.addItem(categoria.capitalize(), categoria)
+        hoy = self._hoy(get_economia(self.perfil.id))
+        puede = hoy is not None and amor.puede_mandar_dm(estado, hoy)
+        self.dm_fama_label.setText(
+            f"Tu fama: <b>{self._fama()}</b>/100 (reputacion, tu club, tus goles y premios). "
+            + ("Podes mandar un DM esta semana." if puede else "Ya mandaste un DM esta semana del juego.")
+        )
+        self._dibujar_resultados(puede)
+
+    def buscar_famosas(self):
+        self._resultados_dm = amor.buscar(self.dm_buscar_edit.text(), self.dm_categoria.currentData() or "",
+                                          RESULTADOS_DM)
+        estado = get_estado_amor(self.perfil.id) if self.perfil is not None else {}
+        hoy = self._hoy(get_economia(self.perfil.id)) if self.perfil is not None else None
+        self._dibujar_resultados(hoy is not None and amor.puede_mandar_dm(estado, hoy))
+
+    def _dibujar_resultados(self, puede: bool):
+        limpiar_layout(self.dm_resultados)
+        fama = self._fama() if self.perfil is not None else 0
+        for indice, celebridad in enumerate(self._resultados_dm):
+            exigencia = amor.exigencia(celebridad)
+            color = estilos.TEXTO if exigencia <= fama else estilos.TEXTO_SUAVE
+            texto = QLabel(
+                f"<span style='color:{color}'><b>{esc(celebridad.get('nombre', ''))}</b></span> "
+                f"<span style='color:{estilos.TEXTO_SUAVE}'>· {esc(celebridad.get('oficio', ''))} · "
+                f"{esc(celebridad.get('usuario_ig', ''))} · exigencia {exigencia}"
+                + (" · fuera de tu nivel" if exigencia > fama else "") + "</span>"
+            )
+            texto.setWordWrap(True)
+            mandar = boton("Mandar DM", primario=exigencia <= fama)
+            mandar.setProperty("dm", indice)
+            mandar.setEnabled(puede)
+            mandar.clicked.connect(lambda _=False, i=indice: self.mandar_dm(i))
+            self.dm_resultados.addLayout(_fila_ancha(texto, mandar))
+
+    def mandar_dm(self, indice: int):
+        perfil = self.perfil
+        if perfil is None or indice >= len(self._resultados_dm):
+            return
+        e = get_economia(perfil.id)
+        hoy = self._hoy(e)
+        if hoy is None:
+            return
+        try:
+            estado, e, suceso = amor.intentar(get_estado_amor(perfil.id), e, self._resultados_dm[indice],
+                                              self._fama(), hoy)
+        except ValueError as exc:
+            QMessageBox.information(self, "Ahora no", str(exc))
+            return
+        set_estado_amor(perfil.id, estado)
+        set_economia(perfil.id, e)
+        self._contar_amor(perfil, suceso, estado)
+        self.amor_eleccion.setText(f"<b>{esc(suceso.titulo)}</b>" + (
+            f"<br><span style='color:{estilos.TEXTO_SUAVE}'>La captura ya circula...</span>" if not suceso.privado else ""))
+        self.amor_eleccion.show()
+        self._resultados_dm = []
+        self._mostrar()
 
     def elegir_amor(self, opcion_id: str):
         perfil = self.perfil

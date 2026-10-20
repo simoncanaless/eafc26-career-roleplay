@@ -591,6 +591,19 @@ def miniatura(config: Configuracion, foto: str = "") -> QWidget:
     return vista
 
 
+def miniatura_de_archivo(ruta: str):
+    """Una foto cualquiera (los autos del marketplace) del tamano de las miniaturas, o None."""
+    from pathlib import Path
+
+    if not ruta or not Path(ruta).exists():
+        return None
+    etiqueta = QLabel()
+    etiqueta.setObjectName("fotoAuto")
+    etiqueta.setPixmap(_nitida(QImage(str(ruta)), MINIATURA, cubrir=True))
+    etiqueta.setFixedSize(MINIATURA)
+    return etiqueta
+
+
 class _Lienzo(QLabel):
     """La foto achicada para que entre; se arrastra un rectangulo encima."""
 

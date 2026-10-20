@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QMessageBox, QTextEdit, QVBoxLayout, QWidget
 
 from roleplay.database import (
+    get_estado_hinchada,
     get_reputacion_actual,
     get_seguidores,
     load_actividad_instagram,
@@ -45,6 +46,7 @@ from roleplay.ui.estilos import fuente_titulo
 TEXTO_PUBLICAR = "Publicar"
 POSTS_EN_FEED = 20
 ACTIVIDAD_VISIBLE = 8
+FEED_GLOBAL_VISIBLE = 10
 
 
 def _usuario(perfil: PlayerProfile) -> str:
@@ -146,6 +148,17 @@ class InstagramWindow(QWidget):
         self.actividad_tarjeta.hide()
         layout.addWidget(self.actividad_tarjeta)
 
+        # ---- lo que publican las paginas de futbol (servicios/feed.py) ----
+        self.global_tarjeta = Tarjeta("Feed global", espaciado=10)
+        self.global_tarjeta.cuerpo.addWidget(texto_suave(
+            "Las paginas de futbol publican solas sobre vos: tus partidos, tus declaraciones, tu vida y los rumores."
+        ))
+        self.global_layout = QVBoxLayout()
+        self.global_layout.setSpacing(10)
+        self.global_tarjeta.cuerpo.addLayout(self.global_layout)
+        self.global_tarjeta.hide()
+        layout.addWidget(self.global_tarjeta)
+
         # ---- feed ----
         feed = Tarjeta("Tu feed", espaciado=12)
         self.feed_layout = QVBoxLayout()
@@ -173,6 +186,7 @@ class InstagramWindow(QWidget):
         self.sugerir_btn.setEnabled(not self._sugiriendo)
         self._cargar_feed()
         self._cargar_actividad()
+        self._cargar_feed_global()
         self.revisar_hinchada()
         if not self._leyendo_partida:
             self._leyendo_partida = True
@@ -355,6 +369,8 @@ class InstagramWindow(QWidget):
             if total:
                 sumar_seguidores(player_id, total)
             set_estado_hinchada(player_id, estado)
+            if self.perfil is not None and self.perfil.id == player_id:
+                self._cargar_feed_global()
             if actividad and self.perfil is not None and self.perfil.id == player_id:
                 self._refrescar_cabecera()
                 self._cargar_actividad()
@@ -362,6 +378,20 @@ class InstagramWindow(QWidget):
 
     def _on_hinchada_error(self, _mensaje: str):
         self._terminar_hinchada()  # sin partida legible, Instagram sigue como siempre
+
+    def _cargar_feed_global(self):
+        limpiar_layout(self.global_layout)
+        posts = get_estado_hinchada(self.perfil.id).get("feed", [])[:FEED_GLOBAL_VISIBLE]
+        for post in posts:
+            dia = post.get("fecha", "")
+            fecha = f" · {dia[8:10]}/{dia[5:7]}" if len(dia) >= 10 else ""
+            etiqueta = QLabel(
+                f"<b>{esc(post.get('usuario_ig') or post.get('pagina', ''))}</b>&nbsp; {esc(post.get('texto', ''))}<br>"
+                f"<span style='color:{estilos.TEXTO_SUAVE}'>❤️ {miles(post.get('likes', 0))}{fecha}</span>"
+            )
+            etiqueta.setWordWrap(True)
+            self.global_layout.addWidget(etiqueta)
+        self.global_tarjeta.setVisible(bool(posts))
 
     def _cargar_actividad(self):
         limpiar_layout(self.actividad_layout)

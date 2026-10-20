@@ -55,7 +55,8 @@ def ofertas(player_id: Optional[int], hoy: date) -> list[dict]:
     resultado = []
     for auto in elegidos:
         minimo, maximo, _ = RAREZA.get(auto.get("rareza"), RAREZA["Media"])
-        estado, factor = dado.choice(ESTADOS)
+        estados = [e for e in ESTADOS if "Japon" not in e[0] or "JDM" in str(auto.get("categoria", ""))]
+        estado, factor = dado.choice(estados)  # (importado de Japon, solo los japoneses)
         anio = ecosistema.numero(auto.get("anio"), hoy.year)
         km = max(500, (hoy.year - anio) * dado.randint(*KM_POR_ANIO)) if anio < hoy.year else dado.randint(100, 3_000)
         precio = round(ecosistema.numero(auto.get("precio_base")) * dado.uniform(minimo, maximo) * factor, -2)
@@ -64,9 +65,15 @@ def ofertas(player_id: Optional[int], hoy: date) -> list[dict]:
             "id": f"{_slug(auto.get('marca', ''))}_{_slug(auto.get('modelo', ''))}_{anio}_{semana.isoformat()}",
             "marca": auto.get("marca", ""), "modelo": auto.get("modelo", ""), "anio": anio,
             "categoria": auto.get("categoria", ""), "rareza": auto.get("rareza", "Media"), "nota": auto.get("nota", ""),
-            "km": km, "estado": estado, "precio": int(max(precio, 1_000)), "imagen": str(imagen) if imagen else "",
+            "km": km, "estado": estado, "precio": int(max(precio, 1_000)), "imagen": imagen.name if imagen else "",
         })
     return sorted(resultado, key=lambda o: o["precio"])
+
+
+def ruta_imagen(archivo: str) -> str:
+    """La foto (img_autos/ al lado de los datos de Simon), o "" si no esta."""
+    ruta = ecosistema.carpeta() / "img_autos" / archivo if archivo else None
+    return str(ruta) if ruta is not None and ruta.exists() else ""
 
 
 def nombre(oferta: dict) -> str:
