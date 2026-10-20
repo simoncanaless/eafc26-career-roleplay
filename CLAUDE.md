@@ -77,7 +77,7 @@ oleplay\datos\`.
 (la app con `--jugar`: abre el MISMO juego por su plataforma y la app). El FC 26 de Simon
 esta en Steam, biblioteca `F:\SteamLibrary` (EA app instalada, la usa Steam).
 
-**Paquete para amigos**: `dist\EAFC Roleplay (amigos).zip` (~195 MB, casi todo Chromium) con
+**Paquete para amigos**: `dist\EAFC Roleplay (amigos).zip` (~206 MB, casi todo Chromium; rearmado el 2026-10-20 con todo lo nuevo, LEEME al dia y probado como amigo nuevo con `--diagnostico`; el script controla que no vayan `carreras.json` ni tus datos y que vayan las fotos de los autos y `qtbase_es.qm`) con
 `EAFC Roleplay.exe` (PyInstaller onedir, no necesita Python) y `LEEME.txt`. Sin datos
 personales y CON `roleplay/datos` (los corpus; el script verifica las dos cosas). Empaquetada,
 los datos van a `%APPDATA%\EAFC26 Roleplay`; la clave de IA es opcional (cada amigo la suya). `build/` y `dist/` estan
