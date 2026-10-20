@@ -48,9 +48,42 @@ def _ventana_al_frente() -> int:
     return int(ctypes.windll.user32.GetForegroundWindow() or 0) if _es_windows() else 0
 
 
-def _poner_al_frente(hwnd: int) -> None:
-    if hwnd and _es_windows() and ctypes.windll.user32.IsWindow(hwnd):
-        ctypes.windll.user32.SetForegroundWindow(hwnd)
+def _poner_al_frente(hwnd: int) -> bool:
+    """Le da el foco a `hwnd` y dice si quedo al frente.
+
+    Con el juego al frente, Windows no deja que otra app le saque el foco con
+    SetForegroundWindow solo (bloqueo de primer plano): la ventana se veia
+    encima, pero el juego seguia al frente y con su raw input se quedaba con
+    los clicks y el teclado. Lo que Windows permite es unirse un momento a la
+    cola de entrada de la ventana del frente (AttachThreadInput) y ahi pedir el
+    foco. No toca el juego: son las mismas llamadas que usa cualquier app."""
+    if not (hwnd and _es_windows()):
+        return False
+    user32 = ctypes.windll.user32
+    if not user32.IsWindow(hwnd):
+        return False
+    if user32.SetForegroundWindow(hwnd) and user32.GetForegroundWindow() == hwnd:
+        return True
+    frente = user32.GetForegroundWindow()
+    hilo_frente = user32.GetWindowThreadProcessId(frente, None) if frente else 0
+    hilo_propio = ctypes.windll.kernel32.GetCurrentThreadId()
+    unido = bool(hilo_frente and hilo_frente != hilo_propio
+                 and user32.AttachThreadInput(hilo_propio, hilo_frente, True))
+    try:
+        user32.BringWindowToTop(hwnd)
+        user32.SetForegroundWindow(hwnd)
+    finally:
+        if unido:
+            user32.AttachThreadInput(hilo_propio, hilo_frente, False)
+    return user32.GetForegroundWindow() == hwnd
+
+
+def _soltar_mouse() -> None:
+    """El juego encierra el cursor en su ventana (ClipCursor) mientras esta al
+    frente; con el overlay abierto se suelta (al volver, el juego lo encierra
+    de nuevo solo)."""
+    if _es_windows():
+        ctypes.windll.user32.ClipCursor(None)
 
 
 class SalaFlotante(QWidget):
@@ -229,6 +262,7 @@ class SalaFlotante(QWidget):
         self.show()
         self.raise_()
         self.activateWindow()
+        _soltar_mouse()
         _poner_al_frente(int(self.winId()))
 
     def modo_hud(self):

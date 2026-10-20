@@ -84,5 +84,55 @@ class TestOverlayCompleto(ayuda.PruebaDeInterfaz):
         dialogo.deleteLater()
 
 
+class User32Falso:
+    """Windows con el juego (hwnd 1, hilo 10) al frente y el bloqueo de primer
+    plano: SetForegroundWindow solo funciona unido a la cola del juego."""
+
+    def __init__(self):
+        self.frente = 1
+        self.unido = False
+        self.llamadas = []
+
+    def IsWindow(self, hwnd):
+        return True
+
+    def GetForegroundWindow(self):
+        return self.frente
+
+    def GetWindowThreadProcessId(self, hwnd, _):
+        return 10
+
+    def AttachThreadInput(self, propio, otro, unir):
+        self.llamadas.append(("unir" if unir else "soltar", otro))
+        self.unido = bool(unir)
+        return 1
+
+    def BringWindowToTop(self, hwnd):
+        return 1
+
+    def SetForegroundWindow(self, hwnd):
+        if self.unido:
+            self.frente = hwnd
+        return int(self.unido)
+
+    def ClipCursor(self, rect):
+        self.llamadas.append(("soltar_mouse", rect))
+        return 1
+
+
+class TestFocoEncimaDelJuego(unittest.TestCase):
+    def test_le_saca_el_foco_al_juego_aunque_windows_lo_bloquee(self):
+        from roleplay.ui import overlay
+
+        user32 = User32Falso()
+        windll = mock.Mock(user32=user32)
+        windll.kernel32.GetCurrentThreadId.return_value = 20
+        with mock.patch.object(overlay, "_es_windows", return_value=True),                 mock.patch.object(overlay.ctypes, "windll", windll, create=True):
+            self.assertTrue(overlay._poner_al_frente(99))
+            overlay._soltar_mouse()
+        self.assertEqual(user32.frente, 99)
+        self.assertEqual(user32.llamadas, [("unir", 10), ("soltar", 10), ("soltar_mouse", None)])  # y se separa
+
+
 if __name__ == "__main__":
     unittest.main()

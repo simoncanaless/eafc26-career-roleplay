@@ -22,14 +22,16 @@ sala flotante chica de antes, ui/overlay.py).
 import ctypes
 from typing import Optional
 
-from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
 
 from roleplay import ajustes
-from roleplay.ui.overlay import _es_windows, _poner_al_frente, _ventana_al_frente
+from roleplay.ui.overlay import _es_windows, _poner_al_frente, _soltar_mouse, _ventana_al_frente
 
 OPACIDAD = 0.95
 OPACIDAD_MINIMA = 0.7
+REINTENTOS_FOCO = 6  # si el juego no suelta el foco al toque, se insiste cada INTERVALO_FOCO_MS
+INTERVALO_FOCO_MS = 120
 MODOS = ("completo", "sala")
 
 
@@ -75,6 +77,7 @@ class OverlayCompleto(QObject):
         self.abierto = False
         self._juego = 0
         self._antes: Optional[dict] = None
+        self._intentos = 0
         self._esc = QShortcut(QKeySequence(Qt.Key.Key_Escape), ventana)
         self._esc.setContext(Qt.ShortcutContext.WindowShortcut)
         self._esc.setEnabled(False)
@@ -105,8 +108,20 @@ class OverlayCompleto(QObject):
         v.showFullScreen()
         v.raise_()
         v.activateWindow()
-        _poner_al_frente(int(v.winId()))
+        self._intentos = 0
+        self._tomar_el_foco()
         self.cambio.emit(True)
+
+    def _tomar_el_foco(self):
+        """Sin el foco, el juego se queda con los clicks y el teclado aunque
+        el overlay se vea encima: se insiste unas veces."""
+        if not self.abierto:
+            return
+        _soltar_mouse()
+        if not _poner_al_frente(int(self.ventana.winId())) and _es_windows():
+            self._intentos += 1
+            if self._intentos < REINTENTOS_FOCO:
+                QTimer.singleShot(INTERVALO_FOCO_MS, self._tomar_el_foco)
 
     def cerrar(self):
         if not self.abierto:
