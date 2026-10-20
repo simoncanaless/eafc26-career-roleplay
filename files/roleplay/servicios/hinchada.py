@@ -137,11 +137,14 @@ def eventos_nuevos(
             estado["hasta"] = max(estado.get("hasta") or "", jugados[-1].fecha.isoformat())
             estado["ultimo"] = clave_partido(jugados[-1])
 
+    from roleplay.servicios.eventos import tiene_reaccion_propia
+
     sobre_el = [n for n in noticias if n.categoria == "jugador" and n.id is not None]
     ultima = estado.get("noticia")
     if ultima is not None:
         hoy = carrera.fecha_actual()
-        for n in reversed([n for n in sobre_el if n.id > ultima][:MAXIMO_EVENTOS]):  # del mas viejo al mas nuevo
+        nuevas = [n for n in sobre_el if n.id > ultima and not tiene_reaccion_propia(n)]  # (esas ya tienen la suya)
+        for n in reversed(nuevas[:MAXIMO_EVENTOS]):  # del mas viejo al mas nuevo
             eventos.append(EventoHinchada(
                 "noticia", hoy.isoformat() if hoy else "", n.titular,
                 f"Noticia sobre el ({n.tono}): {n.titular}. {n.cuerpo}",
@@ -193,7 +196,9 @@ SISTEMA_HINCHAS = (
     "Sos los hinchas que comentan en el Instagram de un futbolista en un juego de roleplay. Para cada evento "
     "escribi 2 o 3 comentarios de cuentas inventadas (@hinchas, rivales, memes) que hablen del marcador, los "
     "goles o el titular EXACTOS del evento. Si gano seguidores, mas hinchas contentos; si perdio, mas criticas. "
-    "`tono`: positivo, negativo, neutral o gracioso. Nunca nombres de personas reales."
+    "`tono`: positivo, negativo, neutral o gracioso. Nunca nombres de personas reales. No cites cantidades de "
+    "seguidores ni otros numeros de la app (los hinchas no los ven), y no exageres lo que dice el titular: si "
+    "escucho una oferta, no se esta yendo; si firmo con una marca, es una marca, no un cambio de club."
 )
 
 

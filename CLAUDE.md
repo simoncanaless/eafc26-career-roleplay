@@ -29,7 +29,7 @@ configurada solo en este repo).
   publico: nunca subir claves, la base, fotos ni datos personales.
 - **Uso**: Simon tiene plan Pro y pide **parar al 90% del uso semanal** (mirarlo con la herramienta de uso antes de
   tareas largas y avisarle). Trabajar con pocas llamadas.
-- **Estado al 2026-10-20** (472 pruebas en verde, todo en GitHub):
+- **Estado al 2026-10-20** (475 pruebas en verde, todo en GitHub):
   00. Ecosistema de Simon (2026-10-20): conferencias con 8 tematicas y periodistas reales, parejas del catalogo
      con DM y romance secreto, seguidores por tier y exposicion, patrocinios, tienda de lujo, hiperautos,
      marketplace de nicho, comentarios de colegas/famosas y feed global (ver `ecosistema.py`). Los datos estan
@@ -161,7 +161,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 | `roleplay/ui/personaje.py` | `CharacterWizard` (ClassicStyle; titulos en rich text con "PASO n/8"; backstory editable o escrito a mano) |
 | `roleplay/ui/entrevista.py` | `InterviewWindow` "Sala de prensa": marcador ("Cargar de mi partida" o a mano; no hay captura) -> preguntas de los 3 periodistas (cada una con boton de voz) -> reaccion -> prensa. Despues de evaluar, `_mover_carino()` aplica `delta_carino` a la hinchada del club |
 | `roleplay/ui/instagram.py` | `InstagramWindow`: perfil (avatar + mosaicos), nuevo post, resultado, "Tus hinchas" (actividad sin publicar) y feed en tarjetas. `revisar_hinchada()`: una a la vez; si se pide otra mientras corre, se hace al terminar **Desde el 2026-10-20**: tarjeta "Feed global" (`estado_json.hinchada.feed`). En los posts, `servicios/instagram.comentarios_del_ambiente`: colegas de `futbolistas_ig` si la fama supera su `fama_minima_para_comentar`, la pareja del catalogo (un guino si es secreto, y los hinchas lo notan), una celebridad de su nivel SOLO de `CATEGORIAS_QUE_COMENTAN` (deportista: una cantante o actriz sin relacion con el futbol no comenta; pedido de Simon 2026-10-20) y hasta 3 likes verificados (mismo filtro) (comentario con tono "like"). Esos comentarios los arma el codigo con el corpus, nunca la IA |
-| `roleplay/servicios/hinchada.py` | El Instagram que se mueve solo: `eventos_nuevos()` (partidos del usuario y noticias sobre el desde `estado_json.hinchada`; la primera vez solo el ultimo partido), `crecimiento_por_partido/noticia()` (los seguidores los decide el codigo), `comentar_eventos()` y `comentarios()` (2-3 del corpus: el tono sigue a los seguidores, con algun gracioso o rival). Se guarda en la tabla `actividad_instagram` **Desde el 2026-10-20**: `base_de_seguidores(tier)` (400.000 / 25.000 / 2.000 x reputacion): la primera vez o al pasar a un club de mejor tier, `procesar` suma la diferencia (actividad "hinchada", `estado.base_tier`); `exposicion(tier, goles, partidos, premios)` multiplica lo que mueve cada partido/noticia (80 goles en 40 en un gigante: x20 o mas, tope 40). `procesar` tambien arma el feed global (`estado.feed`, servicios/feed.py) |
+| `roleplay/servicios/hinchada.py` | El Instagram que se mueve solo: `eventos_nuevos()` (partidos del usuario y noticias sobre el desde `estado_json.hinchada`; la primera vez solo el ultimo partido), `crecimiento_por_partido/noticia()` (los seguidores los decide el codigo), `comentar_eventos()` y `comentarios()` (2-3 del corpus: el tono sigue a los seguidores, con algun gracioso o rival). **Una reaccion por cosa** (2026-10-20, Simon: las primas y las marcas salian dos veces, la segunda con +900.000 seguidores): las noticias que arma `eventos.contar` (claves `eventos.CON_REACCION_PROPIA`: evento, amor, patrocinio, contrato, oferta, hinchada, compra, donacion) ya traen su actividad, asi que `eventos_nuevos` las salta (`tiene_reaccion_propia`); `SISTEMA_HINCHAS` le prohibe a la IA citar seguidores o exagerar el titular. Se guarda en la tabla `actividad_instagram` **Desde el 2026-10-20**: `base_de_seguidores(tier)` (400.000 / 25.000 / 2.000 x reputacion): la primera vez o al pasar a un club de mejor tier, `procesar` suma la diferencia (actividad "hinchada", `estado.base_tier`); `exposicion(tier, goles, partidos, premios)` multiplica lo que mueve cada partido/noticia (80 goles en 40 en un gigante: x20 o mas, tope 40). `procesar` tambien arma el feed global (`estado.feed`, servicios/feed.py) |
 | `roleplay/ui/iconos/` | Flechas/check de la QSS (SVG) y `app.ico` (lo genera el script del acceso directo) |
 | `scripts/seed_test_matches.py` | Siembra/borra partidos "Rival de prueba N" en el ultimo personaje (base REAL) |
 | `scripts/crear_acceso_directo.py` + `scripts/lanzador/Lanzador.cs` | Icono, .exe lanzador (dev) y los dos iconos del escritorio |
@@ -253,7 +253,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 
 ## Testing
 
-`.venv\Scripts\python.exe -m unittest discover -s tests` (472 pruebas, ~25 s). `tests/ayuda.py`:
+`.venv\Scripts\python.exe -m unittest discover -s tests` (475 pruebas, ~25 s). `tests/ayuda.py`:
 - Fija `EAFC_FC26_GUARDADOS` a una carpeta vacia: las pruebas no leen la partida real.
 - Fija `EAFC_ECOSISTEMA` a una carpeta vacia: sin famosas, paginas, periodistas ni autos de nicho.
   `tests/datos_ecosistema.py` (datos chicos + `ConEcosistema`) los arma para `test_ecosistema` (base y pantallas),

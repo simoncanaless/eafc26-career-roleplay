@@ -294,6 +294,7 @@ def elegir(estado: dict, opcion_id: str, hoy: date) -> tuple[dict, Hito, int]:
     estado.setdefault("decisiones", []).insert(
         0, {"tipo": pendiente["tipo"], "club": pendiente["club"], "fecha": hoy.isoformat(), "eleccion": opcion.id})
     del estado["decisiones"][DECISIONES_GUARDADAS:]
-    hito = Hito("eleccion", opcion.texto, opcion.noticia.format(club=club["nombre"]), opcion.tono, opcion.seguidores,
+    hecho = opcion.noticia.format(club=club["nombre"])
+    hito = Hito("eleccion", hecho[:1].upper() + hecho[1:], hecho, opcion.tono, opcion.seguidores,  # lo que paso
                 opcion.reputacion, opcion.reto)
     return estado, hito, club["carino"] - antes

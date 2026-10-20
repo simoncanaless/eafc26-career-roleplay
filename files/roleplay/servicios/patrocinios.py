@@ -290,7 +290,7 @@ def texto_promo(tipo: str, marca: str, rubro: str) -> str:
 def _nueva_promo(contrato: dict, hoy: date, dado: random.Random) -> dict:
     tipos = list(PROMOS)
     tipo = dado.choices(tipos, weights=[PROMOS[t][1] for t in tipos])[0]
-    return {"id": uuid.uuid4().hex[:8], "tipo": tipo, "texto": texto_promo(tipo, contrato["nombre"], _rubro(contrato)),
+    return {"id": uuid.uuid4().hex[:8], "tipo": tipo, "texto": texto_promo(tipo, nombre_de(contrato), _rubro(contrato)),
             "desde": hoy.isoformat(), "vence": (hoy + timedelta(days=PLAZO_DIAS)).isoformat()}
 
 
@@ -313,8 +313,8 @@ def cumplir(e: dict, contrato_id: str, hoy: date) -> tuple[dict, Novedad]:
 
     neto = round(bono * NETO)
     e["saldo"] = e.get("saldo", 0) + neto
-    _movimiento(e, hoy, f"Bono de {contrato['nombre']} por la promo (neto)", neto)
-    return e, Novedad(f"{contrato['nombre']} lanza su campana", f"protagonizo la campana de {contrato['nombre']}: "
+    _movimiento(e, hoy, f"Bono de {nombre_de(contrato)} por la promo (neto)", neto)
+    return e, Novedad(f"{nombre_de(contrato)} lanza su campana", f"protagonizo la campana de {nombre_de(contrato)}: "
                       f"{promo['texto'][:1].lower()}{promo['texto'][1:]}", "positiva", neto,
                       clave=f"patrocinio:promo:{contrato['marca']}")
 
@@ -352,8 +352,8 @@ def revisar(e: Optional[dict], player_id: Optional[int], seguidores: int, reputa
     for contrato in estado["contratos"]:
         marca = POR_ID.get(contrato["marca"])
         if contrato["hasta"] < hoy.isoformat():
-            novedades.append(Novedad(f"Termino su contrato con {contrato['nombre']}",
-                                     f"cumplio su contrato con {contrato['nombre']} ({contrato['rubro']})", "neutral",
+            novedades.append(Novedad(f"Termino su contrato con {nombre_de(contrato)}",
+                                     f"cumplio su contrato con {nombre_de(contrato)} ({contrato['rubro']})", "neutral",
                                      clave=f"patrocinio:fin:{contrato['marca']}"))
             continue
         dado = random.Random(f"rescision:{player_id}:{contrato['id']}:{hoy.isoformat()}")
@@ -362,8 +362,8 @@ def revisar(e: Optional[dict], player_id: Optional[int], seguidores: int, reputa
             multa = contrato["semanal"] * MULTA_SEMANAS if escandalo else 0
             motivo = "despues del escandalo" if escandalo else "por su caida de imagen"
             novedades.append(Novedad(
-                f"{contrato['nombre']} rescinde su contrato",
-                f"perdio su contrato con {contrato['nombre']} {motivo}" + (" y encima tuvo que pagar una multa" if multa else ""),
+                f"{nombre_de(contrato)} rescinde su contrato",
+                f"perdio su contrato con {nombre_de(contrato)} {motivo}" + (" y encima tuvo que pagar una multa" if multa else ""),
                 "negativa", -multa, clave=f"patrocinio:rescision:{contrato['marca']}",
             ))
             continue
@@ -375,12 +375,12 @@ def revisar(e: Optional[dict], player_id: Optional[int], seguidores: int, reputa
             if contrato["faltas"] >= FALTAS_PARA_RESCINDIR:
                 multa = contrato["semanal"] * MULTA_SEMANAS
                 novedades.append(Novedad(
-                    f"{contrato['nombre']} rescinde su contrato",
-                    f"perdio su contrato con {contrato['nombre']} por no cumplir con las promociones y tuvo que "
+                    f"{nombre_de(contrato)} rescinde su contrato",
+                    f"perdio su contrato con {nombre_de(contrato)} por no cumplir con las promociones y tuvo que "
                     "pagar una multa", "negativa", -multa, clave=f"patrocinio:rescision:{contrato['marca']}"))
                 continue
             novedades.append(Novedad(
-                f"{contrato['nombre']}, molesta", f"no cumplio con la promo que le pedia {contrato['nombre']} "
+                f"{nombre_de(contrato)}, molesta", f"no cumplio con la promo que le pedia {nombre_de(contrato)} "
                 f"({promo['texto'][:1].lower()}{promo['texto'][1:]}) y en la marca no estan contentos", "mixta",
                 clave=f"patrocinio:falta:{contrato['marca']}"))
         ultima = contrato.get("ultima_promo") or contrato["desde"]
@@ -437,7 +437,8 @@ def responder(e: dict, aceptar: bool, hoy: date, marca: Optional[str] = None) ->
     estado["contratos"].append(contrato)
     # exclusividad: la competencia del mismo rubro ya no puede (Pepsi si firmaste con Coca-Cola)
     estado["ofertas"] = [o for o in estado["ofertas"] if o["rubro"] != oferta["rubro"]]
-    return e, Novedad(f"Firma con {oferta['nombre']}", f"firmo un contrato de patrocinio con {oferta['nombre']} "
+    nombre = nombre_de(oferta)
+    return e, Novedad(f"Firma con {nombre}", f"firmo un contrato de patrocinio con {nombre} "
                       f"({oferta['rubro']})", "positiva", clave=f"patrocinio:firma:{oferta['marca']}")
 
 

@@ -237,6 +237,16 @@ def revisar(perfil: PlayerProfile, estado: dict, e: dict, carrera: Optional[Carr
 # ---- la repercusion: noticia y comentarios (motor narrativo) ----
 
 
+# las claves (hitos) de las noticias que arma contar(): ya traen la reaccion de los hinchas, asi que la
+# hinchada (servicios/hinchada.py) no vuelve a reaccionar a la noticia (antes salian dos veces, la segunda
+# con un monton de seguidores)
+CON_REACCION_PROPIA = ("evento:", "amor:", "patrocinio:", "contrato:", "oferta:", "hinchada:", "compra:", "donacion:")
+
+
+def tiene_reaccion_propia(noticia) -> bool:
+    return any(str(h).startswith(CON_REACCION_PROPIA) for h in (noticia.hitos or []))
+
+
 def contar(perfil: PlayerProfile, titulo: str, descripcion: str, tono: str, seguidores: int, fecha: str, hito: str,
            tipo_actividad: str = "evento") -> tuple[NoticiaPrensa, ActividadInstagram]:
     """La noticia de algo que le paso al jugador y lo que comentan los
