@@ -29,7 +29,7 @@ configurada solo en este repo).
   publico: nunca subir claves, la base, fotos ni datos personales.
 - **Uso**: Simon tiene plan Pro y pide **parar al 90% del uso semanal** (mirarlo con la herramienta de uso antes de
   tareas largas y avisarle). Trabajar con pocas llamadas.
-- **Estado al 2026-10-20** (361 pruebas en verde, todo en GitHub):
+- **Estado al 2026-10-20** (363 pruebas en verde, todo en GitHub):
   00. Ecosistema de Simon (2026-10-20): conferencias con 8 tematicas y periodistas reales, parejas del catalogo
      con DM y romance secreto, seguidores por tier y exposicion, patrocinios, tienda de lujo, hiperautos,
      marketplace de nicho, comentarios de colegas/famosas y feed global (ver `ecosistema.py`). Los datos estan
@@ -68,6 +68,7 @@ oleplay\datos\`.
 .venv\Scripts\python.exe app.py --jugar          # abre EA FC 26 (Steam) + la app en la sala de prensa
 .venv\Scripts\python.exe app.py --diagnostico    # revisa todo y sale (diagnostico.txt)
 .venv\Scripts\python.exe scripts\empaquetar.py   # paquete para amigos (requirements-dev.txt)
+.venv\Scripts\python.exe scripts\partida_de_prueba.py [--reiniciar] [--reputacion 95] [--seguidores N]   # partida imaginaria (files/prueba, .gitignore): personaje soltero + partida falsa, para probar las parejas sin tocar la real; sin espera entre DMs (EAFC_DM_SIN_ESPERA=1)
 ```
 
 **Iconos del escritorio** (`servicios/accesos.py`, tambien desde Ajustes en la app):
@@ -245,7 +246,7 @@ del original en `Proyecto Fifa\respaldo-files-2026-10-14.zip`).
 
 ## Testing
 
-`.venv\Scripts\python.exe -m unittest discover -s tests` (361 pruebas, ~25 s). `tests/ayuda.py`:
+`.venv\Scripts\python.exe -m unittest discover -s tests` (363 pruebas, ~25 s). `tests/ayuda.py`:
 - Fija `EAFC_FC26_GUARDADOS` a una carpeta vacia: las pruebas no leen la partida real.
 - Fija `EAFC_ECOSISTEMA` a una carpeta vacia: sin famosas, paginas, periodistas ni autos de nicho.
   `tests/datos_ecosistema.py` (datos chicos + `ConEcosistema`) los arma para `test_ecosistema` (base y pantallas),

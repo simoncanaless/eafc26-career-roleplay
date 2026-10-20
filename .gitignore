@@ -33,3 +33,6 @@ files/roleplay/datos/famosas_ig.json
 files/roleplay/datos/ecosistema_ig.json
 files/roleplay/datos/autos_marketplace.json
 files/roleplay/datos/img_autos/
+
+# la partida de prueba (scripts/partida_de_prueba.py): su base y su partida falsa
+files/prueba/

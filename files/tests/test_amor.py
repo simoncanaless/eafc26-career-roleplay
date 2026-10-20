@@ -1,5 +1,6 @@
 """Vida sentimental: arranque, sorteo, decisiones y la tarjeta en Vida."""
 
+import os
 import tempfile
 from datetime import date, timedelta
 from pathlib import Path
@@ -250,3 +251,32 @@ class TestParejas(ConEcosistema):
         dado = random.Random(3)
         for _ in range(10):
             self.assertLessEqual(amor.famosa_para(30, dado)["exigencia"], 30)
+
+
+class TestPartidaDePrueba(ayuda.PruebaConBase):
+    """scripts/partida_de_prueba.py: su propia carpeta, soltero, y sin espera entre DMs."""
+
+    def test_arma_su_carpeta_sin_tocar_la_real(self):
+        import subprocess
+        import sys
+
+        carpeta = Path(tempfile.mkdtemp(prefix="eafc_prueba_parejas_")) / "prueba"
+        resultado = subprocess.run(
+            [sys.executable, str(ayuda.RAIZ / "scripts" / "partida_de_prueba.py"), "--sin-abrir", "--reputacion", "90",
+             "--carpeta", str(carpeta)], capture_output=True, text=True, timeout=120,
+        )
+        self.assertEqual(resultado.returncode, 0, resultado.stderr)
+        self.assertTrue((carpeta / "career_roleplay.db").exists())
+        self.assertTrue((carpeta / "guardados" / "CmPlr1").exists())
+        import sqlite3
+
+        with sqlite3.connect(carpeta / "career_roleplay.db") as conn:
+            nombre, relacion, reputacion = conn.execute(
+                "SELECT nombre_jugador, estado_relacion, reputacion_inicial FROM player_profile").fetchone()
+        self.assertEqual((nombre, relacion, reputacion), ("Prueba Parejas", "soltero", 90))
+
+    def test_en_la_de_prueba_no_hay_espera_entre_dms(self):
+        estado = {"estado": "soltero", "ultimo_dm": "2026-10-01", "decision": None}
+        self.assertFalse(amor.puede_mandar_dm(estado, date(2026, 10, 2)))
+        with mock.patch.dict(os.environ, {"EAFC_DM_SIN_ESPERA": "1"}):
+            self.assertTrue(amor.puede_mandar_dm(estado, date(2026, 10, 2)))

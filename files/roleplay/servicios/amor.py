@@ -52,6 +52,7 @@ Estado en estado_json.amor:
 """
 
 import copy
+import os
 import random
 import uuid
 from dataclasses import dataclass, field
@@ -283,6 +284,8 @@ def puede_mandar_dm(estado: Optional[dict], hoy: date) -> bool:
     if estado.get("estado", "soltero") != "soltero" or estado.get("decision"):
         return False
     ultimo = estado.get("ultimo_dm")
+    if os.environ.get("EAFC_DM_SIN_ESPERA") == "1":
+        return True  # solo la partida de prueba (scripts/partida_de_prueba.py): ahi el juego no avanza
     return not ultimo or (hoy - date.fromisoformat(ultimo)).days >= DM_CADA_DIAS
 
 
