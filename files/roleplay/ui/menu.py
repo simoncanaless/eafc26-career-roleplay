@@ -714,7 +714,7 @@ class MainMenuWindow(QMainWindow):
 
         self.jugar_btn = boton("Jugar FC 26", primario=True, icono_nombre="jugar")
         self.jugar_btn.setToolTip("Abre EA FC 26 por su plataforma (Steam, EA app o Epic), sin modificarlo")
-        self.jugar_btn.clicked.connect(lambda: abrir_juego_o_preguntar(self))
+        self.jugar_btn.clicked.connect(lambda: abrir_juego_o_preguntar(self._padre()))
         self.ajustes_btn = QPushButton("  AJUSTES")
         self.ajustes_btn.setObjectName("navBtn")
         self.ajustes_btn.setIcon(icono("engranaje", estilos.TEXTO_SUAVE))
@@ -874,6 +874,14 @@ class MainMenuWindow(QMainWindow):
             self.bandeja.hide()
         super().closeEvent(evento)
 
+    def _padre(self):
+        """Para los dialogos: la capa del overlay si esta abierto (si no, quedarian debajo)."""
+        return self.overlay.capa if self.overlay.abierto else self
+
+    def _en_la_app(self) -> bool:
+        """El usuario esta mirando la app: la ventana de siempre o el overlay."""
+        return self.isActiveWindow() or (self.overlay.abierto and self.overlay.capa.isActiveWindow())
+
     def _traer_al_frente(self):
         """La ventana de siempre al frente (la bandeja, el icono del escritorio): si
         el overlay estaba abierto, primero se cierra (si no, quedaba a medias: la
@@ -922,12 +930,12 @@ class MainMenuWindow(QMainWindow):
 
     def _avisar_encima(self, titulo: str, texto: str):
         """Un aviso en el HUD encima del juego (si esta prendido y no estas en la app)."""
-        if mostrar_flotante_sola() and not self.isActiveWindow():
+        if mostrar_flotante_sola() and not self._en_la_app():
             self.sala_flotante.avisar(titulo, texto)
 
     def _on_auto_entregado(self, nombre: str):
         self._avisar_encima("Te llego tu auto", nombre)
-        if self.bandeja is not None and not self.isActiveWindow():
+        if self.bandeja is not None and not self._en_la_app():
             self.bandeja.showMessage(
                 "Te llego tu auto", f"{nombre}: la prensa y tus hinchas ya lo vieron.",
                 QSystemTrayIcon.MessageIcon.Information, 8000,
@@ -935,14 +943,14 @@ class MainMenuWindow(QMainWindow):
 
     def _on_evento_inesperado(self, titulo: str, reto: str):
         self._avisar_encima("Algo te paso", titulo + (f". Reto: {reto}" if reto else ""))
-        if self.bandeja is not None and not self.isActiveWindow():
+        if self.bandeja is not None and not self._en_la_app():
             self.bandeja.showMessage(
                 "Algo te paso", titulo + (f". Reto: {reto}" if reto else ". Mira la pagina Vida."),
                 QSystemTrayIcon.MessageIcon.Information, 10000,
             )
 
     def _on_decision_pendiente(self, titulo: str, pagina: str = "Resumen"):
-        if self.bandeja is not None and not self.isActiveWindow():
+        if self.bandeja is not None and not self._en_la_app():
             self.bandeja.showMessage(
                 "Tenes que decidir algo", f"{titulo}. Contestalo en {pagina}.",
                 QSystemTrayIcon.MessageIcon.Information, 10000,
@@ -950,7 +958,7 @@ class MainMenuWindow(QMainWindow):
 
     def _on_noticias_publicadas(self, noticias: list, manual: bool):
         self.pagina_instagram.revisar_hinchada()  # los hinchas reaccionan a las noticias
-        if manual or self.bandeja is None or self.isActiveWindow():
+        if manual or self.bandeja is None or self._en_la_app():
             return
         principal = next((n for n in noticias if n.categoria == "jugador"), noticias[0])
         self._avisar_encima("Prensa", principal.titular)
@@ -966,12 +974,12 @@ class MainMenuWindow(QMainWindow):
         self._refrescar_jugador()
 
     def _abrir_ajustes(self):
-        dialogo = DialogoAjustes(self)
+        dialogo = DialogoAjustes(self._padre())
         dialogo.exec()
         dialogo.deleteLater()
 
     def _abrir_wizard_personaje(self):
-        wizard = CharacterWizard(self)
+        wizard = CharacterWizard(self._padre())
         if wizard.exec():
             self._ir_a(0)
         wizard.deleteLater()

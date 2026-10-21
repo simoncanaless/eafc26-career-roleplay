@@ -25,16 +25,34 @@ class TestOverlayCompleto(ayuda.PruebaDeInterfaz):
         self.addCleanup(self.ventana.deleteLater)
         self.addCleanup(lambda: self.ventana.overlay.cerrar())
 
-    def test_abrir_la_pone_encima_sin_bordes_y_lista_para_usar(self):
-        self.ventana.overlay.abrir()
-        flags = self.ventana.windowFlags()
-        self.assertTrue(self.ventana.overlay.abierto)
-        self.assertTrue(self.ventana.isVisible())
-        self.assertTrue(flags & self.modulo.Qt.WindowType.FramelessWindowHint)
-        self.assertTrue(flags & self.modulo.Qt.WindowType.WindowStaysOnTopHint)
-        self.assertTrue(self.ventana.isFullScreen())
+    def test_abrir_muestra_la_capa_sin_bordes_encima_con_la_app_adentro(self):
+        overlay = self.ventana.overlay
+        overlay.abrir()
+        flags = overlay.capa.windowFlags()
+        self.assertTrue(overlay.abierto)
+        self.assertTrue(overlay.capa.isVisible())
+        self.assertTrue(flags & Qt.WindowType.FramelessWindowHint)
+        self.assertTrue(flags & Qt.WindowType.WindowStaysOnTopHint)
+        self.assertIs(self.ventana.stack.window(), overlay.capa)  # la app entera esta en la capa
         self.assertFalse(self.ventana.barra_overlay.isHidden())  # "volver al juego"
-        self.assertAlmostEqual(self.ventana.windowOpacity(), self.modulo.OPACIDAD, places=2)
+        self.assertAlmostEqual(overlay.capa.windowOpacity(), self.modulo.OPACIDAD, places=2)
+        self.assertEqual(overlay.capa.pos(), overlay._lugar().topLeft())  # (la pantalla de prueba es mas chica que la app)
+        self.assertGreaterEqual(overlay.capa.width(), overlay._lugar().width())
+
+    def test_la_ventana_de_siempre_nunca_cambia_y_la_capa_es_siempre_la_misma(self):
+        # 2026-10-21, Simon: el overlay "se deforma"; antes la ventana principal se transformaba en overlay y volvia
+        self.ventana.show()
+        flags, geometria, capa = self.ventana.windowFlags(), self.ventana.geometry(), self.ventana.overlay.capa
+        for _ in range(5):  # Simon apretaba el atajo varias veces seguidas
+            self.ventana.overlay.abrir()
+            self.assertEqual(self.ventana.windowFlags(), flags)
+            self.ventana.overlay.cerrar()
+        self.assertEqual(self.ventana.windowFlags(), flags)
+        self.assertEqual(self.ventana.geometry(), geometria)
+        self.assertFalse(self.ventana.isFullScreen())
+        self.assertIs(self.ventana.overlay.capa, capa)
+        self.assertIs(self.ventana.stack.window(), self.ventana)  # el contenido volvio
+        self.assertFalse(capa.isVisible())
 
     def test_cerrar_la_deja_como_estaba(self):
         flags = self.ventana.windowFlags()
@@ -84,10 +102,15 @@ class TestOverlayCompleto(ayuda.PruebaDeInterfaz):
 
     def test_minimizar_cierra_el_overlay(self):
         self.ventana.overlay.abrir()
-        self.ventana.showMinimized()
+        self.ventana.overlay.capa.showMinimized()
         ayuda.esperar_tareas(0.2)
         QApplication.processEvents()
         self.assertFalse(self.ventana.overlay.abierto)
+
+    def test_los_dialogos_se_abren_encima_del_overlay(self):
+        self.assertIs(self.ventana._padre(), self.ventana)
+        self.ventana.overlay.abrir()
+        self.assertIs(self.ventana._padre(), self.ventana.overlay.capa)
 
     def test_el_atajo_abre_el_overlay_o_la_sala_segun_ajustes(self):
         self.ventana._on_atajo()

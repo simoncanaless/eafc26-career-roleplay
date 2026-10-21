@@ -244,7 +244,7 @@ class MandoOverlay(QObject):
         self.ventana = ventana
         self.overlay = overlay
         self.lector = lector or LectorMando()
-        self.raton = raton or RatonDeWindows(lambda: int(ventana.winId()))
+        self.raton = raton or RatonDeWindows(overlay.hwnd)  # (la capa del overlay, ui/overlay_completo.py)
         self.traductor = Traductor()
         self._ultimo = 0.0
         self._timer = QTimer(self)

@@ -3,14 +3,14 @@ El overlay completo, como las apps de Overwolf: la app ENTERA a pantalla
 completa encima del juego.
 
 - Ctrl+Shift+F12 (ui/atajo.py) lo abre: se guarda la ventana del frente (el
-  juego), la ventana de la app pasa a ser sin bordes, siempre encima y a
-  pantalla completa EN EL MONITOR DEL JUEGO, con un poco de transparencia
-  (`ajustes.overlay.opacidad`), y toma el foco: se usa al toque.
-- El mismo atajo, Esc o "VOLVER AL JUEGO" lo cierran: la ventana se esconde,
-  vuelve a ser la de siempre (sus bordes, su tamano) y el foco vuelve al juego.
-  Tambien se cierra solo si el juego vuelve al frente (alt-tab, un click en
-  el juego) o si la ventana se minimiza: si no, quedaba "abierto" a medias, con
-  la barra del overlay en la ventana de siempre.
+  juego), el contenido de la app (lateral, paginas, barra) se MUEVE a la capa
+  del overlay (`CapaOverlay`: una ventana propia, sin bordes y siempre encima,
+  creada una sola vez), que se muestra del tamano de la pantalla del juego con
+  un poco de transparencia (`ajustes.overlay.opacidad`) y toma el foco.
+- El mismo atajo, Esc o "VOLVER AL JUEGO" lo cierran: la capa se esconde, el
+  contenido vuelve a la ventana de siempre (que nunca cambio: ni flags ni
+  pantalla completa) y el foco vuelve al juego. Tambien se cierra solo si el
+  juego vuelve al frente (alt-tab, un click en el juego) o si se minimiza.
 
 No se toca el juego: es una ventana mas encima (por eso el juego tiene que
 estar en "ventana sin bordes"; en pantalla completa EXCLUSIVA ninguna ventana
@@ -28,6 +28,7 @@ from typing import Optional
 
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
+from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from roleplay import ajustes, config
 from roleplay.ui.overlay import _es_windows, _poner_al_frente, _soltar_mouse, _ventana_al_frente
@@ -103,6 +104,32 @@ def pantalla_de_la_ventana(hwnd: int):
         return None
 
 
+class CapaOverlay(QWidget):
+    """La ventana del overlay. Se crea UNA vez, con sus flags definitivos (sin bordes,
+    siempre encima, sin boton en la barra de tareas), y despues solo se muestra y se
+    esconde: nunca se le cambian los flags ni entra o sale de "pantalla completa".
+
+    Antes la ventana principal se transformaba en overlay y volvia (flags nuevos y
+    showFullScreen/showNormal con la ventana a la vista). Qt avisa que cambiar el marco
+    de una ventana visible y salir de pantalla completa en Windows la deja deformada,
+    y Simon lo vio (2026-10-21). Los overlays que no inyectan nada en el juego
+    (electron-overlay-window, el de Awakened PoE Trade) usan una ventana propia que
+    nunca se destruye ni se transforma."""
+
+    def __init__(self, al_cerrar):
+        super().__init__(None, Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint
+                         | Qt.WindowType.WindowStaysOnTopHint)
+        self.setWindowTitle("EAFC 26 Roleplay - Overlay")
+        self._al_cerrar = al_cerrar
+        capa = QVBoxLayout(self)
+        capa.setContentsMargins(0, 0, 0, 0)
+        capa.setSpacing(0)
+
+    def closeEvent(self, evento):
+        evento.ignore()  # (Alt+F4) = volver al juego; la capa no se destruye nunca
+        self._al_cerrar()
+
+
 class OverlayCompleto(QObject):
     cambio = Signal(bool)  # True al abrirse, False al cerrarse
 
@@ -111,18 +138,26 @@ class OverlayCompleto(QObject):
         self.ventana = ventana
         self.abierto = False
         self._juego = 0
-        self._antes: Optional[dict] = None
+        self._contenido = None  # lo que se mueve de la ventana principal a la capa
+        self._ventana_visible = False
         self._intentos = 0
-        self._esc = QShortcut(QKeySequence(Qt.Key.Key_Escape), ventana)
+        self.capa = CapaOverlay(self._cerrar_por_la_ventana)
+        self.capa.setWindowIcon(ventana.windowIcon())
+        self.capa.installEventFilter(self)
+        ventana.destroyed.connect(self.capa.deleteLater)
+        self._esc = QShortcut(QKeySequence(Qt.Key.Key_Escape), self.capa)
         self._esc.setContext(Qt.ShortcutContext.WindowShortcut)
         self._esc.setEnabled(False)
         self._esc.activated.connect(self._on_esc)
-        ventana.installEventFilter(self)
+
+    def hwnd(self) -> int:
+        """La ventana donde esta la app ahora (el mando mueve el cursor adentro de esta)."""
+        return int(self.capa.winId()) if self.abierto else int(self.ventana.winId())
 
     def eventFilter(self, objeto, evento):
-        if self.abierto and objeto is self.ventana:
-            if (evento.type() == QEvent.Type.WindowStateChange and self.ventana.isMinimized()
-                    and not evento.oldState() & Qt.WindowState.WindowMinimized):  # (no al abrirse desde minimizada)
+        if self.abierto and objeto is self.capa:
+            if (evento.type() == QEvent.Type.WindowStateChange and self.capa.isMinimized()
+                    and not evento.oldState() & Qt.WindowState.WindowMinimized):
                 anotar("se minimizo")
                 QTimer.singleShot(0, self._cerrar_sin_devolver)
             elif evento.type() == QEvent.Type.WindowDeactivate:
@@ -139,6 +174,10 @@ class OverlayCompleto(QObject):
         anotar("Esc")
         self.cerrar()
 
+    def _cerrar_por_la_ventana(self):
+        anotar("cerrar la ventana")
+        self.cerrar()
+
     def _cerrar_sin_devolver(self):
         self.cerrar(devolver_foco=False)
 
@@ -148,26 +187,35 @@ class OverlayCompleto(QObject):
         else:
             self.abrir()
 
+    def _lugar(self):
+        """Toda la pantalla donde esta el juego (FC 26 en ventana sin bordes la ocupa entera)."""
+        pantalla = (pantalla_de_la_ventana(self._juego) or self.ventana.screen()
+                    or QGuiApplication.primaryScreen())
+        return pantalla.geometry() if pantalla is not None else self.capa.geometry()
+
     def abrir(self):
         if self.abierto:
             return
         v = self.ventana
         al_frente = _ventana_al_frente()
-        if al_frente and al_frente != int(v.winId()):
+        if al_frente and al_frente not in (int(v.winId()), int(self.capa.winId())):
             self._juego = al_frente
-        self._antes = {"visible": v.isVisible() and not v.isMinimized(), "geometria": v.saveGeometry(),
-                       "flags": v.windowFlags()}
-        anotar(f"abrir: al frente {_describir(al_frente)}, ventana {'minimizada' if v.isMinimized() else 'visible' if v.isVisible() else 'escondida'}")
-        pantalla = pantalla_de_la_ventana(self._juego) or v.screen() or QGuiApplication.primaryScreen()
-        v.setWindowFlags(self._antes["flags"] | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
-        v.setWindowOpacity(configuracion()["opacidad"])
-        if pantalla is not None:
-            v.setGeometry(pantalla.geometry())
+        anotar(f"abrir: al frente {_describir(al_frente)}, ventana "
+               f"{'minimizada' if v.isMinimized() else 'visible' if v.isVisible() else 'escondida'}")
+        self._ventana_visible = v.isVisible() and not v.isMinimized()
+        self.capa.setGeometry(self._lugar())
+        self.capa.setWindowOpacity(configuracion()["opacidad"])
+        self._contenido = v.takeCentralWidget()
+        if self._contenido is not None:
+            self.capa.layout().addWidget(self._contenido)
+            self._contenido.show()
+        if self._ventana_visible:
+            v.hide()  # (vacia; vuelve igual que estaba al cerrar)
         self.abierto = True
         self._esc.setEnabled(True)
-        v.showFullScreen()
-        v.raise_()
-        v.activateWindow()
+        self.capa.show()
+        self.capa.raise_()
+        self.capa.activateWindow()
         self._intentos = 0
         self._tomar_el_foco()
         self.cambio.emit(True)
@@ -178,7 +226,7 @@ class OverlayCompleto(QObject):
         if not self.abierto:
             return
         _soltar_mouse()
-        tomado = _poner_al_frente(int(self.ventana.winId()))
+        tomado = _poner_al_frente(int(self.capa.winId()))
         anotar(f"tomar el foco (intento {self._intentos + 1}): {'si' if tomado else 'no'}")
         if not tomado and _es_windows():
             self._intentos += 1
@@ -189,18 +237,16 @@ class OverlayCompleto(QObject):
         if not self.abierto:
             return
         v = self.ventana
-        antes = self._antes or {}
         anotar(f"cerrar (devolver el foco: {'si' if devolver_foco else 'no'})")
         self.abierto = False
         self._esc.setEnabled(False)
-        v.hide()
-        v.setWindowOpacity(1.0)
-        v.setWindowFlags(antes.get("flags", v.windowFlags()))
-        v.setWindowState(Qt.WindowState.WindowNoState)
-        if antes.get("geometria") is not None:
-            v.restoreGeometry(antes["geometria"])
-        if antes.get("visible"):
-            v.showNormal()  # como estaba antes (queda detras del juego)
+        self.capa.hide()
+        if self._contenido is not None:
+            self.capa.layout().removeWidget(self._contenido)
+            v.setCentralWidget(self._contenido)
+            self._contenido = None
+        if self._ventana_visible:
+            v.show()  # como estaba antes (queda detras del juego)
         if devolver_foco:
             _poner_al_frente(self._juego)
         self.cambio.emit(False)
