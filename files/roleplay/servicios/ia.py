@@ -65,7 +65,9 @@ VOZ = (
     "continuidad cuando venga al caso (retomar algo que dijo, una trama abierta, como viene), sin repetir "
     "titulares ni frases que ya estan ahi. Varia la forma: nada de plantillas ni frases hechas de diario "
     "(\"genera dudas\", \"alimenta la polemica\", \"no paso desapercibido\", \"zona mixta\"). La memoria es "
-    "contexto: no saques de ahi datos nuevos ni la cuentes entera."
+    "contexto: no saques de ahi datos nuevos ni la cuentes entera. Las tramas y lo que dijo son de ANTES: no los "
+    "des como hechos de hoy (un rival del que hablo antes no es el proximo). Toda opinion tiene que ser coherente "
+    "con la memoria: no le reproches un rendimiento que es bueno ni elogies uno malo."
 )
 
 ultimo = {"proveedor": "", "modelo": "", "ms": 0}  # para "Probar IA" y el diagnostico

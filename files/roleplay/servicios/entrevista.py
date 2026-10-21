@@ -589,7 +589,8 @@ SISTEMA_PREGUNTAS = (
     "partido ni quien estaba mirando. Cada periodista tiene su voz y su memoria: si en la memoria del roleplay hay "
     "algo que el jugador dijo antes (una promesa, una frase fuerte, una evasiva) o una trama abierta que toca su "
     "tema, puede retomarlo (\"la otra vez dijiste...\"), citando textual solo lo que esta en la memoria. "
-    "Devolve las preguntas en el mismo orden, sin el nombre del periodista adelante."
+    "Cada periodista le habla AL JUGADOR (por su nombre o sin nombre): nunca pongas el nombre del periodista "
+    "dentro de la pregunta. Devolve las preguntas en el mismo orden, sin el nombre del periodista adelante."
 )
 SISTEMA_REACCION = (
     "Sos la prensa deportiva que cubre la conferencia de un futbolista en un juego de roleplay. "
@@ -647,6 +648,9 @@ def preguntas_con_ia(perfil: PlayerProfile, contexto: str, preguntas: list[str],
         nombre = quien.split(" (")[0].split(" @")[0]
         if pregunta.startswith(nombre) and ": " in pregunta[:120]:
             pregunta = pregunta.split(": ", 1)[1]
+        de_pila = nombre.split()[0] if nombre.split() else ""
+        if de_pila and pregunta.startswith(de_pila + ","):  # le hablo al periodista en vez de al jugador
+            pregunta = (perfil.nombre_jugador.split() or [""])[0] + pregunta[len(de_pila):]
         limpias.append(f"{quien}: {pregunta or base}")  # (vacia = la guardia de hechos la tiro: queda la del motor)
     return limpias
 

@@ -219,4 +219,23 @@ def sugerir_post(perfil: PlayerProfile, ultimo_partido: str = "") -> str:
                 datos["goles_texto_mayus"] = "GOLAZO" if r.goles_jugador == 1 else f"{r.goles_jugador} GOLES"
     personalidad = perfil.personalidad if perfil.personalidad in ("reservado", "carismatico", "polemico", "humilde") else "reservado"
     with narrador(perfil.id, "redes") as escritor:
-        return escritor.decir(f"post_{personalidad}_{situacion}", **datos)
+        local = escritor.decir(f"post_{personalidad}_{situacion}", **datos)
+    partido = (f"Su ultimo partido: {datos['marcador']} vs {datos['rival']} ({situacion}"
+               + (f", {datos['goles_texto']} suyos" if datos.get("goles_texto") else "") + ")."
+               if datos.get("marcador") else "Todavia no hay un partido para contar.")
+    return _post_con_ia(perfil, partido, local) or local
+
+
+SISTEMA_POST = (
+    "Sos un futbolista escribiendo un post de Instagram en un juego de roleplay. Escribilo en PRIMERA persona, "
+    "con su personalidad (reservado: corto y sobrio; carismatico: cercano y con onda; polemico: picante y "
+    "provocador; humilde: agradecido y del grupo), como lo escribiria una persona de verdad (1 a 3 oraciones, "
+    "emojis y hashtags si le van). Que tenga continuidad con su historia (la memoria) si viene al caso. `texto`: el post."
+)
+
+
+def _post_con_ia(perfil: PlayerProfile, sobre: str, ejemplo: str) -> str:
+    """El post con su voz y su historia, o "" (queda el del motor local)."""
+    datos = ia.pedir_json(SISTEMA_POST, f"{ia.ficha(perfil)}\n{sobre}\nUn ejemplo del tono (no lo copies): {ejemplo}",
+                          {"texto": "..."}, jugador=perfil.id)
+    return ia.texto((datos or {}).get("texto"), 600)

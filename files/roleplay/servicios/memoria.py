@@ -112,7 +112,7 @@ def _vida(perfil, estado: dict) -> list[str]:
 
 def _tramas(perfil) -> list[str]:
     ganchos = [g for g in perfil.ganchos_narrativos if g][-3:]
-    return ["Tramas abiertas: " + " | ".join(_corto(g, 140) for g in ganchos)] if ganchos else []
+    return ["Tramas que quedaron abiertas en conferencias anteriores: " + " | ".join(_corto(g, 140) for g in ganchos)] if ganchos else []
 
 
 def _titulares(perfil) -> list[str]:
