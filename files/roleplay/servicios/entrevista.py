@@ -586,7 +586,10 @@ SISTEMA_PREGUNTAS = (
     "dicen los datos. Los numeros (la tabla, los puntos, las rachas, los goles) son SOLO los de los datos: no "
     "digas que dos equipos estan cerca en la tabla si los datos dicen lo contrario, ni inventes resultados. Si "
     "la conferencia es PREVIA, el partido todavia no se jugo: no preguntes por como jugo, a quien le dedico el "
-    "partido ni quien estaba mirando. Devolve las preguntas en el mismo orden, sin el nombre del periodista adelante."
+    "partido ni quien estaba mirando. Cada periodista tiene su voz y su memoria: si en la memoria del roleplay hay "
+    "algo que el jugador dijo antes (una promesa, una frase fuerte, una evasiva) o una trama abierta que toca su "
+    "tema, puede retomarlo (\"la otra vez dijiste...\"), citando textual solo lo que esta en la memoria. "
+    "Devolve las preguntas en el mismo orden, sin el nombre del periodista adelante."
 )
 SISTEMA_REACCION = (
     "Sos la prensa deportiva que cubre la conferencia de un futbolista en un juego de roleplay. "
@@ -597,7 +600,8 @@ SISTEMA_REACCION = (
     "`delta_reputacion`: entero (cuanto le suma o resta a su reputacion; parti del sugerido por el sistema). "
     "`delta_carino`: entero de -6 a 6 (la hinchada de su club). `cita`: su frase mas jugosa COPIADA TEXTUAL de "
     "sus respuestas, o vacio. `nuevo_gancho_narrativo`: una trama que deja abierta (promesa, desafio), o vacio. "
-    "Se juzga SOLO lo que respondio: los datos del partido y del rival son contexto, nunca motivo de critica; no "
+    "La prensa se acuerda: si hoy cumple, contradice o repite algo de lo que dijo antes (esta en la memoria), "
+    "marcalo. Se juzga SOLO lo que respondio: los datos del partido y del rival son contexto, nunca motivo de critica; no "
     "traigas a jugadores del rival si el no los nombro, y no le pongas cargos (capitan, lider del vestuario) que "
     "no esten en los datos."
 )

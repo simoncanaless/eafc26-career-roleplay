@@ -70,5 +70,36 @@ class TestGuardiaDeHechos(unittest.TestCase):
         self.assertIn("roleplay VIVO", visto["sistema"])
 
 
+
+class TestLaIAEnLoQueEraGuion(ayuda.PruebaConBase):
+    def setUp(self):
+        super().setUp()
+        self.perfil = PlayerProfile(nombre_jugador="Simon Canales", club_actual="Man Utd")
+        self.perfil.id = database.save_profile(self.perfil)
+
+    def test_la_prensa_cuenta_las_notas_con_su_voz_y_la_de_la_entrevista_no_se_toca(self):
+        from roleplay.servicios import prensa
+
+        notas = [NoticiaPrensa(titular="Canales llega a 20 goles", cuerpo="Hizo 20 goles.", hitos=["goles:20"]),
+                 NoticiaPrensa(titular="La cita", cuerpo="Dijo algo.", hitos=["entrevista:3"])]
+        respuesta = {"notas": [{"indice": 0, "titular": "Veinte y contando", "cuerpo": "Canales ya suma 20."},
+                               {"indice": 1, "titular": "No", "cuerpo": "No."}]}
+        with mock.patch.object(ia, "pedir_json", return_value=respuesta) as pedir:
+            nuevas = prensa.reescribir_con_ia(self.perfil, notas)
+        self.assertEqual((nuevas[0].titular, nuevas[0].hitos), ("Veinte y contando", ["goles:20"]))
+        self.assertEqual(nuevas[1].titular, "La cita")
+        self.assertEqual(pedir.call_args.kwargs["jugador"], self.perfil.id)
+        with mock.patch.object(ia, "pedir_json", return_value=None):  # sin IA: las del motor
+            self.assertEqual(prensa.reescribir_con_ia(self.perfil, notas), notas)
+
+    def test_la_directiva_habla_con_su_voz(self):
+        from roleplay.servicios import contratos
+
+        with mock.patch.object(ia, "pedir_json", return_value={"frase": "Aca nadie es mas grande que el club."}):
+            self.assertEqual(contratos.frase_con_ia(self.perfil.id, "Man Utd", "neg_ofendida", 4),
+                             ("Aca nadie es mas grande que el club.", 4))
+        self.assertEqual(contratos.frase_con_ia(self.perfil.id, "Man Utd", "neg_inventado", 1), ("", 1))
+
+
 if __name__ == "__main__":
     unittest.main()

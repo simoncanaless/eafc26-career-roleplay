@@ -372,3 +372,34 @@ def contexto(carrera, player_id: Optional[int]) -> dict:
         "posicion": entrevista.posicion_del_usuario(carrera), "carino": actual.get("carino", 50),
         "goles": sum(s.goles for s in stats), "partidos": sum(s.partidos for s in stats),
     }
+
+
+# ---- la voz de la directiva (IA con la memoria del roleplay; sin IA, la del corpus) ----
+
+QUE_PASO_EN_LA_MESA = {
+    "neg_abre": "abre la mesa con la primera oferta del club",
+    "neg_sube": "mejora la oferta, pero avisa que hay un limite",
+    "neg_acepta": "acepta lo que pidio el jugador",
+    "neg_ofendida": "se molesta por lo que pidio y no mejora nada",
+    "neg_rompe": "se levanta de la mesa: la negociacion se rompio",
+    "neg_te_vas": "el jugador se levanto de la mesa y la directiva reacciona",
+}
+SISTEMA_DIRECTIVA = (
+    "Sos el director deportivo de un club, sentado a negociar las primas del contrato de un futbolista en un "
+    "juego de roleplay. Decis UNA frase (1 o 2 oraciones, en primera persona, hablandole al jugador y a su "
+    "representante) que reacciona a lo que acaba de pasar en la mesa, con personalidad de dirigente (orgullo "
+    "del club, presion, calculo). Si viene al caso, tomate algo de la memoria del roleplay (como viene, la "
+    "hinchada, lo que dijo en la prensa, otra oferta). No nombres montos ni numeros. `frase`: la frase."
+)
+
+
+def frase_con_ia(player_id: Optional[int], club: str, simbolo: str, pedida: int = 0) -> tuple[str, int]:
+    """Corre en un hilo: (lo que dice la directiva con su voz o "" -queda la del corpus-, `pedida`)."""
+    from roleplay.servicios import ia
+
+    que = QUE_PASO_EN_LA_MESA.get(simbolo)
+    if not que or not player_id:
+        return "", pedida
+    datos = ia.pedir_json(SISTEMA_DIRECTIVA, f"El club: {club}. Lo que acaba de pasar: {que}.",
+                          {"frase": "..."}, jugador=player_id)
+    return ia.texto((datos or {}).get("frase"), 300), pedida

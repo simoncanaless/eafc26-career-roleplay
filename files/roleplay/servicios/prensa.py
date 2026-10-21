@@ -10,6 +10,7 @@ resto de su vida (servicios/cruce.py). Despues de cada entrevista sale una
 nota con su frase mas jugosa entre «».
 """
 
+from dataclasses import replace
 from typing import Optional
 
 from roleplay.models import MatchInterviewRecord, NoticiaPrensa, PlayerProfile
@@ -270,6 +271,40 @@ def _nota_con_ia(perfil: PlayerProfile, registro: MatchInterviewRecord, cita: st
     return (titular, cuerpo) if titular and cuerpo else None
 
 
+SISTEMA_DIARIO = (
+    "Sos la redaccion de los diarios, radios y portales que siguen la carrera de un futbolista en un juego de "
+    "roleplay. Te paso las notas que ya armo el sistema, con sus hechos. Reescribi cada una como la escribiria un "
+    "periodista de verdad que viene siguiendo la historia: `titular` con gancho (sin repetir la forma de los "
+    "titulares de la memoria) y `cuerpo` de 2 a 4 oraciones con mirada propia. Conserva TODOS los hechos de cada "
+    "nota tal cual (nombres, clubes, resultados, numeros, montos, y si es buena o mala noticia) y no agregues "
+    "hechos; las citas entre «» van textuales. Las notas del mundo (categoria general) son sobre otros: no metas "
+    "al jugador si la nota no lo nombra."
+)
+
+
+def reescribir_con_ia(perfil: PlayerProfile, noticias: list[NoticiaPrensa]) -> list[NoticiaPrensa]:
+    """Las mismas noticias contadas por la IA con la memoria del roleplay (una
+    sola llamada para todas); la que no vuelva bien queda como la armo el motor.
+    La nota de una entrevista ya la escribio la IA con la conferencia: no se toca."""
+    from roleplay.servicios import ia
+
+    indices = [i for i, n in enumerate(noticias) if not any(h.startswith("entrevista:") for h in n.hitos)]
+    if not indices:
+        return noticias
+    lista = "\n".join(f"{i}. [{noticias[i].categoria}, {noticias[i].tono}] Titular: {noticias[i].titular}\n"
+                      f"Cuerpo: {noticias[i].cuerpo}" for i in indices)
+    datos = ia.pedir_json(SISTEMA_DIARIO, f"{ia.ficha(perfil)}\n\nLas notas:\n{lista}",
+                          {"notas": [{"indice": 0, "titular": "...", "cuerpo": "..."}]}, jugador=perfil.id)
+    resultado = list(noticias)
+    for item in (datos or {}).get("notas") or []:
+        if not isinstance(item, dict) or item.get("indice") not in indices:
+            continue
+        titular, cuerpo = ia.texto(item.get("titular"), 180), ia.texto(item.get("cuerpo"), 1200)
+        if titular and cuerpo:
+            resultado[item["indice"]] = replace(noticias[item["indice"]], titular=titular, cuerpo=cuerpo)
+    return resultado
+
+
 def noticia_del_mundo(escritor, perfil: PlayerProfile, hecho) -> NoticiaPrensa:
     """Un hecho real de la partida (dict de servicios/partida_real.py, o texto suelto)."""
     if isinstance(hecho, str):
@@ -331,7 +366,7 @@ def revisar_prensa(
             noticias += [noticia_del_mundo(escritor, perfil, h) for h in hechos_reales[:MAXIMO_NOTICIAS_MUNDO]]
 
     return {
-        "noticias": noticias,
+        "noticias": reescribir_con_ia(perfil, noticias) if noticias else noticias,
         "hitos": hitos,
         "estado_prensa": nuevo_estado,
         "delta_reputacion": sum(BONOS_REPUTACION.get(h["tipo"], 0) for h in hitos),

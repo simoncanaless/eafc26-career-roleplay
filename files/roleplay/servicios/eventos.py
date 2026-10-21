@@ -263,8 +263,10 @@ def contar(perfil: PlayerProfile, titulo: str, descripcion: str, tono: str, segu
     with narrador(perfil.id, "prensa") as escritor:
         titular = escritor.decir(f"t_vida_{tono}", **datos) or titulo
         cuerpo = unir(descripcion.rstrip(".") + ".", escritor.elegir(f"c_vida_{tono}", **datos))
-    noticia = NoticiaPrensa(player_id=perfil.id, categoria="jugador", tono=tono, titular=titular, cuerpo=cuerpo,
-                            hitos=[hito])
+    from roleplay.servicios.prensa import reescribir_con_ia
+
+    noticia = reescribir_con_ia(perfil, [NoticiaPrensa(player_id=perfil.id, categoria="jugador", tono=tono,
+                                                       titular=titular, cuerpo=cuerpo, hitos=[hito])])[0]
     evento = EventoHinchada(tipo_actividad, fecha, titulo, descripcion, seguidores)
     actividad = ActividadInstagram(
         player_id=perfil.id, fecha_juego=fecha, tipo=tipo_actividad, titulo=titulo,

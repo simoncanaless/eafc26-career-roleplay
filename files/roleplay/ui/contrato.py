@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 from roleplay.servicios import contratos
 from roleplay.servicios.narrador import narrador
 from roleplay.ui import estilos
-from roleplay.ui.comun import esc
+from roleplay.ui.comun import ejecutar_en_hilo, esc
 from roleplay.ui.componentes import boton, etiqueta_campo, fila, texto_suave, titulo_seccion
 
 COLOR_CONSEJO = {"margen": "POSITIVO", "justo": "TEXTO_SUAVE", "pasado": "NEGATIVO"}
@@ -111,9 +111,24 @@ class DialogoNegociacion(QDialog):
     # ---- dibujo ----
 
     def _decir(self, simbolo: str):
+        """La frase del corpus al toque y, si hay IA, la suya cuando llega (si no se dijo otra mientras)."""
         with narrador(self.player_id, "vida") as escritor:
             texto = escritor.decir(simbolo, club=self.negociacion["club"])
+        self._poner_frase(texto)
+        self._frase_pedida = getattr(self, "_frase_pedida", 0) + 1
+        ejecutar_en_hilo(contratos.frase_con_ia, self.player_id, self.negociacion["club"], simbolo,
+                         self._frase_pedida, al_completar=self._on_frase_ia, al_fallar=self._on_frase_fallo)
+
+    def _poner_frase(self, texto: str):
         self.directiva_label.setText(f"<span style='font-size:15px'>{esc(texto)}</span>")
+
+    def _on_frase_fallo(self, _error: str):
+        pass  # queda la frase del corpus
+
+    def _on_frase_ia(self, resultado):
+        texto, pedida = resultado
+        if texto and pedida == self._frase_pedida:
+            self._poner_frase(texto)
 
     def _mostrar(self, poner_pedidos: bool = False):
         neg = self.negociacion
