@@ -31,7 +31,20 @@ class TestCuantoSeMueve(ayuda.PruebaConBase):
         self.assertGreater(empate, 0)
         self.assertLess(derrota, 0)
         self.assertLess(sin_jugar, victoria)
-        self.assertEqual(victoria, 100)  # 1% de 10.000 con reputacion 50
+        self.assertEqual(victoria, 40)  # 0,4% de 10.000 con reputacion 50 (lejos del techo)
+
+    def test_no_es_una_bola_de_nieve_se_frena_en_el_techo_de_su_reputacion(self):
+        # 2026-10-21: con 5 goles por partido en Man Utd, Simon paso de 600.000 a 52 millones en un mes del juego
+        seguidores, crecimientos = 600_000, []
+        for _ in range(40):  # 40 partidos con 4 goles, cada uno con 3 noticias buenas, todo al maximo
+            crecimiento = round(hinchada.crecimiento_por_partido(seguidores, 100, "victoria", True, 4, 9.5)
+                                * hinchada.TOPE_EXPOSICION)
+            crecimiento += 3 * round(hinchada.crecimiento_por_noticia(seguidores, 100, "positiva") * hinchada.TOPE_EXPOSICION)
+            crecimientos.append(crecimiento)
+            seguidores += crecimiento
+        self.assertLess(seguidores, hinchada.techo_de_seguidores(100) * 1.1)  # ~40 millones, como Haaland
+        self.assertLess(crecimientos[-1], crecimientos[len(crecimientos) // 2])  # cerca del techo cuesta mas
+        self.assertLess(hinchada.techo_de_seguidores(60), hinchada.techo_de_seguidores(100) / 4)
 
     def test_con_pocos_seguidores_igual_se_mueve(self):
         self.assertGreater(hinchada.crecimiento_por_partido(0, 50, "victoria", True), 0)

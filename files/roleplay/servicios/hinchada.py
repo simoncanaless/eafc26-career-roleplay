@@ -26,9 +26,15 @@ SEGUIDORES_BASE = {1: 400_000, 2: 25_000, 3: 2_000}
 # cuanto multiplica la exposicion: el tier del club y un promedio de gol absurdo
 MULTIPLICADOR_TIER = {1: 2.5, 2: 1.0, 3: 0.5}
 PROMEDIO_NORMAL = 0.4  # goles por partido desde los que el ruido crece
-TOPE_EXPOSICION = 40.0
+# (era 40: con 5 goles por partido en un gigante cada evento sumaba varias veces la cuenta
+# entera y Simon paso de 600.000 a 52 millones en un mes del juego, 2026-10-21)
+TOPE_EXPOSICION = 2.5
 MAXIMO_EVENTOS = 5  # por revision: si la app estuvo cerrada mucho tiempo, solo lo ultimo
-ESCALA = 0.01  # un partido "normal" mueve ~1% de los seguidores
+ESCALA = 0.004  # un partido "normal" mueve ~0,4% de los seguidores...
+# ...y cuanto mas cerca del techo de su reputacion, menos (una curva en S, no una bola de nieve).
+# Techo con reputacion 100: 40 millones, lo de Haaland o Bellingham; con 80, ~20 M; con 60, ~9 M.
+TECHO_MAXIMO = 40_000_000
+FRENO_MINIMO = 0.05  # en el techo todavia se mueve un poquito
 MINIMO_ESCALA = 40  # ...y con pocos seguidores, al menos esto
 FACTOR_RESULTADO = {"victoria": 1.0, "empate": 0.3, "derrota": -0.6}
 FACTOR_TONO = {"positiva": 1.5, "mixta": 0.3, "neutral": 0.2, "negativa": -1.2}
@@ -43,10 +49,18 @@ class EventoHinchada:
     crecimiento: int
 
 
+def techo_de_seguidores(reputacion: int) -> int:
+    """Hasta donde llega la cuenta con esa reputacion (ahi se frena)."""
+    return round(TECHO_MAXIMO * (max(0, min(100, reputacion)) / 100) ** 3 + 20_000)
+
+
 def _escala(seguidores: int, reputacion: int) -> float:
     """Cuanto mueve un evento: mas seguidores y mas reputacion, mas gente
-    mirando (y mas gente que se va si las cosas salen mal)."""
-    return max(MINIMO_ESCALA, seguidores * ESCALA) * (0.5 + reputacion / 100)
+    mirando (y mas gente que se va si las cosas salen mal), frenado cerca del
+    techo de su reputacion: crecer de 30 a 40 millones cuesta mucho mas que de
+    300.000 a 400.000."""
+    freno = max(FRENO_MINIMO, 1 - seguidores / techo_de_seguidores(reputacion))
+    return max(MINIMO_ESCALA, seguidores * ESCALA) * (0.5 + reputacion / 100) * freno
 
 
 def base_de_seguidores(tier: int, reputacion: int) -> int:

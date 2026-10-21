@@ -255,7 +255,7 @@ class TestSeguidores(ayuda.PruebaConBase):
         self.assertGreater(hinchada.base_de_seguidores(1, 60), 100 * hinchada.base_de_seguidores(3, 60))
         normal = hinchada.exposicion(3, 10, 30)
         estrella = hinchada.exposicion(1, 80, 40, premios=3)
-        self.assertGreater(estrella, 20 * normal)  # 80 goles en 40 partidos en un gigante: explota
+        self.assertGreater(estrella, 4 * normal)  # 80 goles en 40 partidos en un gigante: mucho mas ruido, pero acotado
         self.assertLessEqual(hinchada.exposicion(1, 500, 10, 99), hinchada.TOPE_EXPOSICION)
 
 
