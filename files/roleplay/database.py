@@ -305,8 +305,15 @@ def _leer_estado(player_id: int) -> Optional[tuple[dict, int]]:
 @contextmanager
 def _editar_estado(player_id: int) -> Iterator[tuple[dict, int]]:
     """Abre el estado_json para modificarlo en el lugar y lo guarda al
-    salir, todo en la misma transaccion (leer y escribir no se cruzan)."""
+    salir, todo en la misma transaccion (leer y escribir no se cruzan).
+
+    BEGIN IMMEDIATE antes de leer: sqlite3 de Python recien abre la transaccion
+    en el UPDATE, asi que el SELECT quedaba afuera y dos hilos podian leer el
+    mismo estado y pisarse (2026-10-21: firmar tres marcas seguidas perdia una,
+    porque la noticia de la anterior, en un hilo, guardaba el estado que habia
+    leido antes). Con el lock de escritura desde la lectura, el otro espera."""
     with conectar() as conn:
+        conn.execute("BEGIN IMMEDIATE")
         fila = conn.execute(
             "SELECT reputacion_inicial, estado_json FROM player_profile WHERE id = ?", (player_id,)
         ).fetchone()

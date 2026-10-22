@@ -139,5 +139,30 @@ class TestDatabase(ayuda.PruebaConBase):
             database.aplicar_delta_reputacion(99, 1, "x")
 
 
+
+class TestEstadoSinPisarse(ayuda.PruebaConBase):
+    def test_dos_hilos_que_guardan_el_estado_a_la_vez_no_se_pisan(self):
+        import threading
+        import time
+
+        from roleplay.models import PlayerProfile
+
+        pid = database.save_profile(PlayerProfile(nombre_jugador="Simon"))
+        leyo = threading.Event()
+
+        def hilo():  # (como la noticia de una marca, que guarda su memoria mientras se firma otra)
+            with database._editar_estado(pid) as (estado, _):
+                leyo.set()
+                time.sleep(0.3)
+                estado["narrador_usados"] = {"x": [1]}
+
+        otro = threading.Thread(target=hilo)
+        otro.start()
+        leyo.wait(2)
+        database.set_economia(pid, {"saldo": 5})  # espera a que el hilo termine y lee lo suyo
+        otro.join()
+        self.assertEqual(database.get_economia(pid), {"saldo": 5})
+        self.assertEqual(database.get_narrador_usados(pid), {"x": [1]})
+
 if __name__ == "__main__":
     unittest.main()
