@@ -47,6 +47,9 @@ class EventoHinchada:
     titulo: str  # lo que se muestra
     detalle: str  # lo que paso, en una oracion
     crecimiento: int
+    # como lo cuenta una pagina de afuera (el feed global): en tercera persona. El `titulo`
+    # es para el jugador ("3 goles tuyos"); una pagina no le habla a el (Simon, 2026-10-21)
+    titular: str = ""
 
 
 def techo_de_seguidores(reputacion: int) -> int:
@@ -140,12 +143,15 @@ def eventos_nuevos(
             else:
                 rendimiento = f"{nombre} jugo {suya.minutos} minutos, marco {cantidad(goles, 'gol', 'goles')}"
                 rendimiento += f", nota {nota:.1f}" if nota is not None else ""
+            apellido = nombre.split()[-1] if nombre.split() else nombre
+            titular = marcador(carrera, p) + (f" · {cantidad(goles, 'gol', 'goles')} de {apellido}" if goles else "")
             eventos.append(EventoHinchada(
                 "partido", p.fecha.isoformat(), titulo,
                 f"Partido: {marcador(carrera, p)} ({carrera.competicion(p.competicion)}, {fecha_corta(p.fecha)}). "
                 f"Resultado para su club: {p.resultado_para(equipo)}. {rendimiento}.",
                 round(crecimiento_por_partido(seguidores, reputacion, p.resultado_para(equipo), suya is not None, goles,
                                               nota) * multiplicador),
+                titular,
             ))
         if jugados:
             estado["hasta"] = max(estado.get("hasta") or "", jugados[-1].fecha.isoformat())

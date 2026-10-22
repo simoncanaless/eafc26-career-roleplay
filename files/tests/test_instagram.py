@@ -34,6 +34,21 @@ class TestFeedGlobal(ConEcosistema):
             self.assertGreater(post["likes"], 0)
 
 
+    def test_las_paginas_hablan_en_tercera_persona_y_una_cita_no_va_a_la_de_chismes(self):
+        # Simon, 2026-10-21: "@goalglobal ... 3 goles tuyos" y @tmz_tv publicando una cita de conferencia
+        eventos = [hinchada.EventoHinchada("partido", "2027-03-03", "Ipswich 0-4 Man Utd · 3 goles tuyos", "", 500,
+                                           "Ipswich 0-4 Man Utd · 3 goles de Canales"),
+                   hinchada.EventoHinchada("noticia", "2027-03-03", "«Todos asumimos nuestra culpa», promete Canales",
+                                           "Noticia sobre el (positiva): ... Dijo que su pareja lo banca.", 100)]
+        carrera = construir(f.construir_bytes())
+        with mock.patch.object(feed, "PROBABILIDAD_POST", 1.0), mock.patch.object(feed, "PROBABILIDAD_RUMOR", 0.0):
+            posts = feed.actualizar(self.perfil, eventos, [], 1_000_000, 90, carrera)
+        self.assertEqual(len(posts), 2)
+        for post in posts:
+            self.assertNotIn("tuyo", post["texto"])
+            self.assertNotEqual(post["usuario_ig"], "@chismes")
+        self.assertTrue(any("3 goles de Canales" in p["texto"] for p in posts))
+
 class TestComentariosDelAmbiente(ConEcosistema):
     def test_colegas_famosas_y_likes_verificados(self):
         tonos, autores = set(), set()

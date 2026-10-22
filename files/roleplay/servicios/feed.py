@@ -30,22 +30,32 @@ PALABRAS_LUJO = ("compro", "estrena", "llego", "mansion", "yate", "jet", "reloj"
 
 
 def _tipo(evento) -> str:
-    """Que clase de pagina publica sobre el evento."""
-    texto = f"{evento.titulo} {evento.detalle}".lower()
+    """Que clase de pagina publica sobre el evento. Se mira el TITULO (de que se trata):
+    el cuerpo de una noticia nombra de paso a la pareja o una noche de fiesta y una cita
+    de conferencia terminaba en la pagina de chismes (Simon, 2026-10-21)."""
+    titulo = evento.titulo.lower()
     if evento.tipo == "partido":
-        return "viral" if "gol" in evento.titulo.lower() else "medio"
-    if any(p in texto for p in PALABRAS_FARANDULA):
+        return "viral" if "gol" in titulo else "medio"
+    if evento.tipo == "amor" or any(p in titulo for p in PALABRAS_FARANDULA):
         return "farandula"
-    if "«" in evento.detalle or "entrevista" in texto or "conferencia" in texto:
+    if "«" in evento.titulo or "«" in evento.detalle[:200] or "entrevista" in titulo or "conferencia" in titulo:
         return "polemica" if evento.crecimiento < 0 else "medio"
-    if any(p in texto for p in PALABRAS_LUJO):
+    if any(p in titulo for p in PALABRAS_LUJO):
         return "viral"
     return "polemica" if evento.crecimiento < 0 else "medio"
 
 
+# si no hay una pagina de ese tipo, la que mas se le parece (nunca la de chismes para una cita)
+PARECIDAS = {"polemica": ("medio", "viral"), "medio": ("polemica", "viral"), "viral": ("medio",),
+             "mercado": ("medio",), "farandula": ("viral",)}
+
+
 def _pagina(paginas: list[dict], tipo: str, dado: random.Random) -> dict:
-    del_tipo = [p for p in paginas if p.get("tipo") == tipo]
-    return dado.choice(del_tipo or paginas)
+    for buscado in (tipo, *PARECIDAS.get(tipo, ())):
+        del_tipo = [p for p in paginas if p.get("tipo") == buscado]
+        if del_tipo:
+            return dado.choice(del_tipo)
+    return dado.choice(paginas)
 
 
 def _likes(tipo: str, fama: int, dado: random.Random) -> int:
@@ -84,7 +94,7 @@ def actualizar(perfil: PlayerProfile, eventos: list, anterior: list, seguidores:
             if tipo != "farandula" and dado.random() >= PROBABILIDAD_POST:
                 continue  # (la farandula no se pierde un chisme)
             pagina = _pagina(paginas, tipo, dado)
-            texto = escritor.decir(f"feed_{tipo}", **base, titulo=evento.titulo)
+            texto = escritor.decir(f"feed_{tipo}", **base, titulo=getattr(evento, "titular", "") or evento.titulo)
             if texto:
                 nuevos.append({"pagina": pagina.get("nombre", ""), "usuario_ig": pagina.get("usuario_ig", ""),
                                "tipo": tipo, "texto": texto, "fecha": evento.fecha_juego or fecha,
