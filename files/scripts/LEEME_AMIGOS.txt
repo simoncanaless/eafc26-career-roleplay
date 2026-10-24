@@ -73,9 +73,12 @@ JUGAR
   Tres periodistas preguntan con los datos reales (la tabla, tus goles, tus
   premios, tus marcas, tu vida) y se acuerdan de lo que dijiste antes. Responde
   escribiendo o por voz.
-- La voz usa el reconocimiento de voz de Windows en espanol (sin internet).
-  Si no lo tenes: Configuracion > Hora e idioma > Idioma y region > Espanol >
-  Opciones > Voz. Sin eso, escribi las respuestas.
+- VOZ: si pusiste la clave de Groq, tus respuestas habladas se pasan a
+  texto con Whisper (el mismo de los subtitulos buenos: entiende muy bien, en
+  menos de un segundo; el audio va a Groq). Sin clave, usa el reconocimiento
+  de voz de Windows en espanol (sin internet). Si no lo tenes: Configuracion >
+  Hora e idioma > Idioma y region > Espanol > Opciones > Voz. Sin nada de eso,
+  escribi las respuestas.
 - RESUMEN: tu carta, tu temporada, TODA tu carrera club por club (como el
   "Resumen de carrera" del juego), tus metas, tu hinchada y tu vitrina.
 - TEMPORADA: tablas, goleadores y tus partidos de cada competicion.

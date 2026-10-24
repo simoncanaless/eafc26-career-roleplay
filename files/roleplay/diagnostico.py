@@ -102,6 +102,9 @@ def revisar() -> list[tuple[bool, str]]:
     from roleplay.ui.mando import describir_mando
 
     anotar(True, f"Mando para el overlay: {describir_mando()}")
+    from roleplay.servicios import transcriptor
+
+    anotar(True, f"Voz: {transcriptor.estado()}")
     return resultados
 
 

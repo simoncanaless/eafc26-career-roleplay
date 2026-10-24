@@ -52,6 +52,9 @@ def construir() -> Path:
         "--collect-submodules", "dxcam",
         # el mando del overlay: SDL2.dll viene adentro de sdl2dll (ui/mando.py)
         "--collect-all", "sdl2dll",
+        # Whisper local (servicios/transcriptor.py) NO va: ~150 MB de librerias; los amigos usan el de Groq
+        "--exclude-module", "faster_whisper", "--exclude-module", "ctranslate2",
+        "--exclude-module", "onnxruntime", "--exclude-module", "av",
         "--exclude-module", "cv2",
         "--exclude-module", "tkinter",
         "--distpath", str(DIST),

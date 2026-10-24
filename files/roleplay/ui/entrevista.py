@@ -544,6 +544,9 @@ class InterviewWindow(QWidget):
         self.microfono_combo.clear()
         for microfono in microfonos:
             self.microfono_combo.addItem(microfono.nombre, microfono.indice)
+        from roleplay.servicios import transcriptor
+
+        transcriptor.precargar()  # Whisper local en memoria antes de la primera respuesta (si esta)
 
     def _on_voz_clicked(self, numero: int):
         if self._grabacion is not None:
@@ -621,6 +624,10 @@ class InterviewWindow(QWidget):
         edit = self._respuesta_edits[numero]
         anterior = edit.toPlainText().strip()
         edit.setPlainText(f"{anterior} {texto}" if anterior else texto)
+        from roleplay.servicios import transcriptor
+
+        self._botones_voz[numero].setToolTip(
+            f"Transcrito con {transcriptor.ultimo['motor']} ({transcriptor.ultimo['detalle']}). Revisalo antes de enviar.")
 
     def _on_transcripcion_error(self, mensaje: str):
         self._terminar_transcripcion()

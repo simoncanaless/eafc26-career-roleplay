@@ -8,3 +8,7 @@ sounddevice>=0.4.6
 # el mando (PS5, PS4, Xbox) en el overlay: SDL, con su DLL
 pysdl2>=0.9.16
 pysdl2-dll>=2.30
+# respuestas por voz con Whisper local (servicios/transcriptor.py), como el Transcriptor de clases.
+# Opcional: sin esto la voz usa el Whisper de Groq (con la clave de la IA) o el de Windows.
+# No va en el paquete de los amigos (~150 MB). Los modelos se bajan aparte (Ajustes > Respuestas por voz).
+faster-whisper==1.2.1

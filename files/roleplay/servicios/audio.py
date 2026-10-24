@@ -1,7 +1,9 @@
 """
-Respuestas por voz: grabar del microfono y transcribir con el reconocedor
-de voz de Windows (System.Speech, el de "Reconocimiento de voz"), sin
-internet ni IA. Se le pasa el WAV por PowerShell; no hace falta instalar nada
+Respuestas por voz: grabar del microfono y transcribir. Desde el 2026-10-24
+primero con Whisper (servicios/transcriptor.py: el local, como el Transcriptor
+de clases de Simon, y si no esta, el de Groq) y de ultimo respaldo con el
+reconocedor de voz de Windows (System.Speech, el de "Reconocimiento de voz"),
+sin internet ni IA. Se le pasa el WAV por PowerShell; no hace falta instalar nada
 si Windows tiene el reconocedor en espanol (Configuracion > Hora e idioma >
 Voz). Si no lo tiene, se avisa y se responde escribiendo.
 
@@ -166,7 +168,23 @@ SEGUNDOS_RECONOCER = 120
 
 
 def transcribir(wav: bytes, pregunta: str = "") -> str:
-    """El texto de la respuesta grabada (vacio si no se entendio nada)."""
+    """El texto de la respuesta grabada (vacio si no se entendio nada): Whisper local -> Whisper de Groq ->
+    Windows. `transcriptor.ultimo` dice con cual se hizo."""
+    from roleplay.servicios import transcriptor
+
+    for motor in (transcriptor.transcribir_local, transcriptor.transcribir_groq):
+        try:
+            texto = motor(wav, pregunta)
+        except transcriptor.NoDisponible:
+            continue
+        except Exception:  # noqa: BLE001 (un modelo que no carga, un error raro: el siguiente)
+            continue
+        return texto[:1].upper() + texto[1:] if texto else ""
+    transcriptor.ultimo.update(motor="Windows", detalle="reconocedor de voz de Windows")
+    return _transcribir_con_windows(wav)
+
+
+def _transcribir_con_windows(wav: bytes) -> str:
     archivo = tempfile.NamedTemporaryFile(prefix="eafc_voz_", suffix=".wav", delete=False)
     try:
         archivo.write(wav)

@@ -288,7 +288,7 @@ class TestArranque(unittest.TestCase):
         proceso = ayuda.correr_aislado(
             "import sys, roleplay.ui.menu\n"
             "print(sorted(m for m in ('google.genai', 'cv2', 'dxcam', 'sounddevice', 'PySide6.QtWebEngineWidgets', "
-            "'PySide6.QtWebEngineCore') if m in sys.modules))"
+            "'PySide6.QtWebEngineCore', 'faster_whisper', 'ctranslate2') if m in sys.modules))"
         )
         self.assertEqual(proceso.returncode, 0, proceso.stderr)
         self.assertEqual(proceso.stdout.strip(), "[]")

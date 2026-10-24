@@ -1,0 +1,5 @@
+# Solo con tarjeta NVIDIA: las DLL de CUDA para que Whisper local use la GPU (~1,3 GB).
+# Sin esto transcribe igual con el procesador (mas lento). Instalar con:
+#   .venv\Scripts\python.exe -m pip install -r requirements-nvidia.txt
+nvidia-cublas-cu12
+nvidia-cudnn-cu12>=9,<10

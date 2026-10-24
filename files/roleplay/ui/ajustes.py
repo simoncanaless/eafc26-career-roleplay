@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
     QInputDialog,
+    QLabel,
     QLineEdit,
     QMessageBox,
     QPlainTextEdit,
@@ -174,6 +175,31 @@ class DialogoAjustes(QDialog):
         overlay.cuerpo.addWidget(self.overlay_mando)
         layout.addWidget(overlay)
 
+        from roleplay.servicios import transcriptor
+
+        voz = Tarjeta("Respuestas por voz")
+        voz.cuerpo.addWidget(texto_suave(
+            "Tus respuestas habladas se pasan a texto con Whisper (como el Transcriptor de clases): primero el de "
+            "tu PC (sin internet; con tarjeta NVIDIA es instantaneo), si no esta el de Groq con tu clave (el audio "
+            "sale a internet) y de ultimo el reconocedor de Windows."
+        ))
+        self.voz_estado = QLabel(transcriptor.estado())
+        self.voz_estado.setWordWrap(True)
+        voz.cuerpo.addWidget(self.voz_estado)
+        if transcriptor.hay_libreria():
+            self.voz_modelo = QComboBox()
+            self.voz_modelo.addItem("Automatico (el mejor para este PC)", "auto")
+            for nombre in transcriptor.MODELOS:
+                bajado = "bajado" if transcriptor.modelo_descargado(nombre) else f"{transcriptor.TAMANOS_GB[nombre]:.1f} GB"
+                self.voz_modelo.addItem(f"{nombre} ({bajado})", nombre)
+            elegido = (ajustes.leer().get("voz") or {}).get("modelo", "auto")
+            self.voz_modelo.setCurrentIndex(max(0, self.voz_modelo.findData(elegido)))
+            self.voz_modelo.currentIndexChanged.connect(self._on_voz_modelo)
+            self.voz_descargar_btn = boton("Descargar el modelo")
+            self.voz_descargar_btn.clicked.connect(self._on_voz_descargar)
+            voz.cuerpo.addLayout(fila(etiqueta_campo("Modelo"), self.voz_modelo, None, self.voz_descargar_btn))
+        layout.addWidget(voz)
+
         motor = Tarjeta("Motor narrativo e IA hibrida")
         motor.cuerpo.addWidget(
             texto_suave(
@@ -277,6 +303,36 @@ class DialogoAjustes(QDialog):
         except ValueError as exc:
             QMessageBox.warning(self, "No se pudo elegir", str(exc))
         self._refrescar()
+
+    def _on_voz_modelo(self, *_):
+        ajustes.guardar(voz={"modelo": self.voz_modelo.currentData()})
+        from roleplay.servicios import transcriptor
+
+        self.voz_estado.setText(transcriptor.estado())
+
+    def _on_voz_descargar(self):
+        from roleplay.servicios import transcriptor
+
+        nombre = self.voz_modelo.currentData()
+        if nombre == "auto":
+            nombre = transcriptor.MODELO_GPU if transcriptor.hay_gpu() else transcriptor.MODELO_CPU
+        if transcriptor.modelo_descargado(nombre):
+            self.voz_estado.setText(f"{nombre} ya esta descargado. " + transcriptor.estado())
+            return
+        self.voz_descargar_btn.setEnabled(False)
+        self.voz_estado.setText(f"Descargando {nombre} ({transcriptor.TAMANOS_GB[nombre]:.1f} GB)... puede tardar.")
+        ejecutar_en_hilo(transcriptor.descargar_modelo, nombre,
+                         al_completar=self._on_voz_descargado, al_fallar=self._on_voz_descarga_error)
+
+    def _on_voz_descargado(self, _resultado):
+        from roleplay.servicios import transcriptor
+
+        self.voz_descargar_btn.setEnabled(True)
+        self.voz_estado.setText("Listo. " + transcriptor.estado())
+
+    def _on_voz_descarga_error(self, mensaje: str):
+        self.voz_descargar_btn.setEnabled(True)
+        self.voz_estado.setText(f"No se pudo descargar ({mensaje}). Revisa la conexion y proba de nuevo.")
 
     def _on_overlay(self, *_):
         ajustes.guardar(overlay={"modo": self.overlay_modo.currentData(),
