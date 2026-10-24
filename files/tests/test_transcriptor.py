@@ -120,3 +120,17 @@ class TestGroq(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestMemoriaDeVideo(unittest.TestCase):
+    def test_el_modelo_se_suelta_solo_si_no_se_usa(self):
+        # 2026-10-24: con FC 26 abierto la tarjeta estaba casi llena y el modelo ocupaba 2,1 GB sin usarse
+        import time
+
+        motor = transcriptor._Motor()
+        motor._modelo, motor._clave = object(), ("small", False)
+        with mock.patch.object(transcriptor, "SOLTAR_DESPUES_S", 0.05):
+            motor.usado()
+            self.assertTrue(motor.cargado())
+            time.sleep(0.3)
+        self.assertFalse(motor.cargado())

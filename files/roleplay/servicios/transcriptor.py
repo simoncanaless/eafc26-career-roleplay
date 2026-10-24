@@ -49,6 +49,10 @@ MODELOS = ("large-v3-turbo", "large-v3", "medium", "small")  # el orden: el mejo
 TAMANOS_GB = {"small": 0.49, "medium": 1.53, "large-v3-turbo": 1.62, "large-v3": 3.09}
 MODELO_GPU, MODELO_CPU = "large-v3-turbo", "small"  # respuestas cortas: turbo en GPU es instantaneo
 
+# La memoria de video: con FC 26 abierto la tarjeta de Simon estaba en 7,6 de 8 GB y el modelo ocupaba 2,1 GB
+# aunque no se usara (2026-10-24). Ahora se carga al empezar a grabar (mientras habla) y se suelta solo.
+SOLTAR_DESPUES_S = 60
+
 GROQ_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 GROQ_MODELO = "whisper-large-v3-turbo"
 GROQ_TIMEOUT = 20
@@ -164,12 +168,32 @@ def modelo_elegido() -> Optional[str]:
 
 
 class _Motor:
-    """El modelo cargado queda en memoria: la primera carga tarda, las siguientes no."""
+    """El modelo cargado queda en memoria un rato (SOLTAR_DESPUES_S sin usarlo) y despues se suelta: no
+    ocupa la memoria de video que necesita el juego."""
 
     def __init__(self):
         self._modelo = None
         self._clave = None
         self._candado = threading.Lock()
+        self._reloj: Optional[threading.Timer] = None
+
+    def cargado(self) -> bool:
+        return self._modelo is not None
+
+    def soltar(self) -> None:
+        with self._candado:
+            self._modelo, self._clave = None, None
+        import gc
+
+        gc.collect()  # (CTranslate2 libera la memoria de video al destruirse el modelo)
+
+    def usado(self) -> None:
+        """Vuelve a contar: si en SOLTAR_DESPUES_S no se usa, se suelta."""
+        if self._reloj is not None:
+            self._reloj.cancel()
+        self._reloj = threading.Timer(SOLTAR_DESPUES_S, self.soltar)
+        self._reloj.daemon = True
+        self._reloj.start()
 
     def cargar(self, nombre: str):
         from faster_whisper import WhisperModel
@@ -191,18 +215,20 @@ class _Motor:
                                       cpu_threads=max(4, (os.cpu_count() or 8) // 2))
             self._modelo, self._clave = modelo, (nombre, gpu)
             return modelo, gpu
+        # (usado() lo llama quien lo usa: transcribir_local y precargar)
 
 
 _motor = _Motor()
 
 
 def precargar() -> None:
-    """Carga el modelo en un hilo (lo llama la sala al mostrar las preguntas). Nunca falla."""
+    """Carga el modelo en un hilo: la sala lo llama al EMPEZAR a grabar, asi se carga mientras habla. Nunca falla."""
     def cargar():
         try:
             nombre = modelo_elegido()
             if nombre:
                 _motor.cargar(nombre)
+                _motor.usado()
         except Exception:  # noqa: BLE001
             pass
 
@@ -215,6 +241,7 @@ def transcribir_local(wav: bytes, pregunta: str = "") -> str:
     if nombre is None:
         raise NoDisponible("sin Whisper local")
     modelo, gpu = _motor.cargar(nombre)
+    _motor.usado()
     segmentos, _info = modelo.transcribe(
         subir_volumen(muestras_de_wav(wav)),
         language="es",
@@ -227,6 +254,7 @@ def transcribir_local(wav: bytes, pregunta: str = "") -> str:
     )
     texto = " ".join(s.text.strip() for s in segmentos if s.text.strip() and not es_inventada(s.text))
     ultimo.update(motor="Whisper local", detalle=f"{nombre} en {'la GPU' if gpu else 'el procesador'}")
+    _motor.usado()  # (desde que termino: el minuto cuenta de aca)
     return texto.strip()
 
 

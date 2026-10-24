@@ -544,9 +544,6 @@ class InterviewWindow(QWidget):
         self.microfono_combo.clear()
         for microfono in microfonos:
             self.microfono_combo.addItem(microfono.nombre, microfono.indice)
-        from roleplay.servicios import transcriptor
-
-        transcriptor.precargar()  # Whisper local en memoria antes de la primera respuesta (si esta)
 
     def _on_voz_clicked(self, numero: int):
         if self._grabacion is not None:
@@ -559,6 +556,9 @@ class InterviewWindow(QWidget):
         except RuntimeError as exc:
             QMessageBox.warning(self, "No se pudo grabar", str(exc))
             return
+        from roleplay.servicios import transcriptor
+
+        transcriptor.precargar()  # Whisper local se carga mientras habla (y se suelta solo al minuto)
 
         self._grabacion = (grabador, numero)
         boton_voz = self._botones_voz[numero]
