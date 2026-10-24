@@ -71,10 +71,11 @@ class UltimoPartido:
 
 
 def ultimo_partido(carrera: Carrera, anterior: Optional[dict] = None) -> Optional[UltimoPartido]:
-    """El ultimo partido jugado por el club del usuario. `anterior` es lo
-    guardado la vez pasada (database.get_estado_partida)."""
+    """El ultimo partido del usuario: el de su club o, si despues jugo con la
+    seleccion, el de la seleccion. `anterior` es lo guardado la vez pasada
+    (database.get_estado_partida)."""
     anterior = anterior or {}
-    equipo = carrera.equipo_usuario()
+    equipo = carrera.equipo_del_ultimo_partido()
     if equipo is None:
         return None
     partido = carrera.ultimo_partido_de(equipo)
@@ -104,6 +105,7 @@ def ultimo_partido(carrera: Carrera, anterior: Optional[dict] = None) -> Optiona
         tarjeta_amarilla=detalle.get("amarillas", 0) > 0,
         tarjeta_roja=detalle.get("rojas", 0) > 0,
         hombre_del_partido=detalle.get("figura", 0) > 0,
+        equipo_propio=carrera.equipo(equipo) if carrera.es_seleccion(equipo) else "",
     )
     return UltimoPartido(
         clave=clave,

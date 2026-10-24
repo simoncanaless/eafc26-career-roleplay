@@ -248,6 +248,35 @@ class Carrera:
                 return equipo
         return None
 
+    def seleccion_del_usuario(self) -> Optional[int]:
+        """La seleccion con la que JUEGA el usuario (tiene partidos con ella en la partida)."""
+        if self.usuario_id is None:
+            return None
+        suyas = [a for a in self.actuaciones if a.jugador == self.usuario_id and self.es_seleccion(a.equipo)]
+        return max(suyas, key=lambda a: a.fecha).equipo if suyas else None
+
+    def equipo_del_ultimo_partido(self) -> Optional[int]:
+        """Con quien jugo su ultimo partido: el club o, si despues jugo con la seleccion, la
+        seleccion (2026-10-22, Simon: los partidos con Italia no salian para la entrevista)."""
+        club, seleccion = self.equipo_usuario(), self.seleccion_del_usuario()
+        if seleccion is None:
+            return club
+        con_seleccion = max(a.fecha for a in self.actuaciones
+                            if a.jugador == self.usuario_id and a.equipo == seleccion)
+        del_club = self.ultimo_partido_de(club) if club is not None else None
+        return seleccion if del_club is None or con_seleccion > del_club.fecha else club
+
+    def equipo_del_proximo_partido(self) -> Optional[int]:
+        """Con quien juega el proximo: el club o su seleccion, el que juegue antes."""
+        club, seleccion = self.equipo_usuario(), self.seleccion_del_usuario()
+        if seleccion is None:
+            return club
+        del_club = self.proximo_partido_de(club) if club is not None else None
+        de_la_seleccion = self.proximo_partido_de(seleccion)
+        if de_la_seleccion is not None and (del_club is None or de_la_seleccion.fecha < del_club.fecha):
+            return seleccion
+        return club
+
     def es_seleccion(self, equipo: int) -> bool:
         return self.ligas_de_equipo.get(equipo) in (LIGA_SELECCIONES, LIGA_SELECCIONES_FEMENINAS)
 

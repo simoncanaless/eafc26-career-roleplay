@@ -423,9 +423,11 @@ class InterviewWindow(QWidget):
             tarjeta_amarilla=self.amarilla_check.isChecked(),
             tarjeta_roja=self.roja_check.isChecked(),
             hombre_del_partido=self.motm_check.isChecked(),
+            equipo_propio=getattr(self, "_equipo_propio", ""),  # (la seleccion, si el partido cargado era con ella)
         )
 
     def _cargar_stats_en_formulario(self, stats: MatchStats):
+        self._equipo_propio = stats.equipo_propio
         self.goles_equipo_spin.setValue(stats.goles_equipo)
         self.goles_rival_spin.setValue(stats.goles_rival)
         self.equipo_rival_edit.setText(stats.equipo_rival)
@@ -681,7 +683,7 @@ class InterviewWindow(QWidget):
         save_match_interview(
             MatchInterviewRecord(
                 player_id=perfil.id,
-                **stats.model_dump(exclude={"confianza_baja"}),
+                **stats.model_dump(exclude={"confianza_baja", "equipo_propio"}),
                 preguntas_entrevista=[pregunta for pregunta, _ in pares],
                 respuestas_jugador=[respuesta for _, respuesta in pares],
                 reaccion_prensa=resultado.reaccion_prensa,

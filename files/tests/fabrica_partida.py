@@ -22,6 +22,7 @@ BRUNO = 212198
 DELANTERO_ARSENAL = 250001
 MAN_UTD, CITY, ARSENAL, LIVERPOOL, SUNDERLAND, NAPOLI, NORUEGA = 11, 10, 1, 9, 106, 48, 1352
 LIGA, CHAMPIONS = 808, 122
+ESCOCIA, ELIMINATORIAS = 1353, 1000  # (solo con con_seleccion)
 NOMBRES_EQUIPOS = {
     MAN_UTD: "Man Utd", CITY: "Manchester City", ARSENAL: "Arsenal", LIVERPOOL: "Liverpool",
     SUNDERLAND: "Sunderland", NAPOLI: "SSC Napoli", NORUEGA: "Noruega",
@@ -134,16 +135,28 @@ ACTUACION_NUEVA = (20270123, 90, 8.8, 2, 25)
 def construir_bytes(
     nombre_partida: str = "Carrera - Prog. de Futbolista 1", partido_nuevo: bool = False,
     fichajes: dict | None = None, otros_partidos: list | None = None, etapas: bool = False,
-    jugador_del_mes: int = 5,
+    jugador_del_mes: int = 5, con_seleccion: bool = False,
 ) -> bytes:
     """`partido_nuevo`: la misma partida despues de que el usuario jugo el
     Man Utd 2-1 Arsenal del 23-01-2027 (2 goles suyos, 1 asistencia).
     `fichajes`: {jugador: club nuevo} (el resto de sus vinculos queda igual).
     `otros_partidos`: partidos de mas, con el formato de PARTIDOS (ej. de
-    otros equipos: el juego avanzo de dia sin que juegue el usuario)."""
+    otros equipos: el juego avanzo de dia sin que juegue el usuario).
+    `con_seleccion`: el usuario tambien juega con Noruega, y su ultimo partido
+    es Noruega 3-1 Escocia (eliminatorias, 19-01-2027, 2 goles suyos), despues
+    del ultimo con el club; el proximo de Noruega es el 30-01."""
     fichajes = fichajes or {}
     partidos_lista = list(PARTIDOS) + list(otros_partidos or [])
     estadisticas_lista = list(ESTADISTICAS)
+    nombres_equipos, liga_de_equipo, jugadores = dict(NOMBRES_EQUIPOS), dict(LIGA_DE_EQUIPO), dict(JUGADORES)
+    if con_seleccion:
+        nombres_equipos[ESCOCIA], liga_de_equipo[ESCOCIA] = "Escocia", 77
+        nacimiento, vinculos = jugadores[USUARIO]
+        jugadores[USUARIO] = (nacimiento, vinculos + [(NORUEGA, 25)])
+        partidos_lista += [(20270119, ELIMINATORIAS, NORUEGA, ESCOCIA, 3, 1, True),
+                           (20270130, ELIMINATORIAS, ESCOCIA, NORUEGA, 0, 0, False)]
+        estadisticas_lista.append((USUARIO, NORUEGA, ELIMINATORIAS, 1, 90, 90, 2, 0, 0, 0, 1,
+                                   [(20270119, 90, 9.0, 2, 25)]))
     if partido_nuevo:
         partidos_lista.insert(-1, PARTIDO_NUEVO)
         jugador, equipo, comp, pj, minutos, nota, goles, ta, tr, ast, fig, ultimos = estadisticas_lista[0]
@@ -151,17 +164,17 @@ def construir_bytes(
                                  ast + 1, fig, ultimos + [ACTUACION_NUEVA])
     mundo = _base({
         "lyxL": _tabla([("mCXg", 3, 18), ("AUsv", 0, 240)],
-                       [{"mCXg": i - 1, "AUsv": n} for i, n in {**NOMBRES_EQUIPOS, **EQUIPOS_SIN_PARTIDOS}.items()]),
+                       [{"mCXg": i - 1, "AUsv": n} for i, n in {**nombres_equipos, **EQUIPOS_SIN_PARTIDOS}.items()]),
         "CZUM": _tabla([("ykFq", 3, 19), ("WVIU", 3, 18), ("UERs", 3, 7), ("mpuH", 3, 7), ("EveZ", 3, 1),
                         ("wZQU", 3, 5)],
                        [{"ykFq": j, "WVIU": (nac - ORIGEN_FECHAS).days, "UERs": MEDIAS[j], "mpuH": MEDIAS[j] + 3,
                          "EveZ": int(j == JUGADORA), "wZQU": POSICION_PREFERIDA.get(j, vs[0][1])}
-                        for j, (nac, vs) in JUGADORES.items()]),
+                        for j, (nac, vs) in jugadores.items()]),
         "RrqT": _tabla([("ykFq", 3, 19), ("mCXg", 3, 18), ("vjla", 3, 6)],
                        [{"ykFq": j, "mCXg": (fichajes[j] if j in fichajes and n == 0 else e) - 1, "vjla": pos}
-                        for j, (_, vs) in JUGADORES.items() for n, (e, pos) in enumerate(vs)]),
+                        for j, (_, vs) in jugadores.items() for n, (e, pos) in enumerate(vs)]),
         "qdZF": _tabla([("aQrQ", 3, 12), ("mCXg", 3, 18)],
-                       [{"aQrQ": liga, "mCXg": e - 1} for e, liga in LIGA_DE_EQUIPO.items()]),
+                       [{"aQrQ": liga, "mCXg": e - 1} for e, liga in liga_de_equipo.items()]),
         "onMQ": _tabla([("aQrQ", 3, 12), ("HEQX", 0, 240)], [{"aQrQ": 12, "HEQX": "Premier League"}]),
         "nQVU": _tabla([("HdeP", 0, 240), ("xnfZ", 0, 240), ("rREd", 0, 240), ("ykFq", 3, 19)],
                        [{"HdeP": "Andres", "xnfZ": "A. Iniesta", "rREd": "Iniesta", "ykFq": 41},
@@ -191,12 +204,17 @@ def construir_bytes(
     # tablas de posiciones: una fila por equipo y competicion (indices desde 1)
     filas, indice_de = b"", {}
     for competicion, grupo in ((LIGA, 1), (CHAMPIONS, 2)):
-        for equipo in sorted(NOMBRES_EQUIPOS):
-            if equipo == NORUEGA:
+        for equipo in sorted(nombres_equipos):
+            if equipo in (NORUEGA, ESCOCIA):
                 continue
             indice = len(indice_de) + 1
             indice_de[(competicion, equipo)] = indice
             filas += struct.pack("<2sHHiB5s5sBB", b"\xff\x01", indice, grupo, equipo, 0, bytes(5), bytes(5), 0, 0)
+    if con_seleccion:  # las eliminatorias: solo selecciones
+        for equipo in (NORUEGA, ESCOCIA):
+            indice = len(indice_de) + 1
+            indice_de[(ELIMINATORIAS, equipo)] = indice
+            filas += struct.pack("<2sHHiB5s5sBB", b"\xff\x01", indice, 3, equipo, 0, bytes(5), bytes(5), 0, 0)
 
     partidos = b"basura" + bytes(9)
     for n, (fecha, comp, local, visita, gl, gv, jugado) in enumerate(partidos_lista, start=1):

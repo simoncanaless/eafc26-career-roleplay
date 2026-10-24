@@ -378,3 +378,38 @@ class TestPartidaRealDelPC(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSeleccion(unittest.TestCase):
+    """2026-10-22, Simon: jugo dos partidos con Italia y no salian para la entrevista."""
+
+    def setUp(self):
+        from roleplay.partida.carrera import construir
+
+        self.carrera = construir(f.construir_bytes(con_seleccion=True))
+
+    def test_el_ultimo_partido_es_el_de_la_seleccion_si_lo_jugo_despues(self):
+        from roleplay.servicios import partida_real
+
+        ultimo = partida_real.ultimo_partido(self.carrera, {})
+        self.assertEqual(ultimo.resumen.split(" · ")[0], "Noruega 3-1 Escocia")
+        self.assertEqual((ultimo.stats.goles_jugador, ultimo.stats.equipo_propio), (2, "Noruega"))
+        sin_seleccion = partida_real.ultimo_partido(__import__("roleplay.partida.carrera", fromlist=["x"]).construir(
+            f.construir_bytes()), {})
+        self.assertEqual(sin_seleccion.stats.equipo_propio, "")  # con el club, como siempre
+
+    def test_la_previa_es_del_que_juega_antes(self):
+        from roleplay.servicios import previa
+
+        self.assertEqual(previa.previa_del_proximo(self.carrera, nombres={}).club, "Man Utd")  # el club juega el 20
+        self.assertEqual(self.carrera.equipo(self.carrera.equipo_del_proximo_partido()), "Man Utd")
+
+    def test_la_prensa_habla_de_la_seleccion_y_los_hinchas_reaccionan(self):
+        from roleplay.servicios import entrevista, hinchada
+
+        stats = __import__("roleplay.servicios.partida_real", fromlist=["x"]).ultimo_partido(self.carrera, {}).stats
+        self.assertIn("seleccion de Noruega", entrevista.describir_partido(stats))
+        eventos, _ = hinchada.eventos_nuevos(self.carrera, [], {"hasta": "2027-01-15"}, 10_000, 80)
+        titulos = [e.titulo for e in eventos if e.tipo == "partido"]
+        self.assertIn("Noruega 3-1 Escocia · 2 goles tuyos", titulos)
+        self.assertTrue(any("seleccion" in e.detalle for e in eventos))

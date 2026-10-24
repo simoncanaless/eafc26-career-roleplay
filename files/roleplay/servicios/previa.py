@@ -73,7 +73,7 @@ def previa_del_proximo(
     """La previa del proximo partido del club del usuario, o None si no hay
     club o no le queda ningun partido por jugar. Sin `nombres`, los de la
     base local (servicios/identificar.py)."""
-    equipo = carrera.equipo_usuario()
+    equipo = carrera.equipo_del_proximo_partido()  # (el club o la seleccion, el que juegue antes)
     if equipo is None:
         return None
     proximo = carrera.proximo_partido_de(equipo)

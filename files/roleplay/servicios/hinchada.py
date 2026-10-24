@@ -130,10 +130,15 @@ def eventos_nuevos(
     nombre = carrera.nombre_editado(usuario) or "el jugador"
 
     if equipo is not None:
-        jugados = carrera.partidos_de(equipo, jugados=True)
+        # su club y, si juega con ella, su seleccion (sus partidos tambien mueven el Instagram)
+        seleccion = carrera.seleccion_del_usuario()
+        de_la_seleccion = [p for p in (carrera.partidos_de(seleccion, jugados=True) if seleccion is not None else [])
+                           if any(a.jugador == usuario for a in carrera.actuaciones_en(p))]
+        jugados = sorted(carrera.partidos_de(equipo, jugados=True) + de_la_seleccion, key=lambda p: p.fecha)
         hasta = estado.get("hasta")
         nuevos = [p for p in jugados if p.fecha.isoformat() > hasta] if hasta else jugados[-1:]
         for p in nuevos[-MAXIMO_EVENTOS:]:
+            suyo = seleccion if p in de_la_seleccion else equipo
             suya = next((a for a in carrera.actuaciones_en(p) if a.jugador == usuario), None)
             goles = suya.goles if suya else 0
             nota = suya.nota if suya else None
@@ -148,8 +153,9 @@ def eventos_nuevos(
             eventos.append(EventoHinchada(
                 "partido", p.fecha.isoformat(), titulo,
                 f"Partido: {marcador(carrera, p)} ({carrera.competicion(p.competicion)}, {fecha_corta(p.fecha)}). "
-                f"Resultado para su club: {p.resultado_para(equipo)}. {rendimiento}.",
-                round(crecimiento_por_partido(seguidores, reputacion, p.resultado_para(equipo), suya is not None, goles,
+                f"Resultado para {'su seleccion' if suyo == seleccion else 'su club'}: {p.resultado_para(suyo)}. "
+                f"{rendimiento}.",
+                round(crecimiento_por_partido(seguidores, reputacion, p.resultado_para(suyo), suya is not None, goles,
                                               nota) * multiplicador),
                 titular,
             ))

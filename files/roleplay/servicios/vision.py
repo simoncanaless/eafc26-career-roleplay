@@ -20,6 +20,7 @@ class MatchStats(BaseModel):
     tarjeta_roja: bool = False
     hombre_del_partido: bool = False
     confianza_baja: bool = False
+    equipo_propio: str = ""  # con quien jugo, si no es su club (la seleccion); vacio = su club
 
 
 def extraer_stats_partido(_imagen_png: bytes) -> MatchStats:

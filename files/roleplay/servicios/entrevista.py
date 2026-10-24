@@ -91,6 +91,8 @@ def resultado_de(stats: MatchStats) -> str:
 def describir_partido(stats: MatchStats) -> str:
     marcador = f"{stats.goles_equipo}-{stats.goles_rival}"
     partes = [f"{resultado_de(stats).capitalize()} {marcador}"]
+    if stats.equipo_propio:
+        partes.append(f"jugando para la seleccion de {stats.equipo_propio}")
     if stats.equipo_rival:
         partes.append(f"vs {stats.equipo_rival}")
     partes.append(f"{stats.goles_jugador} goles, {stats.asistencias_jugador} asistencias")
@@ -509,7 +511,8 @@ def generar_entrevista(perfil: PlayerProfile, stats: MatchStats) -> list[str]:
     carrera = _carrera()
     resultado = resultado_de(stats)
     base = {
-        "nombre": perfil.nombre_jugador, "apellido": apellido(perfil), "club": perfil.club_actual or "el equipo",
+        "nombre": perfil.nombre_jugador, "apellido": apellido(perfil),
+        "club": stats.equipo_propio or perfil.club_actual or "el equipo",  # (con la seleccion, la seleccion)
         "rival": stats.equipo_rival or "el rival", "marcador": f"{stats.goles_equipo}-{stats.goles_rival}",
         "goles": stats.goles_jugador, "goles_texto": _goles_texto(stats.goles_jugador),
         "rating": f"{stats.rating_jugador:.1f}", "minutos": stats.minutos_jugados,
@@ -769,7 +772,7 @@ def evaluar_respuestas(
     resultado = resultado_de(stats)
     delta = _delta(lectura, resultado, stats.rating_jugador, perfil.personalidad, DELTA_REPUTACION_MAXIMO)
     datos = {"rival": stats.equipo_rival or "el rival", "marcador": f"{stats.goles_equipo}-{stats.goles_rival}",
-             "club": perfil.club_actual or "el equipo", "resultado": resultado}
+             "club": stats.equipo_propio or perfil.club_actual or "el equipo", "resultado": resultado}
     cruces = cruce.cruces(perfil.id, stats.equipo_rival, stats.rating_jugador or None, _carrera())
     with narrador(perfil.id, "entrevista") as escritor:
         texto = reaccionar(escritor, perfil, lectura, delta, f"r_apertura_{resultado}", datos, cruces)
