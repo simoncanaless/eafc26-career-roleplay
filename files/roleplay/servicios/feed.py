@@ -107,4 +107,56 @@ def actualizar(perfil: PlayerProfile, eventos: list, anterior: list, seguidores:
                 nuevos.append({"pagina": pagina.get("nombre", ""), "usuario_ig": pagina.get("usuario_ig", ""),
                                "tipo": "rumor", "texto": texto, "fecha": fecha,
                                "likes": _likes("mercado", fama, dado)})
+    nuevos = con_formato_de_cada_pagina(perfil, nuevos)
     return (list(reversed(nuevos)) + anterior)[:MAXIMO_FEED]
+
+
+# ---- el formato de cada pagina (IA; pedido de Simon del 2026-10-24) ----
+# Lo que publica cada pagina lo decide el codigo (que pagina, sobre que hecho); la IA solo le da la forma de esa
+# cuenta. Los hechos los cuida la guardia de ia.py: un numero o un nombre que no esta en el post de base se descarta
+# y queda el texto del corpus.
+FORMATOS = {
+    "@fabrizioromano": "exclusiva de mercado: arranca con 🚨, frases cortas, cita textual si hay; \"HERE WE GO\" "
+                       "SOLO si el dato es un pase cerrado (un interes o un rumor es \"contactos\", \"atentos\").",
+    "@433": "cultura de vestuario y viral: corto, emojis, y termina con una pregunta abierta a los seguidores.",
+    "@brfootball": "meme y remate: una linea con punchline, tono burlon o epico.",
+    "@elchiringuitotv": "debate explosivo de estudio: alguna frase en MAYUSCULAS, exclamaciones, toma partido.",
+    "@tmz_tv": "chisme: tono de primicia de farandula, sin afirmar nada que no este en el post.",
+}
+FORMATO_POR_TIPO = {
+    "viral": "viral: corto, con emojis y energia.", "medio": "medio deportivo: informativo pero con gancho.",
+    "mercado": "mercado de pases: tono de primicia, sin afirmar un pase que no esta cerrado.",
+    "polemica": "debate: toma partido y abre la discusion.", "farandula": "farandula: chisme liviano.",
+    "rumor": "rumor de mercado: \"atentos\", \"contactos\", nunca un pase cerrado.",
+}
+SISTEMA_FEED = (
+    "TAREA: las paginas de futbol de Instagram publican sobre un futbolista, en un juego de roleplay. Te paso cada "
+    "post de base y el FORMATO de la cuenta que lo publica: reescribilo con ese formato (1 a 3 oraciones), en "
+    "tercera persona.\n"
+    "LO MAS IMPORTANTE: dice lo MISMO que el post de base: los nombres, los clubes, el marcador, los goles y el "
+    "hecho quedan tal cual; no agregues hechos. Un rumor sigue siendo rumor.\n"
+    "EJEMPLO. Base: \"Arsenal sigue de cerca a Canales\"; cuenta @fabrizioromano.\n"
+    "  BIEN: \"🚨 Arsenal sigue de cerca a Canales. Contactos iniciados, atentos.\"\n"
+    "  MAL: \"🚨 HERE WE GO! Canales al Arsenal\" (es un interes, no un pase cerrado)."
+)
+
+
+def con_formato_de_cada_pagina(perfil: PlayerProfile, posts: list[dict]) -> list[dict]:
+    """Los mismos posts con la forma de la cuenta que los publica (una llamada para todos), o como estaban."""
+    if not posts:
+        return posts
+    from roleplay.servicios import ia
+
+    lista = "\n".join(
+        f"{i}. {p['usuario_ig']} ({p.get('pagina', '')}) - formato: "
+        f"{FORMATOS.get(p['usuario_ig'].lower(), FORMATO_POR_TIPO.get(p['tipo'], 'medio deportivo'))}\n"
+        f"   Post de base: {p['texto']}" for i, p in enumerate(posts))
+    datos = ia.pedir_json(SISTEMA_FEED, f"{ia.ficha(perfil)}\n\nLos posts:\n{lista}",
+                          {"posts": [{"indice": 0, "texto": "..."}]})
+    resultado = list(posts)
+    for item in (datos or {}).get("posts") or []:
+        if isinstance(item, dict) and isinstance(item.get("indice"), int) and 0 <= item["indice"] < len(posts):
+            texto = ia.texto(item.get("texto"), 400)
+            if texto:
+                resultado[item["indice"]] = {**posts[item["indice"]], "texto": texto}
+    return resultado

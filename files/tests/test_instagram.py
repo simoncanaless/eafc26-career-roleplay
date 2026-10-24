@@ -93,3 +93,45 @@ class TestComentariosDelAmbiente(ConEcosistema):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestVocesConLosDatosReales(ConEcosistema):
+    """2026-10-24 (pedido de Simon): las cuentas verificadas que elige el codigo van en los datos de la IA (y el
+    validador las deja pasar), cada una con su registro; una cuenta real que no se eligio, se descarta."""
+
+    def test_el_colega_habla_con_su_voz_y_una_cuenta_real_inventada_se_descarta(self):
+        from roleplay.servicios import ia
+
+        ambiente = [{"autor": "@colega", "texto": "texto del corpus", "tono": "positivo"}]
+        respuesta = [{"autor": "@colega", "texto": "Maquina 🔥", "tono": "positivo"},
+                     {"autor": "@estrella", "texto": "Te amo", "tono": "positivo"},  # real, no elegida
+                     {"autor": "@hincha_1", "texto": "Seguimos!", "tono": "positivo"},
+                     {"autor": "@hincha_2", "texto": "Vamos", "tono": "gracioso"}]
+        with mock.patch.object(instagram, "comentarios_del_ambiente", return_value=ambiente), \
+                mock.patch.object(instagram, "_comentarios_con_ia", return_value=respuesta) as pedido:
+            reaccion = instagram.generar_reaccion_post(self.perfil, "Seguimos", 60, 10_000)
+        self.assertEqual(pedido.call_args.args[4], ("@colega",))  # el codigo eligio quien comenta
+        textos = {c.autor: c.texto for c in reaccion.comentarios}
+        self.assertEqual(textos["@colega"], "Maquina 🔥")
+        self.assertNotIn("@estrella", textos)
+        self.assertIn("@hincha_1", textos)
+
+    def test_el_validador_acepta_las_cuentas_que_van_en_los_datos(self):
+        from roleplay.servicios import ia
+
+        fuente = ia.preparar_fuente("Cuentas verificadas que comentan este post: @colega (Colega Top)")
+        self.assertEqual(ia.nombres_inventados("Grande Colega Top, que golazo", fuente), [])
+        self.assertTrue(ia.nombres_inventados("Grande Lionel, que golazo", fuente))
+
+    def test_cada_pagina_con_su_formato_y_los_hechos_iguales(self):
+        from roleplay.servicios import ia
+
+        posts = [{"pagina": "433", "usuario_ig": "@433", "tipo": "viral", "texto": "Canales: 3 goles al City", "likes": 1},
+                 {"pagina": "Mercado", "usuario_ig": "@mercado", "tipo": "rumor", "texto": "Arsenal mira a Canales", "likes": 1}]
+        with mock.patch.object(ia, "pedir_json", return_value={"posts": [
+                {"indice": 0, "texto": "3 goles al City 🔥 ¿Es el mejor del momento?"},
+                {"indice": 1, "texto": ""}]}) as pedido:
+            nuevos = feed.con_formato_de_cada_pagina(self.perfil, posts)
+        self.assertIn("pregunta abierta", pedido.call_args.args[1])  # el formato de @433
+        self.assertEqual(nuevos[0]["texto"], "3 goles al City 🔥 ¿Es el mejor del momento?")
+        self.assertEqual(nuevos[1]["texto"], "Arsenal mira a Canales")  # vacio (guardia): queda el de base

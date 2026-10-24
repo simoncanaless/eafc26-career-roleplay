@@ -592,8 +592,17 @@ ESTILOS = {
 }
 SISTEMA_PREGUNTAS = (
     "TAREA: el editor de una conferencia de prensa de futbol en un juego de roleplay. Tres periodistas le hacen "
-    "una pregunta cada uno al jugador: reescribi cada una con la voz y el estilo de ese periodista, sobre EL MISMO "
+    "una pregunta cada uno al jugador: reescribi cada una con la voz y la AGENDA de ese periodista, sobre EL MISMO "
     "tema, en 1 o 2 oraciones, tuteandolo, directo y con gancho (periodismo deportivo actual: streaming, debate).\n"
+    "AGENDA DE CADA PERIODISTA (segun su estilo, que va al lado de su nombre):\n"
+    "- mercado: busca el titular del futuro: renovacion, ofertas, si se siente valorado por el club, si se ve ahi "
+    "el ano que viene. Pregunta con calma, pero deja la puerta abierta para la exclusiva.\n"
+    "- polemico: busca el clip viral. Preguntas de doble filo, un dato incomodo, contrasta lo que dijo antes "
+    "(MEMORIA) con lo que hizo hoy, o pincha con su vida privada, sus autos o sus redes. Nunca insulta.\n"
+    "- tactico: la cancha y el banco: el plan del DT, su funcion, que cambio en el partido, la tabla.\n"
+    "- vestuario: la interna: como esta el grupo, como cayo un fichaje o una venta de su linea, los liderazgos, "
+    "la relacion con los companeros y la hinchada.\n"
+    "- emocional: lo humano: la presion, la familia, la hinchada, lo que siente.\n"
     "LO MAS IMPORTANTE: que se note lo que esta pasando AHORA. Al menos dos de las tres preguntas tocan algo "
     "concreto de hoy (el partido de hoy: su actuacion, el resultado, el rival, la tabla) o de lo ultimo que paso "
     "(el titular mas reciente de la memoria); la tercera puede ir a su vida o su carrera, conectada con el "
@@ -606,26 +615,30 @@ SISTEMA_PREGUNTAS = (
     "como jugo, a quien le dedico el partido o quien lo miraba; poner el nombre del periodista adentro de la "
     "pregunta (le hablan AL JUGADOR).\n"
     "EJEMPLO. Hoy: victoria 5-2 ante Hungria jugando para la seleccion de Italia, 5 goles suyos.\n"
-    "  BIEN: \"Cinco goles con Italia en una noche, Simon. ¿En que momento sentiste que Hungria ya no te podia "
-    "parar?\"\n"
-    "  MAL: \"¿Como ves la pelea de tu club en la liga?\" (hoy jugo con la seleccion y la pregunta no toca nada de hoy).\n"
+    "  BIEN (tactico): \"Cinco goles con Italia en una noche, Simon. ¿En que momento sentiste que Hungria ya no te "
+    "podia parar?\"\n"
+    "  BIEN (polemico): \"La semana pasada dijiste que no te importaban los numeros. ¿Hoy, con cinco, tambien?\"\n"
+    "  MAL: \"¿Como ves la pelea de tu club en la liga?\" (hoy jugo con la seleccion y no toca nada de hoy).\n"
     "Devolve las preguntas en el mismo orden, sin el nombre del periodista adelante."
 )
 SISTEMA_REACCION = (
     "TAREA: la prensa deportiva que cubre la conferencia de un futbolista, en un juego de roleplay.\n"
-    "`reaccion_prensa`: 3 a 4 oraciones en tercera persona que analizan y le CONTESTAN lo que dijo (sus "
-    "argumentos, quejas, chistes o detalles; podes citarlo textual entre «»), conectado con el partido de hoy tal "
-    "cual los datos. Si pone excusas o dice algo fuerte, la prensa le responde con polemica. La prensa se acuerda: "
-    "si hoy cumple, contradice o repite algo de la memoria, lo marca.\n"
+    "LEE EL SUBTEXTO antes de escribir: ¿contesto o tiro el casete (respuestas de manual para no decir nada)? "
+    "¿fue arrogante o humilde? ¿tiro una indirecta (a la directiva, al DT, a un rival, a la prensa)? ¿respaldo "
+    "al grupo? ¿esquivo una pregunta incomoda? La sala reacciona a eso: con ironia periodistica si hubo casete, "
+    "soberbia o evasiva; con respeto si fue frontal, autocritico o generoso con el grupo.\n"
+    "`reaccion_prensa`: 3 a 4 oraciones en tercera persona que le CONTESTAN lo que dijo (sus argumentos, quejas, "
+    "chistes, indirectas; podes citarlo textual entre «»), conectado con el partido de hoy tal cual los datos. La "
+    "prensa se acuerda: si hoy cumple, contradice o repite algo de la memoria, lo marca.\n"
     "`delta_reputacion`: entero, parti del sugerido. `delta_carino`: entero de -6 a 6 (la hinchada de su club). "
     "`cita`: su frase mas jugosa COPIADA TEXTUAL de sus respuestas, o vacio. `nuevo_gancho_narrativo`: una trama "
-    "que deja abierta (promesa, desafio), o vacio.\n"
+    "que deja abierta (promesa, desafio, indirecta que alguien va a contestar), o vacio.\n"
     "SE JUZGA SOLO LO QUE RESPONDIO: los datos del partido y del rival son contexto, nunca motivo de critica.\n"
     "NO: traer jugadores del rival que el no nombro; cargos (capitan, lider del vestuario), estadios o jugadas que "
-    "no estan; frases que no dijo.\n"
-    "EJEMPLO. Dijo: \"No voy a hablar de mi contrato\"; partido: victoria 3-0.\n"
-    "  BIEN: \"Despues del 3-0, Canales eligio el silencio: «No voy a hablar de mi contrato». En la sala nadie se "
-    "lo compro y la pregunta va a volver.\"\n"
+    "no estan; frases que no dijo; adivinar a quien iba una indirecta si no lo dijo.\n"
+    "EJEMPLO. Dijo: \"No voy a hablar de mi contrato, el club sabe lo que tiene que hacer\"; partido: victoria 3-0.\n"
+    "  BIEN: \"Despues del 3-0, Canales cerro el tema contrato con un mensaje con destinatario: «el club sabe lo que "
+    "tiene que hacer». En la sala nadie lo leyo como un saludo.\"\n"
     "  MAL: \"Su falta de compromiso preocupa\" (gano 3-0: no hay datos para eso)."
 )
 
@@ -640,14 +653,21 @@ def _nombra_ajenos(texto: str, ajenos, respuestas) -> bool:
     return False
 
 
+def _periodistas_reales() -> list:
+    from roleplay.servicios import ecosistema
+
+    return ecosistema.periodistas()
+
+
 def preguntas_con_ia(perfil: PlayerProfile, contexto: str, preguntas: list[str], cruces,
                      temas: Optional[list[str]] = None, recientes: Optional[list[str]] = None) -> Optional[list[str]]:
     """Las mismas preguntas (mismo periodista, mismo tema) reescritas por la IA, o None. `recientes`: las de
     las ultimas conferencias, que no tiene que repetir ni parafrasear."""
     partes = [p.split(": ", 1) for p in preguntas]
     temas = list(temas or [])
+    estilos = {lexico.normalizar(p.get("nombre", "")): p.get("estilo", "") for p in _periodistas_reales()}
     lista = "\n".join(
-        f"{i + 1}. {quien} - "
+        f"{i + 1}. {quien} (estilo: {estilos.get(lexico.normalizar(quien.split(' @')[0].split(' (')[0]), '') or next((e.split(':')[0] for m, e in ESTILOS.items() if m in quien), 'general')}) - "
         + (f"tema: {TEMAS.get(temas[i], temas[i])}" if i < len(temas) else
            f"estilo {next((e for m, e in ESTILOS.items() if m in quien), 'general')}")
         + f". Pregunta base: {base}" for i, (quien, base) in enumerate(partes)

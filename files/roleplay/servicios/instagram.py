@@ -55,18 +55,40 @@ def generar_reaccion_post(
             dichos += comentarios(escritor, "post", -1, datos)[:2]
         else:
             dichos += comentarios(escritor, "post", 1, datos)[:1]
-    dichos = _comentarios_con_ia(perfil, texto_post, crecimiento, polemico) or dichos
+    ambiente = []
     if perfil.id:
         from roleplay import database
         from roleplay.servicios import ecosistema
 
         fama = ecosistema.calcular_fama_jugador(perfil.id)["fama"]
-        dichos += comentarios_del_ambiente(perfil, fama, database.get_estado_amor(perfil.id), random.Random())
+        ambiente = comentarios_del_ambiente(perfil, fama, database.get_estado_amor(perfil.id), random.Random())
+    colegas = tuple(c["autor"] for c in ambiente if c["autor"] in _cuentas_de_futbolistas())
+    de_la_ia = _comentarios_con_ia(perfil, texto_post, crecimiento, polemico, colegas)
+    if de_la_ia:
+        reales = _cuentas_reales()
+        voces = {c["autor"]: c["texto"] for c in de_la_ia if c["autor"] in colegas}
+        dichos = [c for c in de_la_ia if c["autor"] not in colegas and c["autor"].lower() not in reales]
+        ambiente = [{**c, "texto": voces.get(c["autor"], c["texto"])} for c in ambiente]  # su voz, de la IA
+    dichos += ambiente
     return InstagramReaccionIA(
         comentarios=[ComentarioIA(**c) for c in dichos],
         likes_estimados=max(0, round(seguidores_actuales * tasa)),
         crecimiento_seguidores=crecimiento,
     )
+
+
+def _cuentas_de_futbolistas() -> set:
+    from roleplay.servicios import ecosistema
+
+    return {c.get("usuario_ig") for c in ecosistema.futbolistas_ig() if c.get("usuario_ig")}
+
+
+def _cuentas_reales() -> set:
+    """Todas las cuentas reales de los datos de Simon (en minuscula): la IA no puede inventar comentarios de esas."""
+    from roleplay.servicios import ecosistema
+
+    todas = ecosistema.futbolistas_ig() + ecosistema.celebridades() + ecosistema.paginas_futbol() + ecosistema.periodistas()
+    return {str(c.get("usuario_ig", "")).lower() for c in todas if c.get("usuario_ig")}
 
 
 def comentarios_del_ambiente(perfil: PlayerProfile, fama: int, estado_amor: dict, dado: random.Random) -> list[dict]:
@@ -124,21 +146,28 @@ def comentarios_del_ambiente(perfil: PlayerProfile, fama: int, estado_amor: dict
 
 SISTEMA_COMENTARIOS = (
     "TAREA: la seccion de comentarios de un post de Instagram de un futbolista, en un juego de roleplay: 4 o 5 "
-    "comentarios.\n"
-    "QUIEN COMENTA: cuentas inventadas (@usuario): hinchas fanaticos, algun rival, cuentas de memes. Nunca "
-    "personas reales.\n"
-    "DE QUE HABLAN: RESPONDEN a lo que dice el post (lo que escribio, textual), con humor y jerga de redes; "
-    "pueden llevar emojis. El tono general sigue a como cayo el post. `tono`: positivo, negativo, neutral o "
-    "gracioso.\n"
+    "comentarios que RESPONDEN a lo que dice el post (lo que escribio, textual).\n"
+    "QUIEN COMENTA: usa las cuentas verificadas provistas en los datos (si hay) combinadas con cuentas inventadas "
+    "de hinchas. Cada uno con SU registro:\n"
+    "- Futbolistas (cuentas verificadas de los datos, con su @ exacto): codigo de vestuario, 2 a 5 palabras, "
+    "complicidad, algun emoji puntual (🔥, 🎩, \"crack\"). Nunca un parrafo. Un comentario por cuenta, como mucho.\n"
+    "- Hinchas, termos y rivales (cuentas inventadas, @usuario): lenguaje de tribuna y de redes, memes, "
+    "exageracion pasional o chicanas de rival, basadas SOLO en lo que dice el post y los datos.\n"
+    "Ninguna otra cuenta real: solo las verificadas que te pasan. El tono general sigue a como cayo el post. "
+    "`tono`: positivo, negativo, neutral o gracioso.\n"
     "NO: inventar lo que el post no dice (lugares, jugadas, compras, personas); seguidores ni numeros de la app.\n"
-    "EJEMPLO. Post: \"Otra noche de goles. Seguimos 💪\".\n"
-    "  BIEN: {\"autor\": \"@la_banda_del_10\", \"texto\": \"Seguimos dice el loco, si ya nos tiene acostumbrados 😂\", "
-    "\"tono\": \"gracioso\"}\n"
+    "EJEMPLO. Post: \"Otra noche de goles. Seguimos 💪\". Cuenta verificada: @colega_10.\n"
+    "  BIEN: {\"autor\": \"@colega_10\", \"texto\": \"Maquina 🔥\", \"tono\": \"positivo\"} y "
+    "{\"autor\": \"@la_banda_del_10\", \"texto\": \"Seguimos dice el loco, si ya nos tiene acostumbrados 😂\", \"tono\": \"gracioso\"}\n"
     "  MAL: \"Que golazo de tiro libre en el Bernabeu\" (el post no dice ni la jugada ni el estadio)."
 )
 
 
-def _comentarios_con_ia(perfil: PlayerProfile, texto_post: str, crecimiento: int, polemico: bool) -> list[dict]:
+def _comentarios_con_ia(perfil: PlayerProfile, texto_post: str, crecimiento: int, polemico: bool,
+                        colegas: tuple = ()) -> list[dict]:
+    """Los comentarios de la IA: hinchas inventados y, con su registro, los colegas que eligio el codigo
+    (`colegas`: sus @ de futbolistas_ig van en los datos, asi el validador los deja pasar). Una cuenta real
+    que no sea de esas se descarta."""
     from roleplay.servicios import cruce, entrevista
 
     ultimo = ""
@@ -154,7 +183,9 @@ def _comentarios_con_ia(perfil: PlayerProfile, texto_post: str, crecimiento: int
     datos = ia.pedir_json(
         SISTEMA_COMENTARIOS,
         f"{ia.ficha(perfil)}\n{ultimo}\nLo que pasa en su vida:\n{vida}\n\nEl post (textual):\n{texto_post[:1500]}\n\n"
-        f"Como cayo: {como}.",
+        f"Como cayo: {como}."
+        + (f"\nCuentas verificadas que comentan este post (futbolistas, usa estos @ tal cual): {', '.join(colegas)}"
+           if colegas else ""),
         {"comentarios": [{"autor": "@usuario", "texto": "...", "tono": "positivo"}]},
         jugador=perfil.id,
     )

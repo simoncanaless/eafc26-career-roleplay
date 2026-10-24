@@ -273,9 +273,10 @@ def nombres_inventados(texto: str, fuente: str) -> list:
     raros = []
     for coincidencia in _NOMBRE_PROPIO.finditer(texto):
         antes = texto[:coincidencia.start()].rstrip(" \"'«¡¿(")
+        palabras = _normal(coincidencia.group(1)).split()
         if not antes or antes[-1] in ".!?:;\n":
-            continue  # principio de oracion
-        for palabra in _normal(coincidencia.group(1)).split():
+            palabras = palabras[1:]  # principio de oracion: la primera no cuenta (las que siguen, si: "Grande Lionel")
+        for palabra in palabras:
             if palabra not in NOMBRES_COMUNES and len(palabra) >= 4 and palabra not in fuente:
                 raros.append(palabra)
     normal = _normal(texto)

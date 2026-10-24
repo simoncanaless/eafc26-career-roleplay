@@ -4,7 +4,7 @@ from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ))
-from roleplay.servicios import contratos, entrevista, hinchada, ia, instagram, prensa  # noqa: E402
+from roleplay.servicios import contratos, entrevista, feed, hinchada, ia, instagram, prensa  # noqa: E402
 
 TAREAS = [
     ("Preguntas de la conferencia (post y previa)", "roleplay/servicios/entrevista.py", entrevista.SISTEMA_PREGUNTAS),
@@ -15,6 +15,9 @@ TAREAS = [
     ("Comentarios de tus posts de Instagram", "roleplay/servicios/instagram.py", instagram.SISTEMA_COMENTARIOS),
     ("Sugerir post (tu voz)", "roleplay/servicios/instagram.py", instagram.SISTEMA_POST),
     ("La directiva en la mesa del contrato", "roleplay/servicios/contratos.py", contratos.SISTEMA_DIRECTIVA),
+    ("Feed global: el formato de cada pagina", "roleplay/servicios/feed.py",
+     feed.SISTEMA_FEED + "\n\nFORMATOS POR CUENTA:\n" + "\n".join(f"- {k}: {v}" for k, v in feed.FORMATOS.items())
+     + "\n\nFORMATOS POR TIPO:\n" + "\n".join(f"- {k}: {v}" for k, v in feed.FORMATO_POR_TIPO.items())),
 ]
 
 partes = [

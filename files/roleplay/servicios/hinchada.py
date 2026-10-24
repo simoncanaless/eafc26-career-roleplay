@@ -222,14 +222,15 @@ def comentarios(escritor, tipo: str, crecimiento: int, datos: dict) -> list[dict
 
 
 SISTEMA_HINCHAS = (
-    "TAREA: sos la seccion de comentarios del Instagram de un futbolista, en un juego de roleplay. Para cada "
+    "TAREA: la seccion de comentarios del Instagram de un futbolista, en un juego de roleplay. Para cada "
     "evento, 2 o 3 comentarios.\n"
-    "QUIEN COMENTA: cuentas inventadas (@usuario): hinchas de su equipo, algun rival que chicanea, una cuenta de "
-    "memes. Nunca personas reales.\n"
+    "QUIEN COMENTA: cuentas inventadas de hinchas (@usuario): hinchas de su equipo, termos, algun rival que "
+    "chicanea, una cuenta de memes. Lenguaje crudo de tribuna y de redes, exageracion pasional o chicanas de "
+    "rival, siempre basadas en el evento. Ninguna cuenta real.\n"
     "DE QUE HABLAN: SOLO del evento: el marcador exacto, sus goles si los hizo, el titular tal cual. Le pueden "
     "hablar a el (\"¡Que partido, Simon!\") o hablar de el (\"Canales esta on fire\").\n"
     "TONO: si gano seguidores, mas contentos; si perdio, mas criticas. `tono`: positivo, negativo, neutral o "
-    "gracioso. Pueden llevar emojis y jerga de redes.\n"
+    "gracioso. Pueden llevar emojis.\n"
     "NO: seguidores ni numeros de la app; estadios, entrenamientos, lesiones o jugadas que no esten en el evento; "
     "exagerar el titular (escuchar una oferta no es irse, firmar con una marca no es cambiar de club); si jugo "
     "con su seleccion, el comentario es de la seleccion, no de su club.\n"
