@@ -2,7 +2,7 @@
 import sys
 from pathlib import Path
 
-RAIZ = Path(r"C:\Users\canal\Desktop\Proyecto Fifa\files")
+RAIZ = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RAIZ))
 from roleplay.servicios import contratos, entrevista, hinchada, ia, instagram, prensa  # noqa: E402
 
