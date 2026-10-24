@@ -553,7 +553,7 @@ class TestHibrido(ConIA):
         self.assertNotIn("solo una", " ".join(locales))
 
     def test_comentarios_del_post_y_de_la_hinchada(self):
-        self.red = [_groq({"comentarios": [{"autor": "hincha_red", "texto": "Ese reloj no ataja penales", "tono": "gracioso"},
+        self.red = [_groq({"comentarios": [{"autor": "hincha_red", "texto": "Ese reloj no hace goles", "tono": "gracioso"},
                                            {"autor": "@rival", "texto": "Juga y despues presumi", "tono": "negativo"},
                                            {"autor": "@meme", "texto": "jajaja", "tono": "inventado"}]})]
         r = instagram.generar_reaccion_post(self.perfil, "Mi reloj nuevo", 50, 1000)

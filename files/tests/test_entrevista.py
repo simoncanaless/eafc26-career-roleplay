@@ -32,6 +32,32 @@ class TestConferencia(ConEcosistema):
                     entrevista.generar_entrevista(self.perfil, stats)
         self.assertGreaterEqual(len(vistos), 6)  # de las 8 tematicas
 
+    def test_con_la_seleccion_la_conferencia_es_de_la_seleccion(self):
+        # 2026-10-23, Simon: "que tengan mas que ver con lo que esta pasando"
+        stats = MatchStats(goles_equipo=5, goles_rival=2, equipo_rival="Hungria", goles_jugador=5, rating_jugador=10,
+                           minutos_jugados=90, equipo_propio="Italia")
+        temas, contextos = set(), []
+
+        def espiar(*argumentos):
+            contextos.append(argumentos[1])
+            temas.update(argumentos[4])
+
+        with mock.patch.object(entrevista, "_carrera", return_value=None):
+            for _ in range(10):
+                with mock.patch.object(entrevista, "preguntas_con_ia", side_effect=espiar):
+                    entrevista.generar_entrevista(self.perfil, stats)
+        self.assertFalse(temas & {"mercado", "contratos"}, temas)
+        self.assertIn("seleccion de Italia", contextos[0])
+
+    def test_si_hizo_goles_no_le_preguntan_por_no_haber_marcado(self):
+        stats = MatchStats(goles_equipo=5, goles_rival=2, equipo_rival="Hungria", goles_jugador=5, rating_jugador=10,
+                           minutos_jugados=90)
+        with mock.patch.object(entrevista, "_carrera", return_value=None):
+            for _ in range(15):
+                for pregunta in entrevista.generar_entrevista(self.perfil, stats):
+                    self.assertNotIn("no te toco marcar", pregunta)
+                    self.assertNotIn("sin gol tuyo", pregunta)
+
     def test_firman_con_su_usuario_y_el_estilo_emocional(self):
         quien, medio = entrevista.periodista_para("tactica", set(), random.Random(1))
         self.assertRegex(quien, r"^Periodista tactico \d @ptactico\d$")

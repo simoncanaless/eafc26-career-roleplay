@@ -48,15 +48,19 @@ TIMEOUT = 6.0
 TOPE_TOTAL = 2  # toda la cascada tarda a lo sumo TOPE_TOTAL x timeout
 
 REGLAS = (
-    "Escribis en espanol (registro chileno/rioplatense informal, natural). "
-    "Usa SOLO los datos que te dan: nunca inventes resultados, goles, estadisticas, posiciones en la tabla, "
-    "fichajes ni nombres de personas reales que no esten en los datos. Si falta un dato, no lo menciones. "
-    "Cada dato es de quien dice el dato: un marcador es del EQUIPO (no son goles del jugador salvo que se diga), "
-    "y lo de un rival (su goleador, su racha, su mal momento) es del rival, nunca del jugador ni de su equipo. "
-    "No inventes causas ni culpas que los datos no digan: una victoria, una racha buena o un mal numero del "
-    "rival nunca son motivo de dudas o criticas al jugador. Las criticas solo pueden salir de lo que el jugador "
-    "DIJO o de un mal numero SUYO o de SU equipo. "
-    "Sin markdown ni emojis salvo que se pidan. Responde SOLO con un objeto JSON valido."
+    "REGLAS DE ORO (si una se rompe, el texto se descarta):\n"
+    "1. Espanol natural, registro chileno/rioplatense informal. Sin markdown. Emojis solo si la tarea los pide.\n"
+    "2. SOLO lo que dicen los datos. Lo que no esta, NO EXISTE: nada de estadios ni ciudades, entrenamientos, "
+    "lesiones, clima, publico, minutos o forma de los goles (cabeza, tiro libre), asistencias, tecnicos, "
+    "companeros, fichajes ni premios que no aparezcan. Ningun nombre propio que no este en los datos.\n"
+    "3. Los numeros, tal cual los datos: ninguno de mas. Un marcador \"A 1-3 B\" es del partido: gano B, de "
+    "visitante. Los goles del jugador son solo los que dicen los datos como SUYOS.\n"
+    "4. Cada dato es de quien es: lo del rival (su goleador, su racha, su tabla) es del rival, nunca del jugador.\n"
+    "5. Nada de causas, culpas ni cargos que los datos no digan (capitan, lider): una victoria o un buen numero "
+    "nunca son motivo de critica; las criticas salen de lo que el jugador DIJO o de un mal numero SUYO.\n"
+    "6. No cambies de que se trata un hecho: si es \"25 goles en la temporada\", son goles en partidos, no en "
+    "un entrenamiento; si es una cena, no es una fiesta.\n"
+    "7. Responde SOLO con un objeto JSON valido, con la forma pedida."
 )
 
 VOZ = (
@@ -216,16 +220,68 @@ def _numeros_de(texto: str) -> set:
     return vistos
 
 
-def _sin_numeros_inventados(valor, permitidos: set):
-    """La respuesta con "" en cada texto que trae un numero que no se le paso."""
+def _sin_numeros_inventados(valor, permitidos: set, fuente: str = ""):
+    """La respuesta con "" en cada texto que trae un numero que no se le paso o
+    un nombre propio que no esta en el pedido (`fuente`, ya normalizada)."""
     if isinstance(valor, str):
-        return valor if all(n in permitidos or re.sub(r"[.,]", "", n) in permitidos
-                            for n in _NUMERO.findall(valor)) else ""
+        numeros_ok = all(n in permitidos or re.sub(r"[.,]", "", n) in permitidos for n in _NUMERO.findall(valor))
+        return valor if numeros_ok and not (fuente and nombres_inventados(valor, fuente)) else ""
     if isinstance(valor, list):
-        return [_sin_numeros_inventados(v, permitidos) for v in valor]
+        return [_sin_numeros_inventados(v, permitidos, fuente) for v in valor]
     if isinstance(valor, dict):
-        return {k: _sin_numeros_inventados(v, permitidos) for k, v in valor.items()}
+        return {k: (v if k in CAMPOS_SIN_GUARDIA else _sin_numeros_inventados(v, permitidos, fuente))
+                for k, v in valor.items()}
     return valor
+
+
+# los nombres propios de la respuesta tienen que estar en el pedido (2026-10-23: "Old Trafford" para un
+# partido de visitante, "la sensacion del entrenamiento"...). Estas palabras con mayuscula son comunes:
+CAMPOS_SIN_GUARDIA = {"autor", "tono"}  # el @usuario de un comentario es inventado a proposito
+NOMBRES_COMUNES = {
+    "instagram", "tiktok", "twitter", "youtube", "twitch", "champions", "premier", "league", "liga", "copa", "mundial",
+    "europa", "balon", "bota", "golden", "best", "fifa", "uefa", "var", "mister", "dios", "simon", "mama", "papa",
+    "seleccion", "hat", "trick", "vamos", "aguante", "ojo", "atentos", "exclusivo", "ultimo", "ultima", "here",
+}
+ALIAS = {"man utd": "manchester united red devils", "man city": "citizens", "manchester city": "citizens"}
+_NOMBRE_PROPIO = re.compile(r"(?<![#@\w])([A-ZÁÉÍÓÚÑ][a-záéíóúñü]{3,}(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñü]{2,})*)")
+
+
+def _normal(texto: str) -> str:
+    import unicodedata
+
+    sin = "".join(c for c in unicodedata.normalize("NFD", texto.lower()) if unicodedata.category(c) != "Mn")
+    return re.sub(r"[^a-z0-9 ]+", " ", sin)
+
+
+def preparar_fuente(texto: str) -> str:
+    """El pedido normalizado, con los apodos de los clubes que nombra (para `nombres_inventados`)."""
+    fuente = _normal(texto)
+    return fuente + " " + " ".join(apodos for club, apodos in ALIAS.items() if club in fuente)
+
+
+HECHOS_QUE_NO_SE_INVENTAN = ("entrenamiento", "estadio", "lesion", "penal", "tiro libre", "de cabeza",
+                             "capitan", "brazalete", "expulsa", "tarjeta roja", "asistencia", "record")
+# nacionalidades: "el uruguayo de La Cruz" (es chileno); vale si el pedido nombra el pais o el gentilicio
+GENTILICIOS = ("urugua", "argentin", "chilen", "brasil", "espanol", "italian", "frances", "ingles", "aleman",
+               "portugu", "holandes", "colombian", "mexican", "peruan", "venezolan", "ecuatorian", "paraguay",
+               "bolivian", "belga", "croata", "noruego", "polaco", "estadounidense", "japones", "coreano")
+
+
+def nombres_inventados(texto: str, fuente: str) -> list:
+    """Los nombres propios del texto que no aparecen en el pedido. Las mayusculas de principio de oracion no
+    cuentan (\"Que partido\"), las palabras comunes tampoco."""
+    raros = []
+    for coincidencia in _NOMBRE_PROPIO.finditer(texto):
+        antes = texto[:coincidencia.start()].rstrip(" \"'«¡¿(")
+        if not antes or antes[-1] in ".!?:;\n":
+            continue  # principio de oracion
+        for palabra in _normal(coincidencia.group(1)).split():
+            if palabra not in NOMBRES_COMUNES and len(palabra) >= 4 and palabra not in fuente:
+                raros.append(palabra)
+    normal = _normal(texto)
+    raros += [hecho for hecho in HECHOS_QUE_NO_SE_INVENTAN if hecho in normal and hecho not in fuente]
+    raros += [g for g in GENTILICIOS if re.search(rf"\b{g}", normal) and g[:5] not in fuente]
+    return raros
 
 
 def pedir_json(prompt_sistema: str, prompt_usuario: str, esquema_ejemplo: dict,
@@ -246,7 +302,8 @@ def pedir_json(prompt_sistema: str, prompt_usuario: str, esquema_ejemplo: dict,
                 prompt_sistema = f"{prompt_sistema}\n\n{VOZ}"
         sistema = (f"{prompt_sistema}\n\n{REGLAS}\nForma exacta del JSON (mismas claves y tipos): "
                    f"{json.dumps(esquema_ejemplo, ensure_ascii=False)}")
-        permitidos = _numeros_de(sistema + prompt_usuario)
+        permitidos = _numeros_de(prompt_usuario)  # (los ejemplos de las consignas no cuentan: no se copian)
+        fuente = preparar_fuente(prompt_usuario)
         limite = time.monotonic() + timeout * TOPE_TOTAL
         for proveedor, modelos, llamar in PROVEEDORES:
             for clave in claves(proveedor):
@@ -268,7 +325,7 @@ def pedir_json(prompt_sistema: str, prompt_usuario: str, esquema_ejemplo: dict,
                             pendientes = [m for m in modelos_de_groq(clave, min(timeout, queda)) if m not in modelos]
                         continue  # cuota, caida o respuesta rara: el siguiente modelo
                     ultimo.update(proveedor=proveedor, modelo=modelo, ms=round((time.monotonic() - inicio) * 1000))
-                    return _sin_numeros_inventados(datos, permitidos)
+                    return _sin_numeros_inventados(datos, permitidos, fuente)
         return None
     except Exception:  # noqa: BLE001  (pase lo que pase, queda el motor local)
         return None

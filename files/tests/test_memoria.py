@@ -52,6 +52,22 @@ class TestGuardiaDeHechos(unittest.TestCase):
         self.assertEqual(limpia["seguidores"], "1888150")
         self.assertEqual(limpia["delta"], 3)  # los numeros sueltos los acota el que llama
 
+    def test_nombres_lugares_y_hechos_inventados(self):
+        # 2026-10-23, Simon: "Old Trafford" en un partido de visitante, "la sensacion del entrenamiento",
+        # "el uruguayo de La Cruz" (es chileno)
+        fuente = ia.preparar_fuente("Partido: Manchester City 1-3 Man Utd (Premier League). Man Utd jugo de "
+                                    "visitante. Simon Canales, de La Cruz, raices chilenas, marco 3 goles.")
+        self.assertEqual(ia.nombres_inventados("Canales enciende el Old Trafford contra el City", fuente), ["trafford"])
+        self.assertTrue(ia.nombres_inventados("Canales es la sensacion del entrenamiento", fuente))
+        self.assertTrue(ia.nombres_inventados("el uruguayo de La Cruz no perdona", fuente))
+        for bien in ("Tres goles en cancha del City, los Red Devils festejan", "¡Que noche de Canales!",
+                     "el chileno no perdona", "Vamos United 🔥"):
+            self.assertEqual(ia.nombres_inventados(bien, fuente), [], bien)
+        respuesta = {"comentarios": [{"autor": "@Old_Trafford_Fan", "texto": "Canales en Anfield, increible", "tono": "positivo"}]}
+        limpia = ia._sin_numeros_inventados(respuesta, set(), fuente)
+        self.assertEqual(limpia["comentarios"][0]["texto"], "")  # Anfield no esta en el pedido
+        self.assertEqual(limpia["comentarios"][0]["autor"], "@Old_Trafford_Fan")  # el @ inventado no se revisa
+
     def test_el_pedido_lleva_la_memoria_y_la_voz(self):
         visto = {}
 

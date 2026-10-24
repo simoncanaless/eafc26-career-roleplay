@@ -411,5 +411,27 @@ class TestSeleccion(unittest.TestCase):
         self.assertIn("seleccion de Noruega", entrevista.describir_partido(stats))
         eventos, _ = hinchada.eventos_nuevos(self.carrera, [], {"hasta": "2027-01-15"}, 10_000, 80)
         titulos = [e.titulo for e in eventos if e.tipo == "partido"]
-        self.assertIn("Noruega 3-1 Escocia · 2 goles tuyos", titulos)
+        self.assertIn("Noruega 3-1 Escocia · 2 goles de Canales", titulos)
         self.assertTrue(any("seleccion" in e.detalle for e in eventos))
+
+
+class TestSalaConLaSeleccion(ayuda.PruebaDeInterfaz):
+    """2026-10-23: al cargar el partido con Italia, la sala le cambiaba el club a "Italia" (y la IA escribio que
+    Italia le gano al Manchester City)."""
+
+    def test_cargar_un_partido_de_la_seleccion_no_cambia_el_club(self):
+        from roleplay.partida.carrera import construir
+        from roleplay.ui import entrevista
+
+        pid = database.save_profile(PlayerProfile(nombre_jugador="Simon Canales", club_actual="Man Utd"))
+        carrera = construir(f.construir_bytes(con_seleccion=True))
+        lectura = partida_real.LecturaPartida(carrera=carrera, ultimo=partida_real.ultimo_partido(carrera, {}),
+                                              ya_entrevistado=False)
+        with mock.patch.object(entrevista, "leer_para_entrevista", return_value=lectura):
+            pagina = entrevista.InterviewWindow()
+            ayuda.esperar_tareas()
+            pagina.cargar_partida_btn.click()
+        self.assertEqual(database.load_profile(pid).club_actual, "Man Utd")
+        self.assertEqual(pagina.equipo_propio_label.text(), "NORUEGA")
+        self.assertEqual(pagina._leer_stats_desde_formulario().equipo_propio, "Noruega")
+        pagina.deleteLater()

@@ -246,9 +246,15 @@ def noticia_de_entrevista(escritor, perfil: PlayerProfile, registro: MatchInterv
 
 
 SISTEMA_NOTA = (
-    "Sos un diario deportivo en un juego de roleplay de futbol. Con la entrevista post-partido de un jugador, "
-    "escribi `titular` (con gancho, que incluya su cita entre «») y `cuerpo` (un parrafo periodistico de 4 a 6 "
-    "oraciones en tercera persona que desarrolle lo que dijo, textual cuando sirva, y como lo leyo la prensa)."
+    "TAREA: la nota de un diario deportivo sobre la conferencia de un futbolista, en un juego de roleplay. "
+    "`titular`: con gancho, con su cita entre «» (textual). `cuerpo`: 4 a 6 oraciones en tercera persona que "
+    "cuenten lo que dijo (textual cuando sirva) y como lo leyo la prensa.\n"
+    "DE QUE HABLA: de SUS respuestas y del partido tal como dicen los datos. La memoria sirve para decir si "
+    "cumple o contradice algo de antes.\n"
+    "NO: frases que no dijo; jugadas, estadios o personas que no esten; culparlo de datos del rival.\n"
+    "EJEMPLO. Dijo: \"Ganamos y punto, lo demas es ruido\"; partido: victoria 2-0.\n"
+    "  BIEN titular: \"«Lo demas es ruido»: Canales cierra la puerta despues del 2-0\"\n"
+    "  MAL: \"Canales, lider del vestuario, calla a la critica en Old Trafford\" (cargo y estadio inventados)."
 )
 
 
@@ -272,13 +278,17 @@ def _nota_con_ia(perfil: PlayerProfile, registro: MatchInterviewRecord, cita: st
 
 
 SISTEMA_DIARIO = (
-    "Sos la redaccion de los diarios, radios y portales que siguen la carrera de un futbolista en un juego de "
-    "roleplay. Te paso las notas que ya armo el sistema, con sus hechos. Reescribi cada una como la escribiria un "
-    "periodista de verdad que viene siguiendo la historia: `titular` con gancho (sin repetir la forma de los "
-    "titulares de la memoria) y `cuerpo` de 2 a 4 oraciones con mirada propia. Conserva TODOS los hechos de cada "
-    "nota tal cual (nombres, clubes, resultados, numeros, montos, y si es buena o mala noticia) y no agregues "
-    "hechos; las citas entre «» van textuales. Las notas del mundo (categoria general) son sobre otros: no metas "
-    "al jugador si la nota no lo nombra."
+    "TAREA: la redaccion de los diarios y portales que siguen la carrera de un futbolista, en un juego de "
+    "roleplay. Te paso notas ya armadas: reescribi cada una como un periodista de verdad que viene siguiendo la "
+    "historia. `titular`: con gancho, hasta ~12 palabras, sin repetir la forma de los titulares de la memoria. "
+    "`cuerpo`: 2 a 4 oraciones con mirada propia.\n"
+    "LO MAS IMPORTANTE: cada nota sigue diciendo LO MISMO. El hecho central, los nombres, los clubes, los "
+    "resultados, los numeros, los montos y si es buena o mala noticia quedan tal cual; las citas entre «» van "
+    "textuales. No agregues hechos.\n"
+    "Las notas del mundo (categoria general) son sobre otros: no metas al jugador si la nota no lo nombra.\n"
+    "EJEMPLO. Nota: \"Canales llega a 25 goles en la temporada\".\n"
+    "  BIEN: \"Canales ya va por 25 y no levanta el pie\"\n"
+    "  MAL: \"Canales, la sensacion del entrenamiento\" (cambia el hecho: son goles en partidos)."
 )
 
 
@@ -349,6 +359,10 @@ def revisar_prensa(
     """
     stats = calcular_estadisticas_acumuladas(historial)
     hitos, nuevo_estado = detectar_nuevos_hitos(stats, estado_prensa)
+    if hitos_reales is not None:
+        # con la partida, los goles de verdad los cuentan los hitos reales: el total de las ENTREVISTAS no es
+        # "su carrera" (salio "Canales llega a 25 goles" teniendo 272; Simon, 2026-10-23)
+        hitos = [h for h in hitos if h["tipo"] != "hito_goles_totales"]
     hitos = hitos + list(hitos_reales or [])
     noticias: list[NoticiaPrensa] = []
     cruces = cruce.cruces(perfil.id, carrera=carrera) if perfil.id else []

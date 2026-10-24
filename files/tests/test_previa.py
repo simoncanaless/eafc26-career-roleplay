@@ -55,7 +55,7 @@ class TestPreviaDelProximo(ayuda.PruebaConBase):
         contexto = previa._contexto(p)
         self.assertIn("El jugador juega en Man Utd; el rival es Manchester City.", contexto)
         self.assertIn("Los marcadores son de los equipos", contexto)
-        self.assertIn("lo de un rival (su goleador, su racha, su mal momento) es del rival", ia.REGLAS)
+        self.assertIn("lo del rival (su goleador, su racha, su tabla) es del rival", ia.REGLAS)
 
     def test_sin_proximo_partido_no_hay_previa(self):
         c = carrera_falsa()

@@ -58,7 +58,7 @@ class TestEventos(ayuda.PruebaConBase):
 
     def test_la_primera_vez_solo_el_ultimo_partido(self):
         eventos, estado = hinchada.eventos_nuevos(self.c, [], None, 10_000, 50)
-        self.assertEqual([e.titulo for e in eventos], ["Man Utd 5-3 Sunderland · 5 goles tuyos"])
+        self.assertEqual([e.titulo for e in eventos], ["Man Utd 5-3 Sunderland · 5 goles de Canales"])
         self.assertIn("marco 5 goles, nota 10.0", eventos[0].detalle)
         self.assertGreater(eventos[0].crecimiento, 0)
         self.assertEqual(estado["hasta"], "2027-01-16")
@@ -70,7 +70,7 @@ class TestEventos(ayuda.PruebaConBase):
         _, estado = hinchada.eventos_nuevos(self.c, [], None, 10_000, 50)
         despues = construir(f.construir_bytes(partido_nuevo=True))
         eventos, estado = hinchada.eventos_nuevos(despues, [], estado, 10_000, 50)
-        self.assertEqual([e.titulo for e in eventos], ["Man Utd 2-1 Arsenal · 2 goles tuyos"])
+        self.assertEqual([e.titulo for e in eventos], ["Man Utd 2-1 Arsenal · 2 goles de Canales"])
         self.assertEqual(estado["hasta"], "2027-01-23")
 
     def test_las_noticias_sobre_el(self):
@@ -140,7 +140,7 @@ class TestInstagramSeMueveSolo(ConPartida):
         guardada = database.load_actividad_instagram(self.pid)
         # el partido y, la primera vez, la base de seguidores del club (servicios/ecosistema.tier_club)
         self.assertEqual(sorted(a.titulo for a in guardada),
-                         ["Jugar en Man Utd te pone en la vidriera", "Man Utd 5-3 Sunderland · 5 goles tuyos"])
+                         ["Jugar en Man Utd te pone en la vidriera", "Man Utd 5-3 Sunderland · 5 goles de Canales"])
         self.assertEqual(database.get_seguidores(self.pid), antes + sum(a.crecimiento_seguidores for a in guardada))
         self.assertEqual(database.get_estado_hinchada(self.pid)["hasta"], "2027-01-16")
         textos = " ".join(

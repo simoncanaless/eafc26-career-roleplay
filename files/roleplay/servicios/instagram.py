@@ -123,11 +123,18 @@ def comentarios_del_ambiente(perfil: PlayerProfile, fama: int, estado_amor: dict
 
 
 SISTEMA_COMENTARIOS = (
-    "Sos la seccion de comentarios del Instagram de un futbolista en un juego de roleplay. Escribi 4 o 5 "
-    "comentarios de cuentas inventadas (@usuarios de hinchas fanaticos, rivales, cuentas de memes) que "
-    "RESPONDAN DIRECTAMENTE a lo que dice el post, con humor y jerga de redes (pueden llevar emojis). "
-    "El tono general sigue a como le cayo el post a la gente. `tono` de cada uno: positivo, negativo, "
-    "neutral o gracioso. Las cuentas son inventadas: nunca nombres de personas reales."
+    "TAREA: la seccion de comentarios de un post de Instagram de un futbolista, en un juego de roleplay: 4 o 5 "
+    "comentarios.\n"
+    "QUIEN COMENTA: cuentas inventadas (@usuario): hinchas fanaticos, algun rival, cuentas de memes. Nunca "
+    "personas reales.\n"
+    "DE QUE HABLAN: RESPONDEN a lo que dice el post (lo que escribio, textual), con humor y jerga de redes; "
+    "pueden llevar emojis. El tono general sigue a como cayo el post. `tono`: positivo, negativo, neutral o "
+    "gracioso.\n"
+    "NO: inventar lo que el post no dice (lugares, jugadas, compras, personas); seguidores ni numeros de la app.\n"
+    "EJEMPLO. Post: \"Otra noche de goles. Seguimos 💪\".\n"
+    "  BIEN: {\"autor\": \"@la_banda_del_10\", \"texto\": \"Seguimos dice el loco, si ya nos tiene acostumbrados 😂\", "
+    "\"tono\": \"gracioso\"}\n"
+    "  MAL: \"Que golazo de tiro libre en el Bernabeu\" (el post no dice ni la jugada ni el estadio)."
 )
 
 
@@ -227,10 +234,17 @@ def sugerir_post(perfil: PlayerProfile, ultimo_partido: str = "") -> str:
 
 
 SISTEMA_POST = (
-    "Sos un futbolista escribiendo un post de Instagram en un juego de roleplay. Escribilo en PRIMERA persona, "
-    "con su personalidad (reservado: corto y sobrio; carismatico: cercano y con onda; polemico: picante y "
-    "provocador; humilde: agradecido y del grupo), como lo escribiria una persona de verdad (1 a 3 oraciones, "
-    "emojis y hashtags si le van). Que tenga continuidad con su historia (la memoria) si viene al caso. `texto`: el post."
+    "TAREA: el post de Instagram que escribe el propio futbolista, en un juego de roleplay. `texto`: 1 a 3 "
+    "oraciones en PRIMERA persona, como lo escribiria una persona de verdad (emojis y hashtags si le van).\n"
+    "SU VOZ: reservado = corto y sobrio; carismatico = cercano y con onda; polemico = picante y provocador; "
+    "humilde = agradecido y del grupo.\n"
+    "DE QUE HABLA: de lo que dicen los datos (su ultimo partido, tal cual) y, si viene al caso, algo de su historia "
+    "(la memoria).\n"
+    "NO: rivales, fechas ni partidos que no esten en los datos (una trama vieja no es el proximo partido); "
+    "estadios, jugadas o personas que no aparezcan.\n"
+    "EJEMPLO. Datos: victoria 3-1 ante el Arsenal, 2 goles suyos; personalidad polemico.\n"
+    "  BIEN: \"Dos mas para la cuenta. Los que hablaban, que sigan hablando 😏 #SinFrenos\"\n"
+    "  MAL: \"El sabado vamos por el Chelsea\" (el proximo rival no esta en los datos)."
 )
 
 

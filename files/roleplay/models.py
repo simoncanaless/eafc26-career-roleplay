@@ -158,6 +158,6 @@ class ActividadInstagram:
     fecha: str = field(default_factory=_ahora)
     fecha_juego: str = ""  # dia del juego al que reaccionan
     tipo: str = "partido"  # "partido" | "noticia"
-    titulo: str = ""  # "Man Utd 5-3 Sunderland · 5 goles tuyos" o el titular de la noticia
+    titulo: str = ""  # "Man Utd 5-3 Sunderland · 5 goles de Canales" o el titular de la noticia
     crecimiento_seguidores: int = 0
     comentarios: list[dict] = field(default_factory=list)  # [{"autor","texto","tono"}]

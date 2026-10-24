@@ -815,7 +815,9 @@ class InterviewWindow(QWidget):
         ultimo = self._lectura.ultimo
         self._cargar_stats_en_formulario(ultimo.stats)
         club = self._lectura.carrera.equipo(ultimo.equipo)
-        if club != self.perfil.club_actual:
+        if ultimo.stats.equipo_propio:  # un partido con la seleccion: el club sigue siendo el mismo
+            self.equipo_propio_label.setText(ultimo.stats.equipo_propio.upper())
+        elif club != self.perfil.club_actual:
             actualizar_club(self.perfil.id, club)
             self.perfil.club_actual = club
             self.club_edit.setText(club)

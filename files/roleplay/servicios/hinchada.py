@@ -142,22 +142,25 @@ def eventos_nuevos(
             suya = next((a for a in carrera.actuaciones_en(p) if a.jugador == usuario), None)
             goles = suya.goles if suya else 0
             nota = suya.nota if suya else None
-            titulo = marcador(carrera, p) + (f" · {cantidad(goles, 'gol tuyo', 'goles tuyos')}" if goles else "")
             if suya is None:
                 rendimiento = f"{nombre} no jugo"
             else:
                 rendimiento = f"{nombre} jugo {suya.minutos} minutos, marco {cantidad(goles, 'gol', 'goles')}"
                 rendimiento += f", nota {nota:.1f}" if nota is not None else ""
             apellido = nombre.split()[-1] if nombre.split() else nombre
-            titular = marcador(carrera, p) + (f" · {cantidad(goles, 'gol', 'goles')} de {apellido}" if goles else "")
+            # en tercera persona: lo ve el jugador, pero tambien es lo que leen los hinchas y la IA
+            # ("5 goles tuyos" se colaba en los comentarios y en el feed; Simon, 2026-10-23)
+            titulo = marcador(carrera, p) + (f" · {cantidad(goles, 'gol', 'goles')} de {apellido}" if goles else "")
+            de_local = p.local == suyo
             eventos.append(EventoHinchada(
                 "partido", p.fecha.isoformat(), titulo,
                 f"Partido: {marcador(carrera, p)} ({carrera.competicion(p.competicion)}, {fecha_corta(p.fecha)}). "
-                f"Resultado para {'su seleccion' if suyo == seleccion else 'su club'}: {p.resultado_para(suyo)}. "
-                f"{rendimiento}.",
+                f"{carrera.equipo(suyo)} ({'su seleccion' if suyo == seleccion else 'su club'}) jugo de "
+                f"{'local' if de_local else 'visitante'} y {p.resultado_para(suyo).replace('victoria', 'gano').replace('derrota', 'perdio').replace('empate', 'empato')}. "
+                f"{rendimiento}. No se sabe el estadio ni como fueron los goles.",
                 round(crecimiento_por_partido(seguidores, reputacion, p.resultado_para(suyo), suya is not None, goles,
                                               nota) * multiplicador),
-                titular,
+                titulo,
             ))
         if jugados:
             estado["hasta"] = max(estado.get("hasta") or "", jugados[-1].fecha.isoformat())
@@ -219,12 +222,21 @@ def comentarios(escritor, tipo: str, crecimiento: int, datos: dict) -> list[dict
 
 
 SISTEMA_HINCHAS = (
-    "Sos los hinchas que comentan en el Instagram de un futbolista en un juego de roleplay. Para cada evento "
-    "escribi 2 o 3 comentarios de cuentas inventadas (@hinchas, rivales, memes) que hablen del marcador, los "
-    "goles o el titular EXACTOS del evento. Si gano seguidores, mas hinchas contentos; si perdio, mas criticas. "
-    "`tono`: positivo, negativo, neutral o gracioso. Nunca nombres de personas reales. No cites cantidades de "
-    "seguidores ni otros numeros de la app (los hinchas no los ven), y no exageres lo que dice el titular: si "
-    "escucho una oferta, no se esta yendo; si firmo con una marca, es una marca, no un cambio de club."
+    "TAREA: sos la seccion de comentarios del Instagram de un futbolista, en un juego de roleplay. Para cada "
+    "evento, 2 o 3 comentarios.\n"
+    "QUIEN COMENTA: cuentas inventadas (@usuario): hinchas de su equipo, algun rival que chicanea, una cuenta de "
+    "memes. Nunca personas reales.\n"
+    "DE QUE HABLAN: SOLO del evento: el marcador exacto, sus goles si los hizo, el titular tal cual. Le pueden "
+    "hablar a el (\"¡Que partido, Simon!\") o hablar de el (\"Canales esta on fire\").\n"
+    "TONO: si gano seguidores, mas contentos; si perdio, mas criticas. `tono`: positivo, negativo, neutral o "
+    "gracioso. Pueden llevar emojis y jerga de redes.\n"
+    "NO: seguidores ni numeros de la app; estadios, entrenamientos, lesiones o jugadas que no esten en el evento; "
+    "exagerar el titular (escuchar una oferta no es irse, firmar con una marca no es cambiar de club); si jugo "
+    "con su seleccion, el comentario es de la seleccion, no de su club.\n"
+    "EJEMPLO. Evento: \"Manchester City 1-3 Man Utd · 3 goles de Canales\" (Man Utd de visitante).\n"
+    "  BIEN: {\"autor\": \"@red_hasta_morir\", \"texto\": \"Tres goles en cancha del City 🔥 no es de este planeta\", "
+    "\"tono\": \"positivo\"}\n"
+    "  MAL: \"Old Trafford exploto con su hat-trick\" (jugo de visitante y el estadio no esta en el evento)."
 )
 
 

@@ -523,7 +523,9 @@ def generar_entrevista(perfil: PlayerProfile, stats: MatchStats) -> list[str]:
     extra = contexto_de_club(perfil, carrera)
     candidatos, pesos = temas_comunes(perfil, base, cruces, extra, carrera=carrera)
 
-    candidatos["tactica"].append((1, f"tac_{resultado}" if resultado != "victoria" else "tac_victoria_sin_gol", base))
+    # (con goles, "ganaron aunque no te toco marcar" no va: se lo preguntaron a Simon despues de hacer 5)
+    sin_gol = "tac_victoria_gol" if stats.goles_jugador else "tac_victoria_sin_gol"
+    candidatos["tactica"].append((1, f"tac_{resultado}" if resultado != "victoria" else sin_gol, base))
     candidatos["vestuario"] += [(1, f"ves_{resultado}", base), (0.5, "ves_generico", base)]
     racha = candidatos["racha"]
     if resultado == "victoria" and stats.goles_jugador:
@@ -559,7 +561,15 @@ def generar_entrevista(perfil: PlayerProfile, stats: MatchStats) -> list[str]:
     if resultado != "victoria":
         pesos["arbitraje"] += 1.5
         pesos["hinchada"] += 2
+    if stats.equipo_propio:  # jugo con la seleccion: hoy no se pregunta por el mercado ni el contrato del club
+        for tema in ("mercado", "contratos"):
+            candidatos[tema], pesos[tema] = [], 0
+        pesos["racha"] += 2
+        pesos["tactica"] += 1
     contexto = [f"Partido de hoy: {describir_partido(stats)}"]
+    if stats.equipo_propio:
+        contexto.append(f"Hoy jugo para la seleccion de {stats.equipo_propio}, no para su club "
+                        f"({perfil.club_actual or 'su club'}): la conferencia es de la seleccion.")
     if extra.get("posicion"):
         contexto.append(f"Posicion del jugador en su club: {extra['posicion']}")
     if memoria:
@@ -581,33 +591,42 @@ ESTILOS = {
     "El Picante": "picante: lo de afuera de la cancha, la vida privada, las contradicciones",
 }
 SISTEMA_PREGUNTAS = (
-    "Sos el editor de una conferencia de prensa de futbol en un juego de roleplay. Tres periodistas le hacen "
-    "una pregunta cada uno al jugador. Reescribi la pregunta de cada periodista con su estilo, sobre EL MISMO "
-    "tema que ya se eligio, con variedad y gancho (1 a 2 oraciones, tuteando al jugador), con el tono del "
-    "periodismo deportivo actual (streaming, debates, zona mixta): directo y picante. Usa los hechos dados "
-    "tal cual: nunca le atribuyas al jugador una posicion, un rol o una zona de la cancha distinta de la que "
-    "dicen los datos. Los numeros (la tabla, los puntos, las rachas, los goles) son SOLO los de los datos: no "
-    "digas que dos equipos estan cerca en la tabla si los datos dicen lo contrario, ni inventes resultados. Si "
-    "la conferencia es PREVIA, el partido todavia no se jugo: no preguntes por como jugo, a quien le dedico el "
-    "partido ni quien estaba mirando. Cada periodista tiene su voz y su memoria: si en la memoria del roleplay hay "
-    "algo que el jugador dijo antes (una promesa, una frase fuerte, una evasiva) o una trama abierta que toca su "
-    "tema, puede retomarlo (\"la otra vez dijiste...\"), citando textual solo lo que esta en la memoria. "
-    "Cada periodista le habla AL JUGADOR (por su nombre o sin nombre): nunca pongas el nombre del periodista "
-    "dentro de la pregunta. Devolve las preguntas en el mismo orden, sin el nombre del periodista adelante."
+    "TAREA: el editor de una conferencia de prensa de futbol en un juego de roleplay. Tres periodistas le hacen "
+    "una pregunta cada uno al jugador: reescribi cada una con la voz y el estilo de ese periodista, sobre EL MISMO "
+    "tema, en 1 o 2 oraciones, tuteandolo, directo y con gancho (periodismo deportivo actual: streaming, debate).\n"
+    "LO MAS IMPORTANTE: que se note lo que esta pasando AHORA. Al menos dos de las tres preguntas tocan algo "
+    "concreto de hoy (el partido de hoy: su actuacion, el resultado, el rival, la tabla) o de lo ultimo que paso "
+    "(el titular mas reciente de la memoria); la tercera puede ir a su vida o su carrera, conectada con el "
+    "momento. Si jugo con su seleccion, se habla de la seleccion, no de su club.\n"
+    "MEMORIA: si dijo algo antes (una promesa, una frase fuerte, una evasiva) que toca el tema, un periodista "
+    "puede retomarlo (\"la otra vez dijiste...\"), citando textual solo lo que esta en la memoria. Las tramas son "
+    "de antes: no las des como hechos de hoy.\n"
+    "NO: preguntar por cosas que no estan en los datos; atribuirle otra posicion o rol; decir que dos equipos "
+    "estan cerca en la tabla si los datos dicen lo contrario; en una PREVIA (el partido no se jugo), preguntar "
+    "como jugo, a quien le dedico el partido o quien lo miraba; poner el nombre del periodista adentro de la "
+    "pregunta (le hablan AL JUGADOR).\n"
+    "EJEMPLO. Hoy: victoria 5-2 ante Hungria jugando para la seleccion de Italia, 5 goles suyos.\n"
+    "  BIEN: \"Cinco goles con Italia en una noche, Simon. ¿En que momento sentiste que Hungria ya no te podia "
+    "parar?\"\n"
+    "  MAL: \"¿Como ves la pelea de tu club en la liga?\" (hoy jugo con la seleccion y la pregunta no toca nada de hoy).\n"
+    "Devolve las preguntas en el mismo orden, sin el nombre del periodista adelante."
 )
 SISTEMA_REACCION = (
-    "Sos la prensa deportiva que cubre la conferencia de un futbolista en un juego de roleplay. "
-    "`reaccion_prensa`: 3 a 4 oraciones en tono periodistico, en tercera persona, que analicen y contesten "
-    "ESPECIFICAMENTE lo que dijo el jugador (sus argumentos, quejas, chistes o detalles; podes citarlo textual "
-    "entre «»), conectandolo con el partido y, si aplica, con lo primero de su vida. Tono del periodismo deportivo "
-    "actual (streaming, debates, zona mixta): si pone excusas o dice algo fuerte, la prensa le contesta con polemica. "
-    "`delta_reputacion`: entero (cuanto le suma o resta a su reputacion; parti del sugerido por el sistema). "
-    "`delta_carino`: entero de -6 a 6 (la hinchada de su club). `cita`: su frase mas jugosa COPIADA TEXTUAL de "
-    "sus respuestas, o vacio. `nuevo_gancho_narrativo`: una trama que deja abierta (promesa, desafio), o vacio. "
-    "La prensa se acuerda: si hoy cumple, contradice o repite algo de lo que dijo antes (esta en la memoria), "
-    "marcalo. Se juzga SOLO lo que respondio: los datos del partido y del rival son contexto, nunca motivo de critica; no "
-    "traigas a jugadores del rival si el no los nombro, y no le pongas cargos (capitan, lider del vestuario) que "
-    "no esten en los datos."
+    "TAREA: la prensa deportiva que cubre la conferencia de un futbolista, en un juego de roleplay.\n"
+    "`reaccion_prensa`: 3 a 4 oraciones en tercera persona que analizan y le CONTESTAN lo que dijo (sus "
+    "argumentos, quejas, chistes o detalles; podes citarlo textual entre «»), conectado con el partido de hoy tal "
+    "cual los datos. Si pone excusas o dice algo fuerte, la prensa le responde con polemica. La prensa se acuerda: "
+    "si hoy cumple, contradice o repite algo de la memoria, lo marca.\n"
+    "`delta_reputacion`: entero, parti del sugerido. `delta_carino`: entero de -6 a 6 (la hinchada de su club). "
+    "`cita`: su frase mas jugosa COPIADA TEXTUAL de sus respuestas, o vacio. `nuevo_gancho_narrativo`: una trama "
+    "que deja abierta (promesa, desafio), o vacio.\n"
+    "SE JUZGA SOLO LO QUE RESPONDIO: los datos del partido y del rival son contexto, nunca motivo de critica.\n"
+    "NO: traer jugadores del rival que el no nombro; cargos (capitan, lider del vestuario), estadios o jugadas que "
+    "no estan; frases que no dijo.\n"
+    "EJEMPLO. Dijo: \"No voy a hablar de mi contrato\"; partido: victoria 3-0.\n"
+    "  BIEN: \"Despues del 3-0, Canales eligio el silencio: «No voy a hablar de mi contrato». En la sala nadie se "
+    "lo compro y la pregunta va a volver.\"\n"
+    "  MAL: \"Su falta de compromiso preocupa\" (gano 3-0: no hay datos para eso)."
 )
 
 
