@@ -208,6 +208,87 @@ def extraer_aston(pedidos: list) -> dict:
     return salida
 
 
+# ---- Bentley: su API cc2 (publica, se recorre sola por sus enlaces) ----
+
+MODELOS_BENTLEY = {
+    "bentley_gt": "continental_gt/continental_gt_v8_hybrid_2027",
+    "bentley_gtc": "continental_gtc/continental_gtc_v8_hybrid_2027",
+    "bentley_supersports": "supersports/supersports",
+    "bentley_flying_spur": "Flying_Spur/new_flying_spur_v8_hybrid_2027",
+    "bentley_bentayga": "bentayga/bentayga_v8_2027",
+    "bentley_bentayga_ewb": "bentayga_ewb/bentayga_ewb_v8_2027",
+    "bentley_torcal": "torcal/torcal",
+}
+# Bentley no publica precios ("priceEnabled": false): estimados por seccion (libras); "by Mulliner" x2,5
+PRECIO_BENTLEY = {"Paints": 3900, "Wheels": 4500, "Hide": 1200, "Veneers": 1800, "Interior Details": 900,
+                  "Specifications": 9000, "Vehicle Dynamics": 14000, "Exterior": 2500}
+SECCIONES_BENTLEY = {"Paints": "section-exterior-color", "Wheels": "section-wheels", "Hide": "section-interior-color",
+                     "Veneers": "section-individualization-interior", "Interior Details": "section-individualization-interior",
+                     "Specifications": "section-individualization-packages", "Exterior": "section-individualization-exterior",
+                     "Vehicle Dynamics": "section-wheels"}
+
+
+def _bentley_seccion(seccion: str, sub: str) -> Optional[str]:
+    if seccion == "Hide" and sub != "Main Hide":
+        return "section-individualization-interior"  # el color principal va en Interior; el resto, a elegir
+    if seccion == "Wheels" and sub != "Wheels":
+        return "section-individualization-exterior"
+    if seccion.strip() == "Optional Equipment":
+        return SECCIONES_BENTLEY.get(sub.strip(), "section-individualization-technology")
+    return SECCIONES_BENTLEY.get(seccion.strip())
+
+
+def extraer_bentley(pedidos: list) -> dict:
+    marca = _json(f"{configurador.BENTLEY}/bentley/api/cc2/brandmaster?language=en&role=public&debugMode=false")
+    params = f"language=en&role=public&dataVersion={marca['dataVersion']}&country={marca['country']}"
+    salida = {}
+    for modelo_id, camino_modelo in MODELOS_BENTLEY.items():
+        modelo = autos.POR_ID.get(modelo_id)
+        if modelo is None or (pedidos and modelo_id not in pedidos):
+            continue
+        rasgos = _json(f"{configurador.BENTLEY}/bentley/api/cc2/brandmaster/features/{camino_modelo}?{params}")
+        sugerencias = _json(f"{configurador.BENTLEY}/bentley/api/cc2/brandmaster/{camino_modelo}/suggestions?{params}")
+        camino_base = sugerencias["_embedded"]["item"][0]["_links"]["cc2:configuration"][0]["href"]
+        de_fabrica = set(configurador.prs_de_camino(camino_base))
+        opciones, vistas_seccion = [], {}
+        for seccion in rasgos.get("_embedded", {}).get("section", []):
+            preferida = (seccion.get("metadata") or {}).get("cc2:preferredView")
+            for sub in [seccion] + seccion.get("_embedded", {}).get("section", []):
+                destino = _bentley_seccion(seccion["title"], sub["title"])
+                if destino is None:
+                    continue
+                if preferida and destino not in vistas_seccion:
+                    vistas_seccion[destino] = preferida
+                items = [i for i in sub.get("_embedded", {}).get("item", []) if not (i.get("flags") or {}).get("hidden")]
+                for item in items:
+                    elegida = item["key"] in de_fabrica
+                    # sus fotos estan en www.bentleymotors.com, que a un pedido que no es de su pagina le da 403:
+                    # no se piden (las fichas quedan con el nombre, como Aston Martin); los renders si responden
+                    foto = ""
+                    mulliner = "mulliner" in item["title"].lower()
+                    precio = 0 if elegida else round(PRECIO_BENTLEY.get(sub["title"].strip(), PRECIO_BENTLEY.get(
+                        seccion["title"].strip(), 1200)) * (2.5 if mulliner else 1))
+                    opciones.append({
+                        "id": item["key"], "nombre": item["title"].strip(), "seccion": destino,
+                        "categoria": sub["title"].strip(), "grupo": sub["title"].strip(), "grupo_id": sub.get("key", sub["title"]),
+                        "hex": configurador.color_por_nombre(item["title"]) if destino == "section-exterior-color" else "",
+                        "precio": precio, "estandar": elegida, "seleccionada": elegida, "miniatura": foto,
+                        "descripcion": "",
+                        "exclusivo": destino not in ("section-individualization-packages",
+                                                     "section-individualization-technology") and len(items) > 1,
+                    })
+        salida[f"bentley_{modelo_id}"] = {
+            "proveedor": "bentley", "marca": "Bentley", "codigo": modelo_id, "modelo": modelo.nombre, "anio": None,
+            "moneda": "GBP", "base": modelo.precio, "pais": "GB", "modelo_app": modelo.id, "precios_estimados": True,
+            "sin_noche": True, "camino_base": camino_base, "opciones": opciones, "render": [],
+            "giro": configurador.GIRO_BENTLEY, "giro_inicial": 1, "vistas": configurador.VISTAS_BENTLEY,
+            "entornos_ui": {"estudio": "Estudio"}, "camara_seccion": vistas_seccion,
+        }
+        print(f"{modelo.nombre_completo} ({camino_modelo}): {len(opciones)} opciones")
+        time.sleep(PAUSA_S)
+    return salida
+
+
 # ---- Ferrari: solo le contesta a su pagina -> desde su pagina, en el navegador de la app (ui/puente_web.py) ----
 
 
@@ -257,6 +338,8 @@ def main():
         salida.update(extraer_aston(pedidos))
     elif marca == "ferrari":
         salida.update(extraer_ferrari(pedidos))
+    elif marca == "bentley":
+        salida.update(extraer_bentley(pedidos))
     else:
         salida.update(extraer_porsche(pedidos))
     configurador.ruta_archivo().write_text(json.dumps({"_que_es": "Opciones reales de los configuradores "

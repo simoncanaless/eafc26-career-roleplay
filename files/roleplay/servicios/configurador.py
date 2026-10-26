@@ -361,7 +361,8 @@ def _bajar(url: str, destino: Path, intentos: int = 1, timeout: int = 30) -> Opt
         return destino
     for intento in range(intentos):
         try:
-            with urllib.request.urlopen(urllib.request.Request(url, headers=CABECERAS), timeout=timeout) as respuesta:
+            cabeceras = CABECERAS if "porsche.com" in url else {}  # (Porsche: las de su pagina; el resto, ninguna)
+            with urllib.request.urlopen(urllib.request.Request(url, headers=cabeceras), timeout=timeout) as respuesta:
                 datos = respuesta.read()
             break
         except urllib.error.HTTPError as error:
@@ -382,6 +383,8 @@ def render(modelo: dict, eleccion: Eleccion, camara: str = "ext-low-front-left",
     if proveedor(modelo) == "ferrari":
         destino = ruta_ferrari(modelo, eleccion, camara, noche)
         return destino if destino.exists() else None
+    if proveedor(modelo) == "bentley":
+        return render_bentley(modelo, eleccion, camara)
     url = url_render(modelo, eleccion, camara, entorno, noche)
     destino = CARPETA_RENDERS / modelo["codigo"] / f"{hashlib.sha1(url.encode()).hexdigest()[:16]}.jpg"
     if destino.exists():
@@ -399,6 +402,85 @@ def miniatura(op: dict) -> Optional[Path]:
     url = ruta if ruta.startswith("http") else SITIO + ruta
     nombre = hashlib.sha1(url.split("?", 1)[0].encode()).hexdigest()[:16] + ".jpg"
     return _bajar(url, CARPETA_RENDERS / "miniaturas" / nombre)
+
+
+# ---- Bentley (su API cc2 es publica y se recorre sola: cada pieza trae el enlace `add` a la configuracion que
+# resulta; el servidor calcula la verificacion del camino `byPRs...`, aplica sus reglas y da las imagenes) ----
+
+BENTLEY = "https://sdl.bentleymotors.com"
+GIRO_BENTLEY = [["EXTERIOR_FRONT", False], ["EXTERIOR_3_4_FRONT", False], ["EXTERIOR_SIDE", False],
+                ["EXTERIOR_3_4_REAR", False], ["EXTERIOR_REAR", False], ["EXTERIOR_3_4_REAR", True],
+                ["EXTERIOR_SIDE", True], ["EXTERIOR_3_4_FRONT", True]]
+VISTAS_BENTLEY = {"INTERIOR_DASHBOARD": "Tablero", "INTERIOR_SEATS": "Asientos",
+                  "INTERIOR_REAR_SEATS_FACE_ON": "Atras", "INTERIOR_REAR_SEATS_SIDE_ON": "Atras de costado"}
+
+
+def _json_bentley(camino: str) -> Optional[dict]:
+    try:
+        with urllib.request.urlopen(BENTLEY + camino, timeout=60) as respuesta:
+            return json.loads(respuesta.read())
+    except (OSError, ValueError):
+        return None
+
+
+def prs_de_camino(camino: str) -> list:
+    """Los codigos de una configuracion de Bentley: van en base64 despues de byPRs + 8 de verificacion."""
+    import base64
+
+    codigo = camino.split("byPRs", 1)[1].split("?", 1)[0][8:]
+    texto = base64.urlsafe_b64decode(codigo + "=" * (-len(codigo) % 4)).decode("utf-8", "replace")
+    return [p for p in texto.split("-") if p]
+
+
+def _con_parametro(camino: str, clave: str, valor: str) -> str:
+    import urllib.parse
+
+    return f"{camino}{'&' if '?' in camino else '?'}{clave}={urllib.parse.quote(valor)}"
+
+
+def configuracion_bentley(modelo: dict, eleccion: Eleccion) -> Optional[dict]:
+    """{vista: url de la imagen} de esa eleccion: desde la de fabrica, agrega (y saca) pieza por pieza con los
+    enlaces de su API. Se guarda por eleccion: la misma combinacion no se vuelve a pedir."""
+    clave = hashlib.sha1(json.dumps(sorted(eleccion.ids())).encode()).hexdigest()[:16]
+    archivo = CARPETA_RENDERS / f"bentley_{modelo['codigo']}" / "configuraciones.json"
+    try:
+        guardadas = json.loads(archivo.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        guardadas = {}
+    if clave in guardadas:
+        return guardadas[clave]
+    camino = modelo["camino_base"]
+    datos = _json_bentley(camino)
+    controladas = {o["id"] for o in modelo.get("opciones", []) if visible(o)}
+    for op_id in sorted(set(eleccion.ids()) - set(prs_de_camino(camino))):
+        nuevo = _json_bentley(_con_parametro(camino, "add", op_id))
+        if nuevo is not None:
+            camino, datos = nuevo["_links"]["self"]["href"], nuevo
+    for op_id in sorted((set(prs_de_camino(camino)) & controladas) - set(eleccion.ids())):
+        nuevo = _json_bentley(_con_parametro(camino, "remove", op_id))  # una casilla que se apago
+        if nuevo is not None:
+            camino, datos = nuevo["_links"]["self"]["href"], nuevo
+    if datos is None:
+        return None
+    vistas = {}
+    for grupo in ("cc2:exteriorView", "cc2:interiorView"):
+        for vista in datos.get("_embedded", {}).get(grupo, []):
+            mayor = max(vista.get("renditions") or [{}], key=lambda r: r.get("width", 0))
+            if mayor.get("url"):
+                vistas[vista["name"]] = mayor["url"]
+    guardadas[clave] = vistas
+    archivo.parent.mkdir(parents=True, exist_ok=True)
+    archivo.write_text(json.dumps(guardadas), encoding="utf-8")
+    return vistas
+
+
+def render_bentley(modelo: dict, eleccion: Eleccion, camara: str) -> Optional[Path]:
+    vistas = configuracion_bentley(modelo, eleccion)
+    url = (vistas or {}).get(camara)
+    if not url:
+        return None
+    destino = CARPETA_RENDERS / f"bentley_{modelo['codigo']}" / f"{hashlib.sha1(url.encode()).hexdigest()[:16]}.png"
+    return _bajar(url, destino)
 
 
 # ---- Ferrari (solo le contesta a su pagina: todo pasa por el navegador de la app, ui/puente_web.py) ----

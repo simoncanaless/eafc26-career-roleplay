@@ -142,6 +142,7 @@ class DialogoConfiguradorOficial(QDialog):
             arriba.addWidget(b)
         self.noche_btn = chip_alternable("Noche")
         self.noche_btn.clicked.connect(self._cambiar_noche)
+        self.noche_btn.setVisible(not catalogo.get("sin_noche"))  # (Bentley no tiene version de noche)
         arriba.addWidget(self.noche_btn)
         raiz.addLayout(arriba)
 

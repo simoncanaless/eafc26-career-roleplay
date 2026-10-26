@@ -257,6 +257,82 @@ class TestFerrari(ConCatalogo):
         self.assertIsNone(configurador.guardar_imagen_ferrari(self.f, eleccion, "turntable-1", False, None))
 
 
+def camino_bentley(prs: str, verificacion: str = "1CB1B94B") -> str:
+    import base64
+
+    codigo = base64.urlsafe_b64encode(prs.encode()).decode().rstrip("=")
+    return f"/bentley/api/cc2/brandmaster/configurations/continental_gt/gt/byPRs{verificacion}{codigo}?language=en&country=GZGBZGB"
+
+
+GT = {
+    "proveedor": "bentley", "marca": "Bentley", "codigo": "bentley_gt", "modelo": "Continental GT", "base": 200000,
+    "moneda": "GBP", "modelo_app": "bentley_gt", "precios_estimados": True, "sin_noche": True, "render": [],
+    "camino_base": camino_bentley("F14 6145-F56     99-WHL1"), "giro": [["EXTERIOR_3_4_FRONT", False]],
+    "entornos_ui": {"estudio": "Estudio"}, "vistas": {"INTERIOR_DASHBOARD": "Tablero"},
+    "opciones": [
+        op("F14 6145", "Snow Quartz", COLOR, "Whites", 0, "#F2F2F0", True, estandar=True),
+        op("F14 6923", "Black Crystal", COLOR, "Blacks", 3900, "#121212"),
+        dict(op("WHL1", "21 Ten Twin-Spoke", LLANTAS, "Wheels", 0, seleccionada=True, estandar=True), exclusivo=True),
+        dict(op("WHL2", "22 Ten Spoke Black", LLANTAS, "Wheels", 4500), exclusivo=True),
+        op("NAIM", "Naim for Bentley", "section-individualization-technology", "Audio", 7000),
+    ],
+}
+
+
+class TestBentley(ConCatalogo):
+    def respuesta(self, prs: str) -> dict:
+        return {"_links": {"self": {"href": camino_bentley(prs, "ABCDEF12")}}, "_embedded": {
+            "cc2:exteriorView": [{"name": "EXTERIOR_3_4_FRONT", "renditions": [
+                {"url": f"https://virtualmedia.bentleymotors.com/iris?COSY-{len(prs)}", "width": 1920},
+                {"url": "https://virtualmedia.bentleymotors.com/chica", "width": 240}]}],
+            "cc2:interiorView": [{"name": "INTERIOR_DASHBOARD", "renditions": [
+                {"url": "https://virtualmedia.bentleymotors.com/iris?COSY-int", "width": 1920}]}]}}
+
+    def test_los_codigos_van_en_base64_despues_de_la_verificacion(self):
+        self.assertEqual(configurador.prs_de_camino(GT["camino_base"]), ["F14 6145", "F56     99", "WHL1"])
+
+    def test_cada_pieza_se_agrega_con_su_enlace_y_la_combinacion_se_guarda(self):
+        pedidos = []
+        pasos = {"F14 6923": "F14 6923-F56     99-WHL1", "WHL2": "F14 6923-F56     99-WHL2"}
+
+        class Lectura:
+            def __init__(self, cuerpo):
+                self.cuerpo = cuerpo
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+            def read(self):
+                return self.cuerpo
+
+        def urlopen(pedido, timeout=None):
+            url = pedido if isinstance(pedido, str) else pedido.full_url
+            pedidos.append(url)
+            if "virtualmedia" in url:
+                return Lectura(b"\x89PNG")
+            agregado = urllib.parse.unquote(url.split("add=", 1)[1]) if "add=" in url else None
+            return Lectura(json.dumps(self.respuesta(pasos.get(agregado, "F14 6145-F56     99-WHL1"))).encode())
+
+        import urllib.parse
+
+        eleccion = configurador.de_fabrica(GT)
+        configurador.elegir(GT, eleccion, "F14 6923")
+        configurador.elegir(GT, eleccion, "WHL2")
+        with mock.patch.object(configurador.urllib.request, "urlopen", urlopen):
+            ruta = configurador.render(GT, eleccion, "EXTERIOR_3_4_FRONT")
+            self.assertIsNotNone(ruta)
+            vistas = configurador.configuracion_bentley(GT, eleccion)  # guardada: no pide de nuevo
+        self.assertEqual(sum("add=" in p for p in pedidos), 2)
+        self.assertIn("add=WHL2", pedidos[-2])
+        self.assertTrue(pedidos[-1].startswith("https://virtualmedia"))
+        self.assertEqual(len(pedidos), 4)  # base + 2 agregados + la imagen
+        self.assertEqual(vistas["INTERIOR_DASHBOARD"], "https://virtualmedia.bentleymotors.com/iris?COSY-int")
+        self.assertNotIn("chica", vistas["EXTERIOR_3_4_FRONT"])  # la de mayor tamano
+
+
 class TestGarageYReventa(ConCatalogo):
     def ficha(self, *ids):
         eleccion = configurador.de_fabrica(GT3)
