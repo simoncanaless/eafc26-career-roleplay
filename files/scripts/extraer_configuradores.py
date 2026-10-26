@@ -208,12 +208,55 @@ def extraer_aston(pedidos: list) -> dict:
     return salida
 
 
+# ---- Ferrari: solo le contesta a su pagina -> desde su pagina, en el navegador de la app (ui/puente_web.py) ----
+
+
+def _desde_la_pagina(puente_, cuerpo: str):
+    from PySide6.QtCore import QEventLoop
+
+    resultado, lazo = {}, QEventLoop()
+    puente_.ejecutar(cuerpo, lambda valor: (resultado.update(valor=valor), lazo.quit()))
+    lazo.exec()
+    return resultado.get("valor")
+
+
+def extraer_ferrari(pedidos: list) -> dict:
+    from roleplay.ui.puente_web import PuenteWeb
+
+    app = QApplication.instance() or QApplication(sys.argv[:1])  # noqa: F841
+    puente_ = PuenteWeb(configurador.PAGINA_FERRARI)
+    modelos = json.loads(_desde_la_pagina(puente_, "return JSON.stringify(await fetch('/rt-assets/data/models.json')"
+                                                   ".then(r => r.json()));") or "[]")
+    por_id = {m["id"]: m for m in modelos}
+    salida = {}
+    for modelo in autos.MODELOS:
+        if modelo.marca != "Ferrari":
+            continue
+        ferrari_id = modelo.url_configurador.split("ferrari_car_configurator/", 1)[-1].split("/")[0]
+        if ferrari_id not in por_id or (pedidos and ferrari_id not in pedidos):
+            print(f"{modelo.nombre_completo}: no esta en su configurador ({ferrari_id})")
+            continue
+        arbol = json.loads(_desde_la_pagina(puente_, f"return JSON.stringify(await fetch('/cars/{ferrari_id}/tree-00.json')"
+                                                     ".then(r => r.json()));") or "[]")
+        if not arbol:
+            print(f"{modelo.nombre_completo} ({ferrari_id}): sin datos")
+            continue
+        datos = configurador.normalizar_ferrari(arbol, por_id[ferrari_id], modelo.id, modelo.precio)
+        salida[f"ferrari_{ferrari_id}"] = datos
+        print(f"{modelo.nombre_completo} ({ferrari_id}): {len(datos['opciones'])} opciones, "
+              f"{'giro de 18 cuadros' if len(datos['giro']) == configurador.CUADROS_FERRARI else '6 vistas'}")
+        time.sleep(PAUSA_S)
+    return salida
+
+
 def main():
     pedidos = [a for a in sys.argv[1:] if not a.startswith("--")]
     marca = next((a[8:] for a in sys.argv[1:] if a.startswith("--marca=")), "porsche")
     salida = dict(configurador.catalogo())
     if marca == "aston":
         salida.update(extraer_aston(pedidos))
+    elif marca == "ferrari":
+        salida.update(extraer_ferrari(pedidos))
     else:
         salida.update(extraer_porsche(pedidos))
     configurador.ruta_archivo().write_text(json.dumps({"_que_es": "Opciones reales de los configuradores "

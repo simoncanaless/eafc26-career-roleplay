@@ -179,6 +179,84 @@ class TestAstonMartin(ConCatalogo):
         self.assertEqual(configurador.color_por_nombre("Q Special"), "")
 
 
+ARBOL_FERRARI = [
+    {"id": "exterior", "cameraShot": ["beautyshot_ext_frontleft"], "subConfig": [
+        {"id": "paintwork", "cameraShot": [], "optspec": [
+            {"id": "EXTC", "description": "EXTERIOR COLOUR", "category": "RT.CATEGORY.STANDARD", "options": [
+                {"id": "EXTC_065452500", "name": "W.B.BLU POZZI 520", "selectable": True, "category": "RT.CATEGORY.STANDARD",
+                 "values": [{"optionId": "EXTC", "variantId": "065452500"}]},
+                {"id": "EXTC_065427400", "name": "ROSSO CORSA DS 322", "selectable": True, "category": "RT.CATEGORY.STANDARD",
+                 "values": [{"optionId": "EXTC", "variantId": "065427400"}]},
+                {"id": "EXTC_364000000", "name": "EXTRACAMPIONARIO", "selectable": False, "values": []}]},
+            {"id": "PNTE", "description": "3/4 LAYERS PAINT", "options": [
+                {"id": "PNTE_1", "name": "GIALLO TRIPLO STRATO", "selectable": True, "isSpecial": True,
+                 "category": "RT.CATEGORY.PAINTWORK", "values": [{"optionId": "PNTE", "variantId": "1"}]}]}]},
+        {"id": "rims", "cameraShot": ["beautyshot_ext_wheel"], "optspec": [
+            {"id": "RIMP", "description": "RIMS PAINTED", "options": [
+                {"id": "RIMP_1", "name": "NERO", "selectable": True, "category": "RT.CATEGORY.RIMS",
+                 "values": [{"optionId": "RIMP", "variantId": "1"}]}]}]},
+        {"id": "calipers", "optspec": [
+            {"id": "CALY", "description": "YELLOW BRAKE CALIPERS", "options": [
+                {"id": "CALY", "name": "YELLOW BRAKE CALIPERS", "selectable": True, "category": "RT.CATEGORY.CALIPERS",
+                 "values": [{"optionId": "CALY", "variantId": None}]}]}]},
+        {"id": "carbon_fibre", "optspec": [
+            {"id": "CEXS", "description": "CARBON FIBRE SIDE SKIRTS", "options": [
+                {"id": "CEXS", "name": "CARBON FIBRE SIDE SKIRTS", "selectable": True, "category": "RT.CATEGORY.CARBON",
+                 "values": [{"optionId": "CEXS", "variantId": None}]}]}]}]},
+    {"id": "interior", "cameraShot": ["beautyshot_int_frontseats"], "subConfig": [
+        {"id": "main_area", "optspec": [
+            {"id": "INTC", "description": "INTERIOR COLOUR", "options": [
+                {"id": "INTC_1", "name": "NERO 110552 (BLACK)", "selectable": True, "category": "RT.CATEGORY.LEATHER",
+                 "values": [{"optionId": "INTC", "variantId": "1"}]}]}]}]},
+]
+
+
+class TestFerrari(ConCatalogo):
+    def setUp(self):
+        super().setUp()
+        self.f = configurador.normalizar_ferrari(ARBOL_FERRARI, {"id": "296gtb", "code": "f171", "name": "296 GTB",
+                                                                 "has2DTurntable": True}, "ferrari_296", 245000)
+
+    def test_su_arbol_queda_en_las_pestanas_de_la_app(self):
+        por_id = {o["id"]: o for o in self.f["opciones"]}
+        self.assertNotIn("EXTC_364000000", por_id)  # lo que su pagina no deja elegir
+        self.assertEqual(por_id["EXTC_065427400"]["nombre"], "Rosso Corsa Ds 322")
+        self.assertTrue(por_id["EXTC_065427400"]["seleccionada"])  # el de fabrica: Rosso Corsa
+        self.assertEqual(por_id["EXTC_065427400"]["hex"], "#C1121F")
+        self.assertEqual((por_id["RIMP_1"]["seccion"], por_id["RIMP_1"]["categoria"]), (LLANTAS, "Llantas"))
+        self.assertEqual(por_id["CALY"]["categoria"], "Pinzas")
+        self.assertEqual(por_id["CEXS"]["seccion"], EXTERIOR)
+        self.assertFalse(por_id["CEXS"]["exclusivo"])  # sola en su grupo: casilla
+        self.assertEqual(por_id["INTC_1"]["seccion"], "section-interior-color")
+        self.assertEqual(por_id["PNTE_1"]["precio"], 18000)  # estimado: pintura especial x1,5
+        self.assertEqual(len(self.f["giro"]), 18)
+        self.assertEqual(self.f["vistas"]["beautyshot_ext_wheel"], "Llanta")
+        self.assertTrue(self.f["precios_estimados"])
+
+    def test_el_pedido_es_el_de_su_pagina(self):
+        eleccion = configurador.de_fabrica(self.f)
+        configurador.elegir(self.f, eleccion, "CALY")
+        pedido = configurador.pedido_ferrari(self.f, eleccion, "turntable-3", noche=True)
+        self.assertEqual(pedido["daytime"], "Night")
+        self.assertEqual(pedido["options"], [{"optionId": "CALY", "variantId": None},
+                                             {"optionId": "EXTC", "variantId": "065427400"}])
+        self.assertEqual((pedido["cameras"], len(pedido["frames"])), ([], 18))
+        js = configurador.js_imagen_ferrari(self.f, eleccion, "beautyshot_ext_wheel", False)
+        self.assertIn("https://api.carconfigurator.ferrari.com/vehicle/296gtb/default/images", js)
+        self.assertIn("beautyshot_ext_wheel", js)
+
+    def test_solo_de_la_cache_y_se_guarda_lo_que_trae_el_navegador(self):
+        import base64
+
+        eleccion = configurador.de_fabrica(self.f)
+        with mock.patch.object(configurador.urllib.request, "urlopen") as urlopen:
+            self.assertIsNone(configurador.render(self.f, eleccion, "turntable-0"))
+        urlopen.assert_not_called()  # Ferrari no se pide desde Python: solo por su pagina
+        ruta = configurador.guardar_imagen_ferrari(self.f, eleccion, "turntable-0", False, base64.b64encode(b"jpg").decode())
+        self.assertEqual(configurador.render(self.f, eleccion, "turntable-0"), ruta)
+        self.assertIsNone(configurador.guardar_imagen_ferrari(self.f, eleccion, "turntable-1", False, None))
+
+
 class TestGarageYReventa(ConCatalogo):
     def ficha(self, *ids):
         eleccion = configurador.de_fabrica(GT3)
@@ -273,6 +351,41 @@ class TestPantalla(ayuda.PruebaDeInterfaz, ConCatalogo):
         self.assertTrue(dialogo.encargar_btn.isEnabled())
         self.assertEqual(dialogo.configuracion().oficial["total"], 159700 + 18000)
         self.assertFalse(pobre.encargar_btn.isEnabled())
+
+    def test_ferrari_pide_la_imagen_por_el_navegador_y_la_guarda(self):
+        import base64
+
+        from PySide6.QtCore import QBuffer
+        from PySide6.QtGui import QColor, QImage
+
+        from roleplay.ui import puente_web
+        from roleplay.ui.configurador_oficial import DialogoConfiguradorOficial
+
+        imagen = QImage(64, 36, QImage.Format.Format_RGB32)
+        imagen.fill(QColor("red"))
+        buffer = QBuffer()
+        buffer.open(QBuffer.OpenModeFlag.WriteOnly)
+        imagen.save(buffer, "JPG")
+        jpg = base64.b64encode(bytes(buffer.data())).decode()
+        pedidos = []
+
+        class PuenteFalso:
+            def ejecutar(self, cuerpo, al_terminar):
+                pedidos.append(cuerpo)
+                al_terminar(jpg)
+
+        ferrari = configurador.normalizar_ferrari(ARBOL_FERRARI, {"id": "296gtb", "name": "296 GTB", "has2DTurntable": True},
+                                                  "ferrari_296", 245000)
+        with mock.patch.object(puente_web, "puente", return_value=PuenteFalso()) as puente:
+            dialogo = DialogoConfiguradorOficial(autos.POR_ID["ferrari_296"], ferrari, 500_000, "GBP")
+            self.addCleanup(dialogo.deleteLater)
+            dialogo._girar(1)
+            dialogo._girar(-1)  # el primer cuadro ya esta guardado: no se pide de nuevo
+        puente.assert_called_with(configurador.PAGINA_FERRARI)
+        self.assertEqual(len(pedidos), 2)
+        self.assertIn("turntable-0", pedidos[0])
+        self.assertIsNotNone(dialogo.foto)
+        self.assertIn("estimados", dialogo.precio_label.text())
 
     def test_girar_y_las_vistas_de_cada_seccion(self):
         pedidas = []

@@ -353,9 +353,27 @@ class DialogoConfiguradorOficial(QDialog):
         self._token += 1
         camara, _ = self._camara()
         self.estado.setText("Cargando...")
-        ejecutar_en_hilo(_render, self._token, self.catalogo, configurador.Eleccion(
-            self.eleccion.codigo, dict(self.eleccion.opciones)), camara, self.entorno, self.noche,
-            al_completar=self._on_render, al_fallar=self._on_render_error)
+        eleccion = configurador.Eleccion(self.eleccion.codigo, dict(self.eleccion.opciones))
+        if configurador.proveedor(self.catalogo) == "ferrari":
+            self._pedir_a_ferrari(self._token, eleccion, camara)
+            return
+        ejecutar_en_hilo(_render, self._token, self.catalogo, eleccion, camara, self.entorno, self.noche,
+                         al_completar=self._on_render, al_fallar=self._on_render_error)
+
+    def _pedir_a_ferrari(self, token: int, eleccion, camara: str):
+        """Ferrari solo le contesta a su pagina: la imagen se pide por el navegador de la app (ui/puente_web.py)."""
+        guardada = configurador.render(self.catalogo, eleccion, camara, noche=self.noche)
+        if guardada is not None:
+            self._on_render((token, guardada))
+            return
+        from roleplay.ui.puente_web import puente
+
+        noche = self.noche
+        self.estado.setText("Ferrari esta dibujando tu auto...")
+        puente(configurador.PAGINA_FERRARI).ejecutar(
+            configurador.js_imagen_ferrari(self.catalogo, eleccion, camara, noche),
+            lambda b64: self._on_render((token, configurador.guardar_imagen_ferrari(
+                self.catalogo, eleccion, camara, noche, b64))))
 
     def _on_render(self, resultado):
         token, ruta = resultado
@@ -370,7 +388,7 @@ class DialogoConfiguradorOficial(QDialog):
         if espejo:
             imagen = imagen.mirrored(True, False)
         self.escenario.mostrar(imagen)
-        if camara.startswith("ext-") and not espejo:
+        if not configurador.es_de_interior(camara) and not espejo:  # la del garage: una de afuera
             self.foto = imagen
 
     def _on_render_error(self, mensaje: str):

@@ -287,6 +287,11 @@ def camara_de_seccion(modelo: dict, seccion: str) -> Optional[str]:
     return None
 
 
+def es_de_interior(camara: str) -> bool:
+    """int-front-seats (Porsche), BS_Config_Int_1_LH (Aston Martin), beautyshot_int_trim (Ferrari)."""
+    return "int" in camara.lower().replace("-", "_").split("_")
+
+
 def vistas_extra(modelo: dict) -> list:
     """[(camara, nombre)] de las vistas que no son del giro y que el modelo trae."""
     if "vistas" in modelo:
@@ -373,7 +378,10 @@ def _bajar(url: str, destino: Path, intentos: int = 1, timeout: int = 30) -> Opt
 def render(modelo: dict, eleccion: Eleccion, camara: str = "ext-low-front-left", entorno: str = "WindTunnel",
            noche: bool = False) -> Optional[Path]:
     """El render de esa combinacion y vista (de la cache o pedido una vez). None sin internet o si la marca no
-    tiene esa imagen. Corre en un hilo."""
+    tiene esa imagen. Corre en un hilo. Ferrari solo de la cache: se pide por el navegador (`ui/puente_web.py`)."""
+    if proveedor(modelo) == "ferrari":
+        destino = ruta_ferrari(modelo, eleccion, camara, noche)
+        return destino if destino.exists() else None
     url = url_render(modelo, eleccion, camara, entorno, noche)
     destino = CARPETA_RENDERS / modelo["codigo"] / f"{hashlib.sha1(url.encode()).hexdigest()[:16]}.jpg"
     if destino.exists():
@@ -391,6 +399,138 @@ def miniatura(op: dict) -> Optional[Path]:
     url = ruta if ruta.startswith("http") else SITIO + ruta
     nombre = hashlib.sha1(url.split("?", 1)[0].encode()).hexdigest()[:16] + ".jpg"
     return _bajar(url, CARPETA_RENDERS / "miniaturas" / nombre)
+
+
+# ---- Ferrari (solo le contesta a su pagina: todo pasa por el navegador de la app, ui/puente_web.py) ----
+
+FERRARI = "https://carconfigurator.ferrari.com"
+API_FERRARI = "https://api.carconfigurator.ferrari.com"
+PAGINA_FERRARI = f"{FERRARI}/en_EN/ferrari_car_configurator"
+CUADROS_FERRARI = 18  # el giro de su pagina (los que tienen has2DTurntable)
+VISTAS_FERRARI = {"beautyshot_ext_wheel": "Llanta", "beautyshot_ext_rooftop": "Desde arriba",
+                  "beautyshot_int_frontseats": "Asientos", "beautyshot_int_steeringwheel": "Volante",
+                  "beautyshot_int_frontside": "Cabina", "beautyshot_int_trim": "Detalles"}
+# Ferrari no publica precios: estimados por categoria de su arbol (libras); las "especiales" x1,5
+PRECIO_FERRARI = {"STANDARD": 0, "ADDITIONAL": 4500, "PAINTWORK": 12000, "LIVERY": 9000, "RIMS": 3500,
+                  "CALIPERS": 1400, "CARBON": 4800, "LEATHER": 2500}
+
+
+def _seccion_ferrari(ruta: list) -> Optional[str]:
+    if ruta[0] == "exterior":
+        if "paintwork" in ruta:
+            return "section-exterior-color"
+        if ruta[-1] in ("rims", "calipers"):
+            return "section-wheels"
+        return "section-individualization-exterior"
+    if ruta[0] == "interior":
+        if ruta[-1] == "main_area":
+            return "section-interior-color"
+        if ruta[-1] == "seattype":
+            return "section-interior-seats"
+        return "section-individualization-interior"
+    if ruta[0] == "equipment":
+        return "section-individualization-technology"
+    return None
+
+
+def _precio_ferrari(categoria: str, especial: bool) -> int:
+    clave = next((c for c in PRECIO_FERRARI if c in categoria), "")
+    precio = PRECIO_FERRARI.get(clave, 1500)
+    return round(precio * (1.5 if especial else 1))
+
+
+def normalizar_ferrari(arbol: list, info: dict, modelo_app: str, base: int) -> dict:
+    """El catalogo de un Ferrari (su tree-00.json y su linea de models.json) con la forma de los demas."""
+    opciones, vistos, camaras = [], set(), set()
+
+    def recorrer(nodo: dict, ruta: list):
+        camaras.update(c for c in nodo.get("cameraShot") or [] if c)
+        seccion = _seccion_ferrari(ruta)
+        for spec in nodo.get("optspec") or []:
+            validas = [o for o in spec.get("options") or [] if o.get("selectable")]
+            for op in validas:
+                if op["id"] in vistos or seccion is None:
+                    continue
+                vistos.add(op["id"])
+                nombre = " ".join(op["name"].split()).title()
+                categoria = ("Pinzas" if ruta[-1] == "calipers" else "Llantas") if seccion == "section-wheels" else \
+                    (spec.get("description") or ruta[-1]).capitalize()
+                opciones.append({
+                    "id": op["id"], "nombre": nombre, "seccion": seccion, "categoria": categoria,
+                    "grupo": categoria, "grupo_id": spec["id"],
+                    "hex": color_por_nombre(nombre) if seccion in ("section-exterior-color", "section-interior-color") else "",
+                    "precio": _precio_ferrari(op.get("category") or spec.get("category") or "", bool(op.get("isSpecial"))),
+                    "estandar": False, "seleccionada": False, "miniatura": "", "descripcion": "",
+                    "exclusivo": len(validas) > 1, "valores": op.get("values") or [],
+                })
+        for hijo in nodo.get("subConfig") or []:
+            recorrer(hijo, ruta + [hijo["id"]])
+
+    for raiz in arbol:
+        recorrer(raiz, [raiz["id"]])
+    pinturas = [o for o in opciones if o["seccion"] == "section-exterior-color"]
+    de_fabrica = next((o for o in pinturas if "Rosso Corsa" in o["nombre"]), pinturas[0] if pinturas else None)
+    if de_fabrica is not None:  # sin opciones dibuja el auto base; el color de fabrica, el Rosso Corsa
+        de_fabrica.update(seleccionada=True, estandar=True, precio=0)
+    giro_18 = bool(info.get("has2DTurntable"))
+    giro = [[f"turntable-{n}", False] for n in range(CUADROS_FERRARI)] if giro_18 else [
+        ["beautyshot_ext_frontleft", False], ["beautyshot_ext_side", False], ["beautyshot_ext_backleft", False],
+        ["beautyshot_ext_backleft", True], ["beautyshot_ext_side", True], ["beautyshot_ext_frontleft", True]]
+    vistas = {c: n for c, n in VISTAS_FERRARI.items() if c in camaras}
+    if giro_18:
+        vistas = {"beautyshot_ext_frontleft": "Presentacion", **vistas}
+    return {
+        "proveedor": "ferrari", "marca": "Ferrari", "codigo": info["id"], "codigo_ferrari": info.get("code", ""),
+        "modelo": info.get("name", ""), "anio": None, "moneda": "GBP", "base": base, "pais": "GB",
+        "modelo_app": modelo_app, "precios_estimados": True, "opciones": opciones, "render": [],
+        "giro": giro, "giro_inicial": 0, "vistas": vistas, "entornos_ui": {"Blackroom": "Estudio"},
+        "camara_seccion": {"section-wheels": "beautyshot_ext_wheel", "section-interior-color": "beautyshot_int_frontseats",
+                           "section-interior-seats": "beautyshot_int_frontseats"},
+    }
+
+
+def pedido_ferrari(modelo: dict, eleccion: Eleccion, camara: str, noche: bool) -> dict:
+    """Lo que su pagina le manda a la API de imagenes (las opciones con su optionId/variantId)."""
+    por_id = _por_id(modelo)
+    opciones = [v for i in sorted(eleccion.ids()) if i in por_id for v in por_id[i].get("valores", [])]
+    giro = camara.startswith("turntable-")
+    return {"daytime": "Night" if noche else "Day", "options": opciones, "scenario": "Blackroom",
+            "cameras": [] if giro else [camara], "frames": list(range(CUADROS_FERRARI)) if giro else []}
+
+
+def ruta_ferrari(modelo: dict, eleccion: Eleccion, camara: str, noche: bool) -> Path:
+    pedido = pedido_ferrari(modelo, eleccion, camara, noche)
+    clave = hashlib.sha1(json.dumps([pedido["options"], pedido["daytime"], camara], sort_keys=True).encode()).hexdigest()[:16]
+    return CARPETA_RENDERS / f"ferrari_{modelo['codigo']}" / f"{clave}.jpg"
+
+
+def js_imagen_ferrari(modelo: dict, eleccion: Eleccion, camara: str, noche: bool) -> str:
+    """El cuerpo (async) que corre en su pagina: pide la imagen como su configurador y la devuelve en base64."""
+    pedido = pedido_ferrari(modelo, eleccion, camara, noche)
+    cuadro = camara.split("-", 1)[1] if camara.startswith("turntable-") else ""
+    return (
+        f"const r = await fetch('{API_FERRARI}/vehicle/{modelo['codigo']}/default/images', {{method: 'POST', "
+        f"headers: {{'content-type': 'application/json'}}, body: {json.dumps(json.dumps(pedido))}}}).then(x => x.json());"
+        f"const url = {json.dumps(cuadro)} ? '{FERRARI}/' + r.prefix + r.trunk + '-Blackroom-{pedido['daytime']}-turntable-"
+        f"{cuadro}.jpg' : (r.filenames || []).find(f => f.includes({json.dumps(camara)}));"
+        "if (!url) return null;"
+        "const imagen = await fetch(url);"
+        "if (!imagen.ok || !(imagen.headers.get('content-type') || '').includes('image')) return null;"
+        "const blob = await imagen.blob();"
+        "return await new Promise(ok => { const f = new FileReader(); f.onload = () => ok(String(f.result).split(',')[1]); "
+        "f.readAsDataURL(blob); });"
+    )
+
+
+def guardar_imagen_ferrari(modelo: dict, eleccion: Eleccion, camara: str, noche: bool, base64_jpg) -> Optional[Path]:
+    import base64
+
+    if not base64_jpg:
+        return None
+    destino = ruta_ferrari(modelo, eleccion, camara, noche)
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_bytes(base64.b64decode(base64_jpg))
+    return destino
 
 
 def miniaturas(modelo: dict, ids: list) -> dict:
