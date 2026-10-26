@@ -106,6 +106,7 @@ class PaginaVida(QWidget):
     auto_entregado = Signal(str)  # llego un auto pedido: el menu avisa en la bandeja
     evento_inesperado = Signal(str, str)  # (titulo, reto): el menu avisa en la bandeja
     decision_pendiente = Signal(str)  # una decision de la vida sentimental: el menu avisa en la bandeja
+    mostrada = Signal()  # se redibujo (cobro, compra, venta): el computador refresca el sitio abierto
 
     def __init__(self):
         super().__init__()
@@ -408,6 +409,7 @@ class PaginaVida(QWidget):
         self._mostrar_posesiones(e)
         self._mostrar_donaciones(e)
         self._mostrar_movimientos(e)
+        self.mostrada.emit()
 
     def _elegir_categoria(self, categoria: str):
         self._categoria = categoria
@@ -509,8 +511,11 @@ class PaginaVida(QWidget):
             self.tienda_layout.addLayout(_fila_ancha(textos, comprar, foto=foto))
 
     def _on_comprar_nicho(self, oferta_id: str):
+        self.comprar_nicho(self._ofertas_nicho.get(oferta_id))
+
+    def comprar_nicho(self, oferta: Optional[dict]):
+        """Un auto del marketplace (de la tienda de aca o del sitio del computador)."""
         perfil, carrera = self.perfil, self._carrera
-        oferta = self._ofertas_nicho.get(oferta_id)
         if perfil is None or carrera is None or carrera.fecha_actual() is None or oferta is None:
             return
         articulo = marketplace.articulo(oferta)

@@ -72,6 +72,7 @@ from roleplay.ui.entrevista import InterviewWindow
 from roleplay.ui.estilos import fuente_titulo
 from roleplay.ui.instagram import InstagramWindow
 from roleplay.ui.temporada import PaginaTemporada
+from roleplay.ui.computador import PaginaComputador
 from roleplay.ui.vida import PaginaVida
 from roleplay.ui.ajustes import DialogoAjustes, abrir_juego_o_preguntar
 from roleplay.ui.personaje import CharacterWizard
@@ -688,12 +689,14 @@ class MainMenuWindow(QMainWindow):
         self.pagina_resumen.decision_pendiente.connect(self._on_decision_pendiente)
         self.pagina_vida.decision_pendiente.connect(lambda titulo: self._on_decision_pendiente(titulo, "Vida"))
         self.pagina_resumen.reputacion_cambiada.connect(self._refrescar_jugador)
+        self.pagina_computador = PaginaComputador(self.pagina_vida)  # los sitios estilo GTA: compran via Vida
         self._paginas = [
             ("Resumen", "inicio", self.pagina_resumen),
             ("Temporada", "trofeo", self.pagina_temporada),
             ("Entrevistas", "microfono", self.pagina_entrevistas),
             ("Instagram", "camara", self.pagina_instagram),
             ("Vida", "billetera", self.pagina_vida),
+            ("Computador", "computador", self.pagina_computador),
         ]
 
         self.stack = QStackedWidget()
