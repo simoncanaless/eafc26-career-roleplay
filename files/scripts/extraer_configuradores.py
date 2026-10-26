@@ -32,13 +32,31 @@ SCRIPT = r"""
   const ops = [];
   for (const sec of c.views.optionsList) for (const ca of (sec.categories || [])) for (const g of (ca.groups || []))
     for (const it of (g.items || [])) ops.push({id: it.id, nombre: it.title, seccion: sec.id, categoria: ca.title,
-      grupo: g.title || '', hex: (it.color || [])[0] || '', precio: it.priceNumeric || 0,
-      estandar: !!it.isStandardEquipment, seleccionada: !!it.isSelected});
+      grupo: g.title || '', grupo_id: it.groupId || '', hex: (it.color || [])[0] || '', precio: it.priceNumeric || 0,
+      estandar: !!it.isStandardEquipment, seleccionada: !!it.isSelected, miniatura: it.thumbnail || '',
+      descripcion: it.description || ''});
   return JSON.stringify({codigo: c.catalog.orderType, modelo: c.catalog.modelName, anio: c.catalog.modelYear,
     moneda: c.market.currency, base: c.configuration.prices.main.base.raw, render: c.prs.optionIds || [],
-    opciones: ops});
+    opciones: ops, vistas_seccion: Object.fromEntries(c.views.optionsList.map(s => [s.id, s.visualizationViews || []])),
+    escenario: ((c.mainStage || {}).stage || []).map(s => ({vista: s.view, url: s.url})),
+    entornos: ((c.prs || {}).environments || []).map(e => e.id)});
 })()
 """
+
+
+def camaras(escenario: list) -> dict:
+    """{vista de la pagina: id de camara del render}, sacado de las imagenes del escenario (el pedido va en lz-string)."""
+    import lzstring
+
+    salida = {}
+    for imagen in escenario:
+        try:
+            comprimido = imagen["url"].split("/1/", 1)[1].split("?", 1)[0]
+            pedido = json.loads(lzstring.LZString().decompressFromEncodedURIComponent(comprimido))
+            salida[imagen["vista"]] = pedido["config"]["camera"]["id"]
+        except (IndexError, KeyError, TypeError, ValueError):
+            continue
+    return salida
 
 
 def leer(pagina, url: str) -> dict:
@@ -79,6 +97,7 @@ def main():
         if not datos.get("opciones"):
             print(f"{modelo.nombre_completo} ({codigo}): sin datos")
             continue
+        datos["camaras"] = camaras(datos.pop("escenario", []))
         datos.update(marca="Porsche", pais="GB", modelo_app=modelo.id)
         salida[codigo] = datos
         print(f"{modelo.nombre_completo} ({codigo}): {len(datos['opciones'])} opciones, base {datos['base']} {datos['moneda']}")

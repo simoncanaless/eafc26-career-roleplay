@@ -1,25 +1,115 @@
 """
-El configurador oficial nativo (servicios/configurador.py): el render de la marca en grande, las opciones
-reales (circulos con el color exacto de cada pintura, llantas, interior, asientos, paquetes) y el desglose
-precio base + opcionales = precio final de encargo. Lo abre Vida en lugar del configurador de siempre cuando
-hay catalogo oficial del modelo (solo en el PC de Simon).
+El configurador oficial nativo (servicios/configurador.py), armado como la pagina de la marca: el auto en grande
+con el render oficial (se gira arrastrando o con las flechas, con los fondos de la pagina y de noche), las vistas
+de la llanta y del interior, y a la derecha las pestanas de la pagina (color, llantas, interior, asientos,
+paquetes...) con la foto de cada opcion, su precio y su descripcion. Abajo, precio base + opcionales = precio final
+de encargo. Lo abre Vida en lugar del configurador de siempre cuando hay catalogo oficial del modelo (solo en el PC
+de Simon).
 """
 
 from typing import Optional
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QImage, QPainter, QPixmap
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
-    QComboBox, QDialog, QGridLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget,
+    QDialog, QGridLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, QStackedWidget, QTabBar, QVBoxLayout,
+    QWidget,
 )
 
 from roleplay.servicios import autos, configurador
 from roleplay.servicios.economia import dinero
 from roleplay.ui import estilos
 from roleplay.ui.comun import ejecutar_en_hilo, esc
-from roleplay.ui.componentes import boton, etiqueta_campo, fila, texto_suave, titulo_seccion
+from roleplay.ui.componentes import boton, chip_alternable, etiqueta_campo, fila, texto_suave, titulo_seccion
 
-COLUMNAS_COLORES = 8
+PASO_GIRO_PX = 70  # cuanto hay que arrastrar para pasar a la vista de al lado
+COLUMNAS_COLORES = 9
+FOTO_OPCION = QSize(184, 104)
+BORDE = "#2A3340"
+
+
+def _render(token: int, modelo: dict, eleccion: configurador.Eleccion, camara: str, entorno: str, noche: bool):
+    return token, configurador.render(modelo, eleccion, camara, entorno, noche)
+
+
+class Escenario(QLabel):
+    """El auto en grande: guarda la imagen original y la escala al tamano; arrastrar de costado lo gira."""
+    girar = Signal(int)
+
+    def __init__(self):
+        super().__init__("Cargando el render oficial...")
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setMinimumSize(640, 360)
+        self.setCursor(Qt.CursorShape.OpenHandCursor)
+        self.imagen: Optional[QImage] = None
+        self._desde: Optional[int] = None
+
+    def mostrar(self, imagen: QImage):
+        self.imagen = imagen
+        self._escalar()
+
+    def _escalar(self):
+        if self.imagen is not None:
+            self.setPixmap(QPixmap.fromImage(self.imagen).scaled(
+                self.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+
+    def resizeEvent(self, evento):
+        super().resizeEvent(evento)
+        self._escalar()
+
+    def mousePressEvent(self, evento):
+        self._desde = int(evento.position().x())
+        self.setCursor(Qt.CursorShape.ClosedHandCursor)
+
+    def mouseMoveEvent(self, evento):
+        if self._desde is None:
+            return
+        x = int(evento.position().x())
+        pasos = int((x - self._desde) / PASO_GIRO_PX)
+        if pasos:
+            self._desde += pasos * PASO_GIRO_PX
+            self.girar.emit(-pasos)  # arrastrar a la izquierda muestra el costado siguiente, como en la pagina
+
+    def mouseReleaseEvent(self, evento):
+        self._desde = None
+        self.setCursor(Qt.CursorShape.OpenHandCursor)
+
+
+class Ficha(QPushButton):
+    """Una opcion como en la pagina: la foto, el nombre y el precio; con borde de color si esta elegida."""
+
+    def __init__(self, op: dict, precio: str):
+        super().__init__()
+        self.setFixedSize(FOTO_OPCION.width() + 16, FOTO_OPCION.height() + 74)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        caja = QVBoxLayout(self)
+        caja.setContentsMargins(8, 8, 8, 8)
+        caja.setSpacing(4)
+        self.foto = QLabel("···")
+        self.foto.setFixedSize(FOTO_OPCION)
+        self.foto.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.foto.setStyleSheet(f"background: {estilos.FONDO}; border-radius: 4px; color: {estilos.TEXTO_SUAVE};")
+        nombre = QLabel(op["nombre"])
+        nombre.setWordWrap(True)
+        nombre.setMaximumHeight(34)
+        valor = QLabel(precio)
+        valor.setObjectName("suave")
+        for etiqueta in (self.foto, nombre, valor):
+            etiqueta.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            caja.addWidget(etiqueta)
+        caja.addStretch()
+        self.setToolTip(op["nombre"])
+
+    def poner_foto(self, ruta):
+        imagen = QPixmap(str(ruta))
+        if not imagen.isNull():
+            self.foto.setPixmap(imagen.scaled(FOTO_OPCION, Qt.AspectRatioMode.KeepAspectRatio,
+                                              Qt.TransformationMode.SmoothTransformation))
+
+    def marcar(self, elegida: bool):
+        borde = estilos.ACENTO if elegida else BORDE
+        self.setStyleSheet(f"QPushButton {{ background: {estilos.PANEL}; border: 2px solid {borde}; border-radius: 6px; }}"
+                           f"QPushButton:hover {{ border-color: {estilos.ACENTO}; }}")
 
 
 class DialogoConfiguradorOficial(QDialog):
@@ -28,124 +118,264 @@ class DialogoConfiguradorOficial(QDialog):
         self.setWindowTitle(f"EAFC 26 Roleplay - {modelo.nombre_completo}")
         self.modelo, self.catalogo, self.saldo, self.moneda = modelo, catalogo, saldo, moneda
         self.eleccion = configurador.de_fabrica(catalogo)
-        self.foto: Optional[QImage] = None
-        self._pedido_render = 0
-        self._botones_color: dict = {}
-        self._combos: dict = {}
+        self.secciones = configurador.opciones_por_seccion(catalogo)
+        self.foto: Optional[QImage] = None  # la del garage: la ultima vista de afuera
+        self.giro, self.camara_extra = 1, None  # arranca de adelante a la izquierda, como la pagina
+        self.entorno, self.noche = next(iter(configurador.ENTORNOS)), False
+        self._token = 0
+        self._fichas: dict = {}  # id -> Ficha
+        self._circulos: dict = {}  # id -> (boton, hex)
+        self._paginas: dict = {}  # seccion -> indice en el stack (se arman al abrirlas)
 
-        raiz = QHBoxLayout(self)
+        raiz = QVBoxLayout(self)
+        arriba = QHBoxLayout()
+        arriba.addWidget(titulo_seccion(f"{modelo.marca} · {catalogo.get('modelo', modelo.nombre)} {catalogo.get('anio', '')}"))
+        arriba.addStretch()
+        self._botones_entorno = {}
+        for entorno, nombre in configurador.ENTORNOS.items():
+            b = chip_alternable(nombre)
+            b.clicked.connect(lambda _=False, e=entorno: self._cambiar_entorno(e))
+            self._botones_entorno[entorno] = b
+            arriba.addWidget(b)
+        self.noche_btn = chip_alternable("Noche")
+        self.noche_btn.clicked.connect(self._cambiar_noche)
+        arriba.addWidget(self.noche_btn)
+        raiz.addLayout(arriba)
+
+        cuerpo = QHBoxLayout()
         izquierda = QVBoxLayout()
-        izquierda.addWidget(titulo_seccion(f"{modelo.marca} · {catalogo.get('modelo', modelo.nombre)} {catalogo.get('anio', '')}"))
-        self.render_label = QLabel("Cargando el render oficial...")
-        self.render_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.render_label.setMinimumSize(720, 405)
-        izquierda.addWidget(self.render_label, 1)
-        self.precio_label = QLabel()
-        self.precio_label.setWordWrap(True)
-        izquierda.addWidget(self.precio_label)
-        raiz.addLayout(izquierda, 3)
+        self.escenario = Escenario()
+        self.escenario.girar.connect(self._girar)
+        izquierda.addWidget(self.escenario, 1)
+        vistas = QHBoxLayout()
+        anterior, siguiente = boton("‹"), boton("›")
+        anterior.clicked.connect(lambda: self._girar(-1))
+        siguiente.clicked.connect(lambda: self._girar(1))
+        self._botones_vista = {}
+        vistas.addWidget(anterior)
+        exterior = chip_alternable("Exterior")
+        exterior.clicked.connect(lambda: self._ver(None))
+        self._botones_vista[None] = exterior
+        vistas.addWidget(exterior)
+        for camara, nombre in configurador.vistas_extra(catalogo):
+            b = chip_alternable(nombre)
+            b.clicked.connect(lambda _=False, c=camara: self._ver(c))
+            self._botones_vista[camara] = b
+            vistas.addWidget(b)
+        vistas.addStretch()
+        self.estado = texto_suave("", ajustar=False)
+        vistas.addWidget(self.estado)
+        vistas.addWidget(siguiente)
+        izquierda.addLayout(vistas)
+        izquierda.addWidget(texto_suave("Arrastra el auto (o usa las flechas) para girarlo."))
+        cuerpo.addLayout(izquierda, 1)
 
+        derecha = QVBoxLayout()
+        self.pestanas = QTabBar()
+        self.pestanas.setExpanding(False)
+        self.pestanas.setUsesScrollButtons(True)
+        for seccion in self.secciones:
+            self.pestanas.addTab(configurador.SECCIONES[seccion].upper())
+        derecha.addWidget(self.pestanas)
+        self.stack = QStackedWidget()
+        derecha.addWidget(self.stack, 1)
+        self.detalle = QLabel()
+        self.detalle.setWordWrap(True)
+        self.detalle.setTextFormat(Qt.TextFormat.RichText)
+        self.detalle.setMaximumHeight(150)
+        self.detalle.setAlignment(Qt.AlignmentFlag.AlignTop)
+        derecha.addWidget(self.detalle)
         panel = QWidget()
-        opciones = QVBoxLayout(panel)
-        for (seccion, categoria), ops in configurador.opciones_por_categoria(catalogo).items():
-            opciones.addWidget(etiqueta_campo(f"{configurador.SECCIONES[seccion]} · {categoria}"))
-            clave = f"{seccion}|{categoria}"
-            if seccion == "section-exterior-color":  # la pintura: circulos con el color real de la marca
-                grilla = QGridLayout()
+        panel.setLayout(derecha)
+        panel.setFixedWidth(2 * (FOTO_OPCION.width() + 16) + 60)
+        cuerpo.addWidget(panel)
+        raiz.addLayout(cuerpo, 1)
+
+        self.precio_label = QLabel()
+        self.encargar_btn = boton("Encargar", primario=True)
+        self.encargar_btn.clicked.connect(self.accept)
+        cancelar = boton("Cancelar")
+        cancelar.clicked.connect(self.reject)
+        raiz.addLayout(fila(self.precio_label, None, cancelar, self.encargar_btn))
+        self.resize(1600, 900)
+        self._marcar_botones()
+        self._actualizar_precio()
+        self.pestanas.currentChanged.connect(self._abrir_seccion)
+        self._abrir_seccion(0)
+        if self._token == 0:  # la primera seccion no movio la camara: igual hay que mostrar el auto
+            self._pedir_render()
+
+    # ---- las opciones ----
+
+    def _dinero(self, monto) -> str:
+        return dinero(int(monto or 0), self.moneda) if monto else "De serie"
+
+    def _abrir_seccion(self, indice: int):
+        if indice < 0 or indice >= len(self.secciones):
+            return
+        seccion = list(self.secciones)[indice]
+        if seccion not in self._paginas:
+            self._paginas[seccion] = self.stack.addWidget(self._pagina(seccion))
+        self.stack.setCurrentIndex(self._paginas[seccion])
+        camara = configurador.camara_de_seccion(self.catalogo, seccion)  # como la pagina: llantas -> la llanta
+        if camara:
+            giro = [c for c, espejo in configurador.GIRO if not espejo]
+            if camara in giro:
+                self.giro, self.camara_extra = giro.index(camara), None
+            else:
+                self.camara_extra = camara
+            self._marcar_botones()
+            self._pedir_render()
+
+    def _pagina(self, seccion: str) -> QWidget:
+        contenido = QWidget()
+        caja = QVBoxLayout(contenido)
+        con_fotos = []
+        for categoria, ops in self.secciones[seccion].items():
+            caja.addWidget(etiqueta_campo(categoria))
+            grilla = QGridLayout()
+            grilla.setSpacing(8)
+            if seccion == "section-exterior-color":  # la pintura: circulos con el color real, como la pagina
                 for n, op in enumerate(ops):
                     circulo = QPushButton()
-                    circulo.setFixedSize(30, 30)
+                    circulo.setFixedSize(34, 34)
+                    circulo.setCursor(Qt.CursorShape.PointingHandCursor)
                     circulo.setToolTip(f"{op['nombre']} · {self._dinero(op['precio'])}")
-                    circulo.clicked.connect(lambda _=False, c=clave, i=op["id"]: self._elegir(c, i))
-                    self._botones_color.setdefault(clave, []).append((op["id"], op["hex"], circulo))
+                    circulo.clicked.connect(lambda _=False, i=op["id"]: self._elegir(i))
+                    self._circulos[op["id"]] = (circulo, op["hex"])
                     grilla.addWidget(circulo, n // COLUMNAS_COLORES, n % COLUMNAS_COLORES)
-                opciones.addLayout(grilla)
-                self._pintar_circulos(clave)
             else:
-                combo = QComboBox()
-                combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
-                combo.setMinimumContentsLength(24)  # los nombres largos de Porsche no ensanchan el panel
-                combo.addItem("Como viene de fabrica", "")
-                for op in ops:
-                    combo.addItem(f"{op['nombre']} · {self._dinero(op['precio'])}", op["id"])
-                actual = self.eleccion.opciones.get(clave, "")
-                combo.setCurrentIndex(max(0, combo.findData(actual)))
-                combo.currentIndexChanged.connect(lambda _=0, c=clave, w=combo: self._elegir(c, w.currentData()))
-                self._combos[clave] = combo
-                opciones.addWidget(combo)
-        opciones.addStretch()
+                for n, op in enumerate(ops):
+                    ficha = Ficha(op, self._dinero(op["precio"]))
+                    ficha.clicked.connect(lambda _=False, i=op["id"]: self._elegir(i))
+                    self._fichas[op["id"]] = ficha
+                    grilla.addWidget(ficha, n // 2, n % 2)
+                    if op.get("miniatura"):
+                        con_fotos.append(op["id"])
+            caja.addLayout(grilla)
+        caja.addStretch()
+        self._marcar_opciones()
+        if con_fotos:
+            ejecutar_en_hilo(configurador.miniaturas, self.catalogo, con_fotos,
+                             al_completar=self._on_miniaturas, al_fallar=self._sin_miniaturas)
         desplazable = QScrollArea()
         desplazable.setWidgetResizable(True)
         desplazable.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        desplazable.setWidget(panel)
-        derecha = QVBoxLayout()
-        derecha.addWidget(texto_suave("Las opciones y los precios del configurador oficial de la marca (mercado UK)."))
-        derecha.addWidget(desplazable, 1)
-        self.encargar_btn = boton("Encargar", primario=True)
-        self.encargar_btn.clicked.connect(self._encargar)
-        cancelar = boton("Cancelar")
-        cancelar.clicked.connect(self.reject)
-        derecha.addLayout(fila(None, cancelar, self.encargar_btn))
-        raiz.addLayout(derecha, 2)
-        self.resize(1500, 860)
-        self._actualizar()
+        desplazable.setWidget(contenido)
+        return desplazable
 
-    def _dinero(self, monto) -> str:
-        return dinero(int(monto or 0), self.moneda) if monto else "de serie"
+    def _on_miniaturas(self, rutas: dict):
+        for op_id, ruta in rutas.items():
+            if op_id in self._fichas:
+                self._fichas[op_id].poner_foto(ruta)
 
-    def _pintar_circulos(self, clave: str):
-        elegido = self.eleccion.opciones.get(clave)
-        for op_id, hex_, circulo in self._botones_color.get(clave, []):
-            borde = estilos.ACENTO if op_id == elegido else "#3A4452"
+    def _sin_miniaturas(self, _mensaje: str):
+        pass  # sin internet quedan sin foto; el nombre y el precio estan igual
+
+    def _marcar_opciones(self):
+        elegidas = set(self.eleccion.ids())
+        for op_id, ficha in self._fichas.items():
+            ficha.marcar(op_id in elegidas)
+        for op_id, (circulo, hex_) in self._circulos.items():
+            borde = estilos.ACENTO if op_id in elegidas else BORDE
             # Paint to Sample no trae un color: el que quieras (un degradado)
             fondo = hex_ or "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #C0392B, stop:0.5 #F1C40F, stop:1 #2E86C1)"
-            circulo.setStyleSheet(f"QPushButton {{ background: {fondo}; border: 3px solid {borde}; border-radius: 15px; }}")
+            circulo.setStyleSheet(f"QPushButton {{ background: {fondo}; border: 3px solid {borde}; border-radius: 17px; }}")
 
-    def _elegir(self, clave: str, opcion_id: str):
-        configurador.elegir(self.eleccion, clave, opcion_id)
-        for otra in self._botones_color:
-            self._pintar_circulos(otra)
-        for otra, combo in self._combos.items():  # una sola llanta: la otra lista vuelve a "de fabrica"
-            combo.blockSignals(True)
-            combo.setCurrentIndex(max(0, combo.findData(self.eleccion.opciones.get(otra, ""))))
-            combo.blockSignals(False)
-        self._actualizar()
+    def _elegir(self, opcion_id: str):
+        op = next(o for o in self.catalogo["opciones"] if o["id"] == opcion_id)
+        cambio = configurador.elegir(self.catalogo, self.eleccion, opcion_id)
+        texto = configurador.descripcion(op)
+        if len(texto) > 420:
+            texto = texto[:420].rsplit(" ", 1)[0] + "..."
+        nota = " · de serie, no se saca" if configurador.bloqueada(op) else ""
+        self.detalle.setText(f"<b>{esc(op['nombre'])}</b> · {esc(self._dinero(op['precio']))}{nota}"
+                             f"<br><span style='color:{estilos.TEXTO_SUAVE}'>{esc(texto).replace(chr(10), '<br>')}</span>")
+        if cambio:
+            self._marcar_opciones()
+            self._actualizar_precio()
+            self._pedir_render()
 
-    def _actualizar(self):
+    def _actualizar_precio(self):
         base, extra = int(self.catalogo.get("base") or 0), configurador.opcionales(self.catalogo, self.eleccion)
         total = base + extra
-        detalle = "".join(f"<br>· {esc(n)}: {self._dinero(p)}" for _, n, p in
-                          configurador.resumen(configurador.ficha(self.catalogo, self.eleccion)) if p)
         alcanza = total <= self.saldo
         self.precio_label.setText(
             f"Precio base {dinero(base, self.moneda)} + opcionales {dinero(extra, self.moneda)} = "
             f"<b style='color:{estilos.ACENTO if alcanza else estilos.NEGATIVO}'>{dinero(total, self.moneda)}</b>"
-            f" (precio final de encargo){detalle}" + ("" if alcanza else "<br>No te alcanza con tu saldo."))
+            f" (precio final de encargo)" + ("" if alcanza else " · No te alcanza con tu saldo."))
+        detalle = configurador.resumen(configurador.ficha(self.catalogo, self.eleccion))
+        self.precio_label.setToolTip("\n".join(f"{n}: {self._dinero(p)}" for _, n, p in detalle if p))
         self.encargar_btn.setEnabled(alcanza)
-        self._pedido_render += 1
-        ejecutar_en_hilo(configurador.render, self.catalogo, configurador.Eleccion(self.eleccion.codigo,
-                                                                                   dict(self.eleccion.opciones)),
-                         al_completar=self._on_render, al_fallar=self._on_render_error)
 
-    def _on_render(self, ruta):
+    # ---- el auto ----
+
+    def _camara(self) -> tuple:
+        if self.camara_extra:
+            return self.camara_extra, False
+        return configurador.GIRO[self.giro]
+
+    def _girar(self, pasos: int):
+        if self.camara_extra is None:
+            self.giro = (self.giro + pasos) % len(configurador.GIRO)
+        self.camara_extra = None
+        self._marcar_botones()
+        self._pedir_render()
+
+    def _ver(self, camara: Optional[str]):
+        self.camara_extra = camara
+        self._marcar_botones()
+        self._pedir_render()
+
+    def _cambiar_entorno(self, entorno: str):
+        self.entorno = entorno
+        self._marcar_botones()
+        self._pedir_render()
+
+    def _cambiar_noche(self):
+        self.noche = not self.noche
+        self._marcar_botones()
+        self._pedir_render()
+
+    def _marcar_botones(self):
+        for entorno, b in self._botones_entorno.items():
+            b.setChecked(entorno == self.entorno)
+        self.noche_btn.setChecked(self.noche)
+        for camara, b in self._botones_vista.items():
+            b.setChecked(camara == self.camara_extra)
+
+    def _pedir_render(self):
+        self._token += 1
+        camara, _ = self._camara()
+        self.estado.setText("Cargando...")
+        ejecutar_en_hilo(_render, self._token, self.catalogo, configurador.Eleccion(
+            self.eleccion.codigo, dict(self.eleccion.opciones)), camara, self.entorno, self.noche,
+            al_completar=self._on_render, al_fallar=self._on_render_error)
+
+    def _on_render(self, resultado):
+        token, ruta = resultado
+        if token != self._token:
+            return  # llego tarde: ya se pidio otra vista (igual quedo guardada para la proxima)
         if ruta is None:
-            self.render_label.setText("Sin internet: el render llega cuando haya conexion.")
+            self.estado.setText("Esta vista no esta disponible (o no hay internet).")
             return
+        self.estado.setText("")
+        camara, espejo = self._camara()
         imagen = QImage(str(ruta))
-        fondo = QImage(imagen.size(), QImage.Format.Format_RGB32)
-        fondo.fill(QColor(estilos.FONDO))
-        pintor = QPainter(fondo)
-        pintor.drawImage(0, 0, imagen)
-        pintor.end()
-        self.foto = fondo  # la del garage (sin transparencia)
-        self.render_label.setPixmap(QPixmap.fromImage(fondo).scaled(
-            self.render_label.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        if espejo:
+            imagen = imagen.mirrored(True, False)
+        self.escenario.mostrar(imagen)
+        if camara.startswith("ext-") and not espejo:
+            self.foto = imagen
 
     def _on_render_error(self, mensaje: str):
-        self.render_label.setText(f"No se pudo cargar el render ({mensaje}).")
+        self.estado.setText(f"No se pudo cargar el render ({mensaje}).")
 
-    def _encargar(self):
-        self.accept()
+    def keyPressEvent(self, evento):
+        if evento.key() in (Qt.Key.Key_Left, Qt.Key.Key_Right):
+            self._girar(-1 if evento.key() == Qt.Key.Key_Left else 1)
+        else:
+            super().keyPressEvent(evento)
 
     def configuracion(self) -> autos.Configuracion:
         return autos.Configuracion(modelo=self.modelo.id, oficial=configurador.ficha(self.catalogo, self.eleccion))

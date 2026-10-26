@@ -1,20 +1,23 @@
 """
 El configurador oficial nativo (pedido de Simon, 2026-10-26; SOLO para su PC: la app no se publica).
 
-Las opciones reales de cada modelo (pinturas con su hex, llantas, interiores, paquetes, con su nombre y precio
-oficial en libras) salen de la pagina del configurador de la marca: `scripts/extraer_configuradores.py` las lee
-con el mismo motor del navegador de la app (QtWebEngine) de los datos que la pagina ya trae, y las guarda en
-`roleplay/datos/configuradores_oficiales.json`. El render de cada combinacion lo pide `render()` al servicio de
-imagenes de la marca y lo guarda en `roleplay/datos/img_configurador/` (una vez por combinacion: nunca se pide
-dos veces la misma). Hoy: Porsche (`prs.porsche.com/iod`, la combinacion va comprimida con lz-string).
+Las opciones reales de cada modelo (pinturas con su hex, llantas, interiores, paquetes, con su nombre, precio
+oficial en libras, la foto de cada opcion y su descripcion) salen de la pagina del configurador de la marca:
+`scripts/extraer_configuradores.py` las lee con el mismo motor del navegador de la app (QtWebEngine) de los datos
+que la pagina ya trae, y las guarda en `roleplay/datos/configuradores_oficiales.json`, con las camaras de cada vista
+y los fondos (tunel de viento, oasis, estudio). Las imagenes las pide `render()` / `miniatura()` al servicio de la
+marca y quedan en `roleplay/datos/img_configurador/` (una vez por combinacion: nunca se pide dos veces la misma).
+Hoy: Porsche (`prs.porsche.com/iod`, la combinacion va comprimida con lz-string).
 
 Los dos (el JSON y las imagenes) son de las marcas: van en .gitignore y el paquete de los amigos NO los lleva.
 Sin el JSON, el concesionario sigue con el configurador de siempre (la web oficial adentro de la app o el dibujo).
 """
 
 import hashlib
+import html
 import json
 import os
+import re
 import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -23,24 +26,41 @@ from typing import Optional
 CARPETA = Path(__file__).resolve().parent.parent / "datos"
 ARCHIVO = CARPETA / "configuradores_oficiales.json"
 CARPETA_RENDERS = CARPETA / "img_configurador"
+SITIO = "https://configurator.porsche.com"
+CABECERAS = {"User-Agent": "Mozilla/5.0", "Referer": SITIO + "/"}
 
-# lo que se elige en la pantalla (el resto del equipamiento queda como viene de fabrica)
+# las pestanas de la pantalla, en el orden de la pagina (lo demas queda como viene de fabrica)
 SECCIONES = {
-    "section-exterior-color": "Color exterior",
+    "section-exterior-color": "Color",
     "section-wheels": "Llantas",
     "section-interior-color": "Interior",
     "section-interior-seats": "Asientos",
     "section-individualization-packages": "Paquetes",
     "section-individualization-exterior": "Exterior",
+    "section-individualization-interior": "Personalizar interior",
+    "section-individualization-technology": "Tecnologia",
 }
 # lo que no se ve en el auto ni cambia el render: neumaticos, juegos de invierno, accesorios de llantas
 CATEGORIAS_OCULTAS = ("tyres", "winter", "wheel sets", "accessor")
-# secciones donde se elige UNA sola cosa aunque venga en varias categorias (llantas "Wheels" y "Painted wheels")
-UNA_POR_SECCION = {"section-exterior-color", "section-wheels", "section-interior-color", "section-interior-seats"}
-# las de mas prestigio: suben el valor de reventa (se buscan en la categoria o el grupo)
+# secciones donde se elige UNA sola cosa aunque venga en varias categorias (la pintura, aunque Paint to Sample venga
+# aparte), y donde se elige una por categoria (llantas: el modelo en "Wheels" y su pintura en "Painted wheels");
+# en las demas cada opcion se prende y se apaga, como las casillas de la pagina
+UNA_POR_SECCION = {"section-exterior-color", "section-interior-color", "section-interior-seats"}
+UNA_POR_CATEGORIA = {"section-wheels"}
+# las de mas prestigio: suben el valor de reventa (se buscan en la categoria, el grupo o el nombre)
 PRESTIGIO = ("paint to sample", "exclusive", "manufaktur", "weissach", "carbono", "carbon", "tailor", "ad personam",
              "mso", "assetto")
 REVENTA_PRESTIGIO = 0.25  # de lo invertido en opcionales de prestigio, cuanto suma a la reventa
+
+# girar el auto: las camaras de afuera en orden alrededor del auto. La de adelante a la derecha no existe en el
+# servicio: es la de adelante a la izquierda dada vuelta (espejo=True)
+GIRO = [("ext-low-front", False), ("ext-low-front-left", False), ("ext-low-side-left", False),
+        ("ext-low-rear-left", False), ("ext-low-rear", False), ("ext-low-rear-right", False),
+        ("ext-low-side-right", False), ("ext-low-front-left", True)]
+# las otras vistas de la pagina (si el modelo las trae)
+VISTAS = {"ext-low-front-left-wheel": "Llanta", "ext-high-rear-left": "Desde arriba", "int-front-dashboard": "Tablero",
+          "int-front-seats": "Asientos", "int-rear-seats": "Atras"}
+ENTORNOS = {"WindTunnel": "Tunel de viento", "Oasis": "Oasis", "Whiteroom Porsche": "Estudio"}
 
 
 def ruta_archivo() -> Path:
@@ -63,47 +83,75 @@ def de_modelo(url_configurador: str) -> Optional[dict]:
 
 @dataclass
 class Eleccion:
-    """Lo que eligio el jugador sobre un modelo oficial."""
+    """Lo que eligio el jugador sobre un modelo oficial: clave -> id (`clave_de`)."""
     codigo: str
-    opciones: dict = field(default_factory=dict)  # seccion|categoria -> id de la opcion
+    opciones: dict = field(default_factory=dict)
 
     def ids(self) -> list:
         return list(self.opciones.values())
 
 
-def opciones_por_categoria(modelo: dict) -> dict:
-    """{(seccion, categoria): [opciones]} solo de las SECCIONES que se eligen."""
-    grupos: dict = {}
+def clave_de(op: dict) -> str:
+    """En las secciones de una sola cosa, la seccion (o la categoria); en las demas, cada opcion es su casilla."""
+    if op["seccion"] in UNA_POR_SECCION:
+        return op["seccion"]
+    if op["seccion"] in UNA_POR_CATEGORIA:
+        return f"{op['seccion']}|{op['categoria']}"
+    return f"{op['seccion']}|{op['id']}"
+
+
+def es_casilla(op: dict) -> bool:
+    return op["seccion"] not in UNA_POR_SECCION | UNA_POR_CATEGORIA
+
+
+def visible(op: dict) -> bool:
+    return op.get("seccion") in SECCIONES and not any(c in op["categoria"].lower() for c in CATEGORIAS_OCULTAS)
+
+
+def opciones_por_seccion(modelo: dict) -> dict:
+    """{seccion: {categoria: [opciones]}} en el orden de SECCIONES y de la pagina."""
+    salida: dict = {s: {} for s in SECCIONES}
     for op in modelo.get("opciones", []):
-        if op.get("seccion") in SECCIONES and not any(c in op["categoria"].lower() for c in CATEGORIAS_OCULTAS):
-            grupos.setdefault((op["seccion"], op["categoria"]), []).append(op)
-    return grupos
+        if visible(op):
+            salida[op["seccion"]].setdefault(op["categoria"], []).append(op)
+    return {s: cats for s, cats in salida.items() if cats}
+
+
+def _por_id(modelo: dict) -> dict:
+    return {o["id"]: o for o in modelo.get("opciones", [])}
 
 
 def de_fabrica(modelo: dict) -> Eleccion:
     """La eleccion inicial: lo que viene seleccionado en el configurador de la marca."""
     eleccion = Eleccion(modelo["codigo"])
-    for (seccion, categoria), ops in opciones_por_categoria(modelo).items():
-        elegida = next((o for o in ops if o.get("seleccionada")), None)
-        if elegida is not None:
-            eleccion.opciones[f"{seccion}|{categoria}"] = elegida["id"]
+    for op in modelo.get("opciones", []):
+        if op.get("seleccionada") and visible(op):
+            eleccion.opciones[clave_de(op)] = op["id"]
     return eleccion
 
 
-def elegir(eleccion: Eleccion, clave: str, opcion_id: str) -> None:
-    """Elige (o con "" vuelve a lo de fabrica) en una categoria "seccion|categoria"."""
-    seccion = clave.split("|", 1)[0]
-    if opcion_id and seccion in UNA_POR_SECCION:
-        for otra in [c for c in eleccion.opciones if c.split("|", 1)[0] == seccion]:
-            del eleccion.opciones[otra]
-    if opcion_id:
+def bloqueada(op: dict) -> bool:
+    """Lo de serie que viene puesto no se saca (en la pagina tampoco)."""
+    return bool(op.get("estandar") and op.get("seleccionada"))
+
+
+def elegir(modelo: dict, eleccion: Eleccion, opcion_id: str) -> bool:
+    """Elige una opcion; en las casillas, si ya estaba, la saca. Devuelve si cambio algo."""
+    op = _por_id(modelo).get(opcion_id)
+    if op is None:
+        return False
+    clave = clave_de(op)
+    if not es_casilla(op):
+        if eleccion.opciones.get(clave) == opcion_id:
+            return False
         eleccion.opciones[clave] = opcion_id
+    elif clave in eleccion.opciones:
+        if bloqueada(op):
+            return False
+        del eleccion.opciones[clave]
     else:
-        eleccion.opciones.pop(clave, None)
-
-
-def _por_id(modelo: dict) -> dict:
-    return {o["id"]: o for o in modelo.get("opciones", [])}
+        eleccion.opciones[clave] = opcion_id
+    return True
 
 
 def elegidas(modelo: dict, eleccion: Eleccion) -> list:
@@ -118,6 +166,12 @@ def opcionales(modelo: dict, eleccion: Eleccion) -> int:
 def precio_total(modelo: dict, eleccion: Eleccion) -> int:
     """Precio base oficial + la suma de los opcionales elegidos (lo de fabrica cuesta 0)."""
     return int(modelo.get("base") or 0) + opcionales(modelo, eleccion)
+
+
+def descripcion(op: dict) -> str:
+    """La descripcion de la pagina en texto (viene con <br /> y entidades)."""
+    texto = re.sub(r"<br\s*/?>", "\n", op.get("descripcion") or "")
+    return html.unescape(re.sub(r"<[^>]+>", "", texto)).strip()
 
 
 def es_de_prestigio(opcion: dict) -> bool:
@@ -162,50 +216,91 @@ def resumen(ficha_oficial: dict) -> list:
             for o in ficha_oficial.get("opciones", [])]
 
 
-# ---- el render oficial (con cache) ----
+# ---- las vistas ----
+
+def camara_de_seccion(modelo: dict, seccion: str) -> Optional[str]:
+    """La camara que la pagina muestra al abrir esa seccion (llantas -> la llanta, interior -> el tablero)."""
+    for vista in (modelo.get("vistas_seccion") or {}).get(seccion) or []:
+        camara = (modelo.get("camaras") or {}).get(vista)
+        if camara:
+            return camara
+    return None
+
+
+def vistas_extra(modelo: dict) -> list:
+    """[(camara, nombre)] de las vistas que no son del giro y que el modelo trae."""
+    tiene = set((modelo.get("camaras") or {}).values())
+    return [(c, n) for c, n in VISTAS.items() if c in tiene]
+
+
+# ---- las imagenes oficiales (con cache) ----
 
 def _ids_de_render(modelo: dict, eleccion: Eleccion) -> list:
-    """Los ids que entran al render: los de fabrica, cambiando en cada categoria elegida la de fabrica por la elegida."""
-    por_id = _por_id(modelo)
-
-    def grupo(op: dict) -> str:  # lo que se reemplaza: la seccion entera (pintura, llantas) o la categoria
-        return op["seccion"] if op["seccion"] in UNA_POR_SECCION else f"{op['seccion']}|{op['categoria']}"
-
-    elegidos = {grupo(por_id[i]): i for i in eleccion.ids() if i in por_id}
-    base = []
-    for i in modelo.get("render", []):
-        op = por_id.get(i)
-        if op is None or grupo(op) not in elegidos:
-            base.append(i)
-    return sorted(set(base) | set(elegidos.values()))
+    """Los ids que entran al render: lo de fabrica que la pantalla no maneja + lo elegido."""
+    controladas = {o["id"] for o in modelo.get("opciones", []) if visible(o)}
+    base = [i for i in modelo.get("render", []) if i not in controladas]
+    return sorted(set(base) | set(eleccion.ids()))
 
 
-def url_render(modelo: dict, eleccion: Eleccion, camara: str = "ext-low-front-left") -> str:
+def _pedido_render(modelo: dict, eleccion: Eleccion, camara: str, entorno: str, noche: bool) -> dict:
+    return {"config": {"animations": [], "camera": {"id": camara, "options": {"variant": "desktop"}},
+                       "environment": {"id": entorno, "options": {}},
+                       "lighting": {"id": "NIGHT" if noche else "DAY", "options": {}},
+                       "product": {"id": modelo["codigo"], "options": {"config": _ids_de_render(modelo, eleccion),
+                                                                        "country": modelo.get("pais", "GB"),
+                                                                        "modelYear": modelo.get("anio")}}},
+            "settings": {"format": "jpeg", "transparent": False}}
+
+
+def url_render(modelo: dict, eleccion: Eleccion, camara: str = "ext-low-front-left", entorno: str = "WindTunnel",
+               noche: bool = False) -> str:
     import lzstring
 
-    pais = modelo.get("pais", "GB")
-    pedido = {"config": {"animations": [], "camera": {"id": camara, "options": {"variant": "desktop"}},
-                         "environment": {"id": "WhiteroomAlpha", "options": {}}, "lighting": {"id": "DAY", "options": {}},
-                         "product": {"id": modelo["codigo"], "options": {"config": _ids_de_render(modelo, eleccion),
-                                                                          "country": pais, "modelYear": modelo.get("anio")}}},
-              "settings": {"format": "png", "transparent": True}}
+    pedido = _pedido_render(modelo, eleccion, camara, entorno, noche)
     comprimido = lzstring.LZString().compressToEncodedURIComponent(json.dumps(pedido, separators=(",", ":")))
-    return f"https://prs.porsche.com/iod/image/{pais}/{modelo['codigo']}/1/{comprimido}?clientId=icc"
+    return f"https://prs.porsche.com/iod/image/{modelo.get('pais', 'GB')}/{modelo['codigo']}/1/{comprimido}?clientId=icc"
 
 
-def render(modelo: dict, eleccion: Eleccion, camara: str = "ext-low-front-left") -> Optional[Path]:
-    """El render de esa combinacion (de la cache o pedido una vez). None sin internet. Corre en un hilo."""
-    clave = hashlib.sha1(json.dumps([modelo["codigo"], _ids_de_render(modelo, eleccion), camara]).encode()).hexdigest()[:16]
-    destino = CARPETA_RENDERS / modelo["codigo"] / f"{clave}.png"
+def _bajar(url: str, destino: Path) -> Optional[Path]:
     if destino.exists():
         return destino
     try:
-        pedido = urllib.request.Request(url_render(modelo, eleccion, camara), headers={
-            "User-Agent": "Mozilla/5.0", "Referer": "https://configurator.porsche.com/"})
-        with urllib.request.urlopen(pedido, timeout=30) as respuesta:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=CABECERAS), timeout=30) as respuesta:
             datos = respuesta.read()
     except (OSError, ValueError):
         return None
     destino.parent.mkdir(parents=True, exist_ok=True)
     destino.write_bytes(datos)
     return destino
+
+
+def render(modelo: dict, eleccion: Eleccion, camara: str = "ext-low-front-left", entorno: str = "WindTunnel",
+           noche: bool = False) -> Optional[Path]:
+    """El render de esa combinacion y vista (de la cache o pedido una vez). None sin internet o si la marca no
+    tiene esa imagen. Corre en un hilo."""
+    pedido = json.dumps(_pedido_render(modelo, eleccion, camara, entorno, noche), sort_keys=True)
+    destino = CARPETA_RENDERS / modelo["codigo"] / f"{hashlib.sha1(pedido.encode()).hexdigest()[:16]}.jpg"
+    if destino.exists():
+        return destino
+    return _bajar(url_render(modelo, eleccion, camara, entorno, noche), destino)
+
+
+def miniatura(op: dict) -> Optional[Path]:
+    """La foto chica de la opcion (la de la pagina), bajada una vez. None si no tiene o sin internet."""
+    ruta = op.get("miniatura") or ""
+    if not ruta:
+        return None
+    url = ruta if ruta.startswith("http") else SITIO + ruta
+    nombre = hashlib.sha1(url.split("?", 1)[0].encode()).hexdigest()[:16] + ".jpg"
+    return _bajar(url, CARPETA_RENDERS / "miniaturas" / nombre)
+
+
+def miniaturas(modelo: dict, ids: list) -> dict:
+    """{id: ruta} de las que se pudieron bajar (en un hilo, para una pestana entera)."""
+    por_id = _por_id(modelo)
+    salida = {}
+    for i in ids:
+        ruta = miniatura(por_id[i]) if i in por_id else None
+        if ruta:
+            salida[i] = ruta
+    return salida
