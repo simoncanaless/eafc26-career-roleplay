@@ -120,7 +120,7 @@ def _portadas(modelos: list) -> dict:
     """{id del modelo: render oficial de fabrica} de los que tienen configurador oficial (en un hilo, una vez)."""
     salida = {}
     for modelo in modelos:
-        catalogo = configurador.de_modelo(modelo.url_configurador)
+        catalogo = configurador.de_modelo(modelo)
         if catalogo:
             ruta = configurador.render(catalogo, configurador.de_fabrica(catalogo))
             if ruta:
@@ -448,7 +448,7 @@ class PaginaComputador(QWidget):
     def _autos(self, contenido, _sitio, _perfil, e, moneda, _hoy):
         if self._portadas is None:  # el render oficial de fabrica de cada modelo con configurador oficial (una vez)
             self._portadas = {}
-            con_oficial = [m for m in autos.MODELOS if configurador.de_modelo(m.url_configurador)]
+            con_oficial = [m for m in autos.MODELOS if configurador.de_modelo(m)]
             if con_oficial:
                 ejecutar_en_hilo(_portadas, con_oficial, al_completar=self._on_portadas, al_fallar=self._sin_portadas)
         filtros = QHBoxLayout()
@@ -463,7 +463,7 @@ class PaginaComputador(QWidget):
         contenido.addWidget(texto_suave("Se configura a tu gusto, se paga al encargarlo y llega dias despues en el juego."))
         tarjetas = []
         for modelo in (m for m in autos.MODELOS if not self.marca or m.marca == self.marca):
-            oficial = configurador.de_modelo(modelo.url_configurador) is not None
+            oficial = configurador.de_modelo(modelo) is not None
             configurar = boton("Configurar", primario=True)
             configurar.setProperty("modelo", modelo.id)
             configurar.setEnabled(bool(e))

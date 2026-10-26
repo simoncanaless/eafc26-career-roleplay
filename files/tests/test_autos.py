@@ -368,10 +368,12 @@ from roleplay.servicios import marketplace  # noqa: E402
 class TestAutos(ConEcosistema):
     def test_hiperautos_nuevos_y_descontinuados_en_el_garage(self):
         ids = {m.id for m in autos.MODELOS}
-        self.assertTrue({"ferrari_f80", "mclaren_w1", "porsche_mission_x"} <= ids)
+        self.assertIn("ferrari_f80", ids)
         self.assertEqual(autos.POR_ID["ferrari_f80"].precio, 3_735_000)
-        self.assertNotIn("ferrari_sf90", ids)
-        self.assertIn("ferrari_sf90", autos.POR_ID)  # el que lo tenga lo sigue viendo
+        for viejo in ("ferrari_sf90", "mclaren_w1", "porsche_mission_x", "bugatti_tourbillon"):  # sin configurador
+            self.assertNotIn(viejo, ids)
+            self.assertIn(viejo, autos.POR_ID)  # el que lo tenga lo sigue viendo
+        self.assertNotIn("Bugatti", autos.MARCAS)
 
     def test_marketplace_rota_por_semana_y_se_valoriza(self):
         hoy = date(2026, 10, 7)

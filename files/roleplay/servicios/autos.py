@@ -224,6 +224,12 @@ DESCONTINUADOS = [
     Modelo("ferrari_roma", "Ferrari", "Roma", "gt_ferrari", 170_000, 28,
            url_configurador="https://carconfigurator.ferrari.com/en_EN"),
 ]
+# sin configurador de la marca no se venden (Simon, 2026-10-26: "los que no tengan configurador se eliminan"):
+# el Tourbillon (Bugatti no tiene), el W1 (McLaren solo tiene su pagina) y el Mission X (es un prototipo).
+# Quedan en POR_ID para los garages que ya los tienen
+SIN_CONFIGURADOR = {"bugatti_tourbillon", "mclaren_w1", "porsche_mission_x"}
+DESCONTINUADOS += [m for m in MODELOS if m.id in SIN_CONFIGURADOR]
+MODELOS = [m for m in MODELOS if m.id not in SIN_CONFIGURADOR]
 # agrupados por marca (en el orden en que aparece cada una), como los muestra el concesionario
 MODELOS = [m for marca in dict.fromkeys(m.marca for m in MODELOS) for m in MODELOS if m.marca == marca]
 POR_ID = {m.id: m for m in MODELOS + DESCONTINUADOS}

@@ -80,7 +80,8 @@ class Ficha(QPushButton):
 
     def __init__(self, op: dict, precio: str):
         super().__init__()
-        self.setFixedSize(FOTO_OPCION.width() + 16, FOTO_OPCION.height() + 74)
+        con_foto = bool(op.get("miniatura"))  # (Aston Martin no da fotos de las opciones: queda el nombre)
+        self.setFixedSize(FOTO_OPCION.width() + 16, (FOTO_OPCION.height() if con_foto else 0) + 74)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         caja = QVBoxLayout(self)
         caja.setContentsMargins(8, 8, 8, 8)
@@ -97,6 +98,7 @@ class Ficha(QPushButton):
         for etiqueta in (self.foto, nombre, valor):
             etiqueta.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
             caja.addWidget(etiqueta)
+        self.foto.setVisible(con_foto)
         caja.addStretch()
         self.setToolTip(op["nombre"])
 
@@ -120,8 +122,9 @@ class DialogoConfiguradorOficial(QDialog):
         self.eleccion = configurador.de_fabrica(catalogo)
         self.secciones = configurador.opciones_por_seccion(catalogo)
         self.foto: Optional[QImage] = None  # la del garage: la ultima vista de afuera
-        self.giro, self.camara_extra = 1, None  # arranca de adelante a la izquierda, como la pagina
-        self.entorno, self.noche = next(iter(configurador.ENTORNOS)), False
+        self._giro = configurador.giro(catalogo)  # las camaras alrededor del auto de esta marca
+        self.giro, self.camara_extra = configurador.giro_inicial(catalogo), None  # adelante a la izquierda
+        self.entorno, self.noche = next(iter(configurador.entornos(catalogo))), False
         self._token = 0
         self._fichas: dict = {}  # id -> Ficha
         self._circulos: dict = {}  # id -> (boton, hex)
@@ -129,10 +132,10 @@ class DialogoConfiguradorOficial(QDialog):
 
         raiz = QVBoxLayout(self)
         arriba = QHBoxLayout()
-        arriba.addWidget(titulo_seccion(f"{modelo.marca} · {catalogo.get('modelo', modelo.nombre)} {catalogo.get('anio', '')}"))
+        arriba.addWidget(titulo_seccion(f"{modelo.marca} · {catalogo.get('modelo', modelo.nombre)} {catalogo.get('anio') or ''}"))
         arriba.addStretch()
         self._botones_entorno = {}
-        for entorno, nombre in configurador.ENTORNOS.items():
+        for entorno, nombre in configurador.entornos(catalogo).items():
             b = chip_alternable(nombre)
             b.clicked.connect(lambda _=False, e=entorno: self._cambiar_entorno(e))
             self._botones_entorno[entorno] = b
@@ -219,9 +222,9 @@ class DialogoConfiguradorOficial(QDialog):
         self.stack.setCurrentIndex(self._paginas[seccion])
         camara = configurador.camara_de_seccion(self.catalogo, seccion)  # como la pagina: llantas -> la llanta
         if camara:
-            giro = [c for c, espejo in configurador.GIRO if not espejo]
-            if camara in giro:
-                self.giro, self.camara_extra = giro.index(camara), None
+            en_el_giro = [i for i, (c, espejo) in enumerate(self._giro) if c == camara and not espejo]
+            if en_el_giro:
+                self.giro, self.camara_extra = en_el_giro[0], None
             else:
                 self.camara_extra = camara
             self._marcar_botones()
@@ -303,7 +306,9 @@ class DialogoConfiguradorOficial(QDialog):
         self.precio_label.setText(
             f"Precio base {dinero(base, self.moneda)} + opcionales {dinero(extra, self.moneda)} = "
             f"<b style='color:{estilos.ACENTO if alcanza else estilos.NEGATIVO}'>{dinero(total, self.moneda)}</b>"
-            f" (precio final de encargo)" + ("" if alcanza else " · No te alcanza con tu saldo."))
+            f" (precio final de encargo)" + ("" if alcanza else " · No te alcanza con tu saldo.")
+            + (f"<br><span style='color:{estilos.TEXTO_SUAVE}'>{esc(self.modelo.marca)} no publica los precios de los "
+               "opcionales: son estimados.</span>" if self.catalogo.get("precios_estimados") else ""))
         detalle = configurador.resumen(configurador.ficha(self.catalogo, self.eleccion))
         self.precio_label.setToolTip("\n".join(f"{n}: {self._dinero(p)}" for _, n, p in detalle if p))
         self.encargar_btn.setEnabled(alcanza)
@@ -313,11 +318,11 @@ class DialogoConfiguradorOficial(QDialog):
     def _camara(self) -> tuple:
         if self.camara_extra:
             return self.camara_extra, False
-        return configurador.GIRO[self.giro]
+        return self._giro[self.giro]
 
     def _girar(self, pasos: int):
         if self.camara_extra is None:
-            self.giro = (self.giro + pasos) % len(configurador.GIRO)
+            self.giro = (self.giro + pasos) % len(self._giro)
         self.camara_extra = None
         self._marcar_botones()
         self._pedir_render()

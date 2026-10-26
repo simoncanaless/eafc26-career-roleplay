@@ -67,18 +67,32 @@ def ruta_archivo() -> Path:
     return Path(os.environ.get("EAFC_CONFIGURADORES", ARCHIVO))
 
 
+_CACHE: dict = {}
+
+
 def catalogo() -> dict:
-    """{codigo de modelo: {...}} o {} sin el archivo (nunca falla)."""
+    """{codigo de modelo: {...}} o {} sin el archivo (nunca falla). Se lee una vez por version del archivo."""
+    ruta = ruta_archivo()
     try:
-        return json.loads(ruta_archivo().read_text(encoding="utf-8")).get("modelos", {})
+        firma = (str(ruta), ruta.stat().st_mtime_ns)
+        if _CACHE.get("firma") != firma:
+            _CACHE.update(firma=firma, modelos=json.loads(ruta.read_text(encoding="utf-8")).get("modelos", {}))
+        return _CACHE["modelos"]
     except (OSError, ValueError):
         return {}
 
 
-def de_modelo(url_configurador: str) -> Optional[dict]:
-    """El catalogo oficial de un modelo del concesionario (por el codigo de su url), o None."""
-    codigo = url_configurador.rstrip("/").rsplit("/", 1)[-1] if "/model/" in url_configurador else ""
-    return catalogo().get(codigo) if codigo else None
+def de_modelo(modelo) -> Optional[dict]:
+    """El catalogo oficial de un modelo del concesionario (autos.Modelo): por su id (`modelo_app`) o, en los de
+    Porsche, por el codigo de su url. None si no hay. Tambien acepta la url sola."""
+    url = modelo if isinstance(modelo, str) else modelo.url_configurador
+    todos = catalogo()
+    if not isinstance(modelo, str):
+        for datos in todos.values():
+            if datos.get("modelo_app") == modelo.id:
+                return datos
+    codigo = url.rstrip("/").rsplit("/", 1)[-1] if "/model/" in url else ""
+    return todos.get(codigo) if codigo else None
 
 
 @dataclass
@@ -92,16 +106,19 @@ class Eleccion:
 
 
 def clave_de(op: dict) -> str:
-    """En las secciones de una sola cosa, la seccion (o la categoria); en las demas, cada opcion es su casilla."""
+    """En las secciones de una sola cosa, la seccion (o la categoria); si la opcion es de un grupo donde se elige
+    una sola (`exclusivo`: las colecciones obligatorias de Aston Martin), el grupo; en las demas, su casilla."""
     if op["seccion"] in UNA_POR_SECCION:
         return op["seccion"]
+    if op.get("exclusivo"):
+        return f"{op['seccion']}|g|{op.get('grupo_id') or op['categoria']}"
     if op["seccion"] in UNA_POR_CATEGORIA:
         return f"{op['seccion']}|{op['categoria']}"
     return f"{op['seccion']}|{op['id']}"
 
 
 def es_casilla(op: dict) -> bool:
-    return op["seccion"] not in UNA_POR_SECCION | UNA_POR_CATEGORIA
+    return op["seccion"] not in UNA_POR_SECCION | UNA_POR_CATEGORIA and not op.get("exclusivo")
 
 
 def visible(op: dict) -> bool:
@@ -174,6 +191,28 @@ def descripcion(op: dict) -> str:
     return html.unescape(re.sub(r"<[^>]+>", "", texto)).strip()
 
 
+# las marcas que no dan el color en hex (Aston Martin, Ferrari): uno aproximado por el nombre, solo para el circulo
+# (el render muestra el de verdad). En orden: la palabra mas especifica primero
+COLORES = [
+    ("canna di fucile", "#4A4E52"), ("gunmetal", "#4A4E52"), ("british racing", "#1F4D2E"), ("racing green", "#1F4D2E"),
+    ("navy", "#1C2A4A"), ("midnight", "#1C2440"), ("burgundy", "#6B1F2A"), ("bordeaux", "#6B1F2A"), ("titanium", "#7E8287"),
+    ("platinum", "#B9BCBE"), ("champagne", "#D8C7A0"), ("magnetic", "#5E6266"), ("bronze", "#8C6239"), ("copper", "#B26B3D"),
+    ("gold", "#C9A227"), ("oro", "#C9A227"), ("silver", "#C0C4C8"), ("argento", "#C0C4C8"), ("grigio", "#7A7F86"),
+    ("grey", "#7A7F86"), ("gray", "#7A7F86"), ("nero", "#121212"), ("black", "#121212"), ("onyx", "#151515"),
+    ("bianco", "#F2F2F0"), ("white", "#F2F2F0"), ("avorio", "#EFE6D2"), ("ivory", "#EFE6D2"), ("cream", "#EDE3C8"),
+    ("crema", "#EDE3C8"), ("rosso", "#C1121F"), ("red", "#C1121F"), ("giallo", "#F2C200"), ("yellow", "#F2C200"),
+    ("arancio", "#E8701A"), ("orange", "#E8701A"), ("azzurro", "#4FA3E0"), ("blu", "#1F3A93"), ("blue", "#1F3A93"),
+    ("verde", "#2E6B45"), ("green", "#2E6B45"), ("viola", "#5B2A86"), ("purple", "#5B2A86"), ("marrone", "#5B3A29"),
+    ("brown", "#5B3A29"), ("tan", "#A0703C"), ("cuoio", "#8B5A2B"), ("beige", "#CDB891"), ("sabbia", "#CDB891"),
+    ("sand", "#CDB891"), ("rosa", "#D98BA0"), ("pink", "#D98BA0"),
+]
+
+
+def color_por_nombre(nombre: str) -> str:
+    texto = nombre.lower()
+    return next((hex_ for palabra, hex_ in COLORES if palabra in texto), "")
+
+
 def es_de_prestigio(opcion: dict) -> bool:
     texto = f"{opcion.get('categoria', '')} {opcion.get('grupo', '')} {opcion.get('nombre', '')}".lower()
     return any(p in texto for p in PRESTIGIO)
@@ -218,8 +257,29 @@ def resumen(ficha_oficial: dict) -> list:
 
 # ---- las vistas ----
 
+def proveedor(modelo: dict) -> str:
+    """De que marca es el catalogo (como se piden las imagenes): porsche (el primero, sin la clave) o aston."""
+    return modelo.get("proveedor", "porsche")
+
+
+def giro(modelo: dict) -> list:
+    """[(camara, espejo)] alrededor del auto: las del modelo o las de Porsche."""
+    return [tuple(c) for c in modelo["giro"]] if modelo.get("giro") else GIRO
+
+
+def giro_inicial(modelo: dict) -> int:
+    return int(modelo.get("giro_inicial", 1))
+
+
+def entornos(modelo: dict) -> dict:
+    """{id: nombre} de los fondos que se pueden elegir (el primero, el de entrada)."""
+    return modelo.get("entornos_ui") or ENTORNOS
+
+
 def camara_de_seccion(modelo: dict, seccion: str) -> Optional[str]:
     """La camara que la pagina muestra al abrir esa seccion (llantas -> la llanta, interior -> el tablero)."""
+    if "camara_seccion" in modelo:
+        return modelo["camara_seccion"].get(seccion)
     for vista in (modelo.get("vistas_seccion") or {}).get(seccion) or []:
         camara = (modelo.get("camaras") or {}).get(vista)
         if camara:
@@ -229,6 +289,8 @@ def camara_de_seccion(modelo: dict, seccion: str) -> Optional[str]:
 
 def vistas_extra(modelo: dict) -> list:
     """[(camara, nombre)] de las vistas que no son del giro y que el modelo trae."""
+    if "vistas" in modelo:
+        return list(modelo["vistas"].items())
     tiene = set((modelo.get("camaras") or {}).values())
     return [(c, n) for c, n in VISTAS.items() if c in tiene]
 
@@ -252,23 +314,57 @@ def _pedido_render(modelo: dict, eleccion: Eleccion, camara: str, entorno: str, 
             "settings": {"format": "jpeg", "transparent": False}}
 
 
+def valor_aston(op_id: str):
+    """Como va una opcion de Aston Martin en el pedido: un codigo ("3132") o, las de una lista (los cueros por
+    zona), {"TU": {"TU": "L830"}} (el id es "TU:L830")."""
+    if ":" in op_id:
+        lista, codigo = op_id.split(":", 1)
+        return {lista: {lista: codigo}}
+    return op_id
+
+
+def _url_aston(modelo: dict, eleccion: Eleccion, camara: str, entorno: str, noche: bool) -> str:
+    import lzstring
+
+    ids = _ids_de_render(modelo, eleccion)
+    valores = [i for i in ids if ":" not in i] + [valor_aston(i) for i in ids if ":" in i]
+    pedido = {"animations": [], "camera": {"id": camara, "options": {}},
+              "config": {"id": modelo["codigo"], "options": {"config": valores}},
+              "environment": {"id": entorno, "options": {"night": noche}}}
+    comprimido = lzstring.LZString().compressToEncodedURIComponent(json.dumps(pedido, separators=(",", ":")))
+    return f"https://configurator.astonmartin.com/iod/{modelo.get('pais', 'GB')}/{modelo['codigo']}/1920/{comprimido}"
+
+
 def url_render(modelo: dict, eleccion: Eleccion, camara: str = "ext-low-front-left", entorno: str = "WindTunnel",
                noche: bool = False) -> str:
     import lzstring
 
+    if proveedor(modelo) == "aston":
+        return _url_aston(modelo, eleccion, camara, entorno, noche)
     pedido = _pedido_render(modelo, eleccion, camara, entorno, noche)
     comprimido = lzstring.LZString().compressToEncodedURIComponent(json.dumps(pedido, separators=(",", ":")))
     return f"https://prs.porsche.com/iod/image/{modelo.get('pais', 'GB')}/{modelo['codigo']}/1/{comprimido}?clientId=icc"
 
 
-def _bajar(url: str, destino: Path) -> Optional[Path]:
+def _bajar(url: str, destino: Path, intentos: int = 1, timeout: int = 30) -> Optional[Path]:
+    """Baja una vez (si ya esta, no pide nada). Con `intentos`, reintenta cuando el servidor todavia esta
+    generando la imagen (Aston Martin la dibuja en el momento: 503/504 las primeras veces)."""
+    import time
+    import urllib.error
+
     if destino.exists():
         return destino
-    try:
-        with urllib.request.urlopen(urllib.request.Request(url, headers=CABECERAS), timeout=30) as respuesta:
-            datos = respuesta.read()
-    except (OSError, ValueError):
-        return None
+    for intento in range(intentos):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=CABECERAS), timeout=timeout) as respuesta:
+                datos = respuesta.read()
+            break
+        except urllib.error.HTTPError as error:
+            if error.code not in (502, 503, 504) or intento == intentos - 1:
+                return None
+            time.sleep(3)
+        except (OSError, ValueError):
+            return None
     destino.parent.mkdir(parents=True, exist_ok=True)
     destino.write_bytes(datos)
     return destino
@@ -278,11 +374,13 @@ def render(modelo: dict, eleccion: Eleccion, camara: str = "ext-low-front-left",
            noche: bool = False) -> Optional[Path]:
     """El render de esa combinacion y vista (de la cache o pedido una vez). None sin internet o si la marca no
     tiene esa imagen. Corre en un hilo."""
-    pedido = json.dumps(_pedido_render(modelo, eleccion, camara, entorno, noche), sort_keys=True)
-    destino = CARPETA_RENDERS / modelo["codigo"] / f"{hashlib.sha1(pedido.encode()).hexdigest()[:16]}.jpg"
+    url = url_render(modelo, eleccion, camara, entorno, noche)
+    destino = CARPETA_RENDERS / modelo["codigo"] / f"{hashlib.sha1(url.encode()).hexdigest()[:16]}.jpg"
     if destino.exists():
         return destino
-    return _bajar(url_render(modelo, eleccion, camara, entorno, noche), destino)
+    if proveedor(modelo) == "aston":
+        return _bajar(url, destino, intentos=4, timeout=120)
+    return _bajar(url, destino)
 
 
 def miniatura(op: dict) -> Optional[Path]:

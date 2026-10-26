@@ -1598,7 +1598,7 @@ class PaginaVida(QWidget):
 
         modelo = autos.POR_ID[modelo_id]
         saldo = get_economia(self.perfil.id).get("saldo", 0)
-        oficial = configurador.de_modelo(modelo.url_configurador)
+        oficial = configurador.de_modelo(modelo)
         if oficial:  # el configurador oficial nativo (opciones y renders reales; solo en el PC de Simon)
             from roleplay.ui.configurador_oficial import DialogoConfiguradorOficial
 

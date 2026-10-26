@@ -100,6 +100,85 @@ class TestOpciones(ConCatalogo):
         self.assertEqual([c for c, _ in configurador.vistas_extra(GT3)], ["ext-low-front-left-wheel", "int-front-dashboard"])
 
 
+DB12 = {
+    "proveedor": "aston", "marca": "Aston Martin", "codigo": "AM578", "modelo": "DB12 S Coupe", "anio": None,
+    "moneda": "GBP", "base": 208000, "pais": "GB", "modelo_app": "aston_db12_s", "precios_estimados": True,
+    "render": ["3132", "MHPCODELHD", "TU:L830", "WRB2"],
+    "giro": [["BS_Config_Ext_1", False], ["BS_Config_Ext_2", False], ["BS_Config_Ext_2", True]],
+    "vistas": {"BS_Config_Ext_5": "Llanta"}, "entornos_ui": {"Black_Studio": "Estudio negro"},
+    "camara_seccion": {LLANTAS: "BS_Config_Ext_5"},
+    "opciones": [
+        dict(op("3132", "Ion Blue", COLOR, "Purples blues", 0, "#1F3A93", True), exclusivo=False),
+        op("3090", "Arden Green", COLOR, "Greens", 2400, "#2E6B45"),
+        dict(op("WRB2", "Five Spoke Forged - Gloss Silver", LLANTAS, "Wheels", 0, seleccionada=True, estandar=True),
+             exclusivo=True, grupo_id="EXTERIOR/WHEELS"),
+        dict(op("WL3Q", "Five Spoke Forged - Black DT", LLANTAS, "Wheels", 2800), exclusivo=True, grupo_id="EXTERIOR/WHEELS"),
+        dict(op("TU:L830", "Obsidian Black", "section-individualization-interior", "Cuero (TU)", 0, "#121212", True,
+                estandar=True), exclusivo=True, grupo_id="INTERIOR/TU"),
+        dict(op("TU:L802", "Black Metallic", "section-individualization-interior", "Cuero (TU)", 0, "#121212"),
+             exclusivo=True, grupo_id="INTERIOR/TU"),
+    ],
+}
+
+
+class TestAstonMartin(ConCatalogo):
+    def setUp(self):
+        super().setUp()
+        Path(os.environ["EAFC_CONFIGURADORES"]).write_text(json.dumps({"modelos": {"992812": GT3, "AM578": DB12}}),
+                                                           encoding="utf-8")
+
+    def test_se_encuentra_por_el_modelo_del_concesionario_y_trae_sus_camaras(self):
+        catalogo = configurador.de_modelo(autos.POR_ID["aston_db12_s"])
+        self.assertEqual(catalogo["codigo"], "AM578")
+        self.assertEqual(configurador.giro(catalogo)[2], ("BS_Config_Ext_2", True))
+        self.assertEqual(configurador.entornos(catalogo), {"Black_Studio": "Estudio negro"})
+        self.assertEqual(configurador.camara_de_seccion(catalogo, LLANTAS), "BS_Config_Ext_5")
+        self.assertIsNone(configurador.camara_de_seccion(catalogo, COLOR))
+        self.assertEqual(configurador.vistas_extra(catalogo), [("BS_Config_Ext_5", "Llanta")])
+        self.assertEqual(configurador.giro(GT3), configurador.GIRO)  # Porsche, las de siempre
+
+    def test_colecciones_obligatorias_y_los_cueros_por_zona(self):
+        eleccion = configurador.de_fabrica(DB12)
+        self.assertFalse(configurador.elegir(DB12, eleccion, "WRB2"))  # obligatoria: no se saca
+        self.assertTrue(configurador.elegir(DB12, eleccion, "WL3Q"))
+        self.assertTrue(configurador.elegir(DB12, eleccion, "TU:L802"))
+        self.assertEqual(sorted(eleccion.ids()), ["3132", "TU:L802", "WL3Q"])
+
+    def test_el_pedido_de_imagen_lleva_los_codigos_y_las_listas(self):
+        import lzstring
+
+        eleccion = configurador.de_fabrica(DB12)
+        configurador.elegir(DB12, eleccion, "3090")
+        configurador.elegir(DB12, eleccion, "TU:L802")
+        url = configurador.url_render(DB12, eleccion, "BS_Config_Ext_2", "Black_Studio", noche=True)
+        self.assertTrue(url.startswith("https://configurator.astonmartin.com/iod/GB/AM578/1920/"))
+        pedido = json.loads(lzstring.LZString().decompressFromEncodedURIComponent(url.rsplit("/", 1)[1]))
+        self.assertEqual(pedido["camera"]["id"], "BS_Config_Ext_2")
+        self.assertEqual(pedido["environment"], {"id": "Black_Studio", "options": {"night": True}})
+        self.assertEqual(pedido["config"]["options"]["config"], ["3090", "MHPCODELHD", "WRB2", {"TU": {"TU": "L802"}}])
+
+    def test_reintenta_mientras_el_servidor_genera_la_imagen(self):
+        import urllib.error
+
+        llamadas = []
+
+        def urlopen(pedido, timeout=None):
+            llamadas.append(timeout)
+            if len(llamadas) < 3:
+                raise urllib.error.HTTPError(pedido.full_url, 504, "generando", {}, None)
+            return Respuesta()
+
+        with mock.patch.object(configurador.urllib.request, "urlopen", urlopen), mock.patch("time.sleep"):
+            self.assertIsNotNone(configurador.render(DB12, configurador.de_fabrica(DB12), "BS_Config_Ext_1", "Black_Studio"))
+        self.assertEqual(llamadas, [120, 120, 120])
+
+    def test_el_color_aproximado_por_el_nombre(self):
+        self.assertEqual(configurador.color_por_nombre("Rosso Corsa"), "#C1121F")
+        self.assertEqual(configurador.color_por_nombre("Satin Xenon Grey"), "#7A7F86")
+        self.assertEqual(configurador.color_por_nombre("Canna di Fucile"), "#4A4E52")
+        self.assertEqual(configurador.color_por_nombre("Q Special"), "")
+
+
 class TestGarageYReventa(ConCatalogo):
     def ficha(self, *ids):
         eleccion = configurador.de_fabrica(GT3)
