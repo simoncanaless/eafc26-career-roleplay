@@ -250,7 +250,10 @@ def valor_de_venta(posesion: dict, hoy: Optional[date] = None) -> int:
         from roleplay.servicios import marketplace
 
         return marketplace.valor_de_reventa(posesion, hoy or date.fromisoformat(posesion.get("desde") or "2000-01-01"))
-    return round(posesion["precio"] * VENTA)
+    from roleplay.servicios import configurador
+
+    # los opcionales de prestigio del configurador oficial (Paint to Sample, Weissach...) se pagan en la reventa
+    return round(posesion["precio"] * VENTA) + configurador.bonus_de_reventa((posesion.get("config") or {}).get("oficial"))
 
 
 def patrimonio(economia: dict) -> int:

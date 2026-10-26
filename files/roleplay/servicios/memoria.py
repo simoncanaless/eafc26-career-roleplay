@@ -99,6 +99,15 @@ def _vida(perfil, estado: dict) -> list[str]:
     if eventos:
         lineas.append("Le paso hace poco: " + "; ".join(_corto(e["titulo"], 80) for e in eventos) + ".")
     economia = estado.get("economia") or {}
+    from roleplay.servicios import autos as autos_
+
+    garage = []
+    for p in economia.get("posesiones", []):
+        if p.get("articulo", "").startswith("auto:") and p["articulo"][5:] in autos_.POR_ID:
+            config = autos_.Configuracion.desde_dict(p.get("config") or {"modelo": p["articulo"][5:]})
+            garage.append(f"{autos_.POR_ID[config.modelo].nombre_completo} {autos_.describir(config)}".strip())
+    if garage:
+        lineas.append("Su garage: " + "; ".join(_corto(g, 110) for g in garage[-3:]) + ".")
     from roleplay.servicios import ofertas as ofertas_de_clubes, patrocinios
 
     marcas = [patrocinios.nombre_de(c) for c in (economia.get("patrocinios") or {}).get("contratos", [])]

@@ -34,6 +34,7 @@ os.environ["EAFC_SIN_OFERTAS"] = "1"  # la partida de prueba cae en enero (venta
 # ...y sin los datos del ecosistema de Simon (famosas, paginas, periodistas, autos de nicho)
 os.environ["EAFC_ECOSISTEMA"] = tempfile.mkdtemp(prefix="eafc_ecosistema_")
 os.environ["EAFC_CATALOGO_EA"] = str(Path(tempfile.gettempdir()) / "eafc_sin_catalogo.json")
+os.environ["EAFC_CONFIGURADORES"] = str(Path(tempfile.gettempdir()) / "eafc_sin_configuradores.json")  # sin el configurador oficial de tu PC
 RAIZ = Path(__file__).resolve().parent.parent
 if str(RAIZ) not in sys.path:
     sys.path.insert(0, str(RAIZ))

@@ -306,9 +306,11 @@ class Configuracion:
     interior: str = "negro"
     extras: list = field(default_factory=list)
     patente: str = ""
+    # la ficha del configurador oficial (servicios/configurador.py): opciones reales, base, opcionales, total
+    oficial: dict = field(default_factory=dict)
 
     def a_dict(self) -> dict:
-        return dict(self.__dict__, extras=list(self.extras))
+        return dict(self.__dict__, extras=list(self.extras), oficial=dict(self.oficial))
 
     @classmethod
     def desde_dict(cls, datos: dict) -> "Configuracion":
@@ -321,6 +323,9 @@ def limpiar_patente(texto: str) -> str:
 
 
 def precio(config: Configuracion) -> int:
+    if config.oficial:  # el precio oficial: base + opcionales elegidos
+        total = int(config.oficial.get("total") or 0) + (PATENTE_PERSONALIZADA if config.patente else 0)
+        return int(round(total / REDONDEO) * REDONDEO)
     modelo = POR_ID[config.modelo]
     recargo = sum(
         opcion(grupo, getattr(config, grupo)).recargo for grupo in ("acabado", "llantas", "pinzas", "franja", "interior")
@@ -331,7 +336,13 @@ def precio(config: Configuracion) -> int:
 
 def describir(config: Configuracion) -> str:
     """"rojo metalizado, llantas forjadas negras, pinzas amarillas, ..." para
-    la pantalla, la prensa y los hinchas."""
+    la pantalla, la prensa y los hinchas. Con el configurador oficial, con los nombres reales
+    ("en Shark Blue, Llantas ..., con Paquete Weissach")."""
+    if config.oficial:
+        ops = config.oficial.get("opciones", [])
+        color = next((o["nombre"] for o in ops if o.get("seccion") == "section-exterior-color"), "")
+        resto = [o["nombre"] for o in ops if o.get("seccion") != "section-exterior-color" and o.get("precio")]
+        return ", ".join(([f"en {color}"] if color else []) + resto[:5])
     partes = [f"{opcion('color', config.color).nombre.lower()} {opcion('acabado', config.acabado).nombre.lower()}"]
     if config.llantas != "estandar":
         partes.append(f"llantas {opcion('llantas', config.llantas).nombre.lower()}")

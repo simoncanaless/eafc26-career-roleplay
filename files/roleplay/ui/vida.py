@@ -1589,7 +1589,17 @@ class PaginaVida(QWidget):
     def _on_configurar(self, modelo_id: str):
         if self.perfil is None:
             return
-        dialogo = Configurador(autos.POR_ID[modelo_id], get_economia(self.perfil.id).get("saldo", 0), self._moneda(), self)
+        from roleplay.servicios import configurador
+
+        modelo = autos.POR_ID[modelo_id]
+        saldo = get_economia(self.perfil.id).get("saldo", 0)
+        oficial = configurador.de_modelo(modelo.url_configurador)
+        if oficial:  # el configurador oficial nativo (opciones y renders reales; solo en el PC de Simon)
+            from roleplay.ui.configurador_oficial import DialogoConfiguradorOficial
+
+            dialogo = DialogoConfiguradorOficial(modelo, oficial, saldo, self._moneda(), self)
+        else:
+            dialogo = Configurador(modelo, saldo, self._moneda(), self)
         if dialogo.exec() == QDialog.DialogCode.Accepted:
             self.pedir(dialogo.configuracion(), dialogo.foto)
         dialogo.deleteLater()

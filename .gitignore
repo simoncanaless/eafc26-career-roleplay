@@ -41,3 +41,7 @@ files/prueba/
 # perfiles de carrera (roleplay/carreras.py): la lista y las carpetas de las otras carreras
 files/carreras.json
 files/carreras/
+
+# configurador oficial (scripts/extraer_configuradores.py): datos y renders de las marcas, solo local
+files/roleplay/datos/configuradores_oficiales.json
+files/roleplay/datos/img_configurador/

@@ -68,12 +68,16 @@ def construir() -> Path:
     shutil.copy(RAIZ / "scripts" / "COMO_PONER_LA_IA.txt", carpeta / "COMO PONER LA IA.txt")
 
     podar_chromium(carpeta)
+    # el configurador oficial (opciones y renders de las marcas) es solo para tu PC: no va a los amigos
+    internos = carpeta / "_internal" / "roleplay" / "datos"
+    (internos / "configuradores_oficiales.json").unlink(missing_ok=True)
+    shutil.rmtree(internos / "img_configurador", ignore_errors=True)
     colados = [ruta for ruta in carpeta.rglob("*") if ruta.name in NO_VA]
     if colados:
         raise SystemExit(f"Se colaron datos personales en el paquete: {colados}")
     if not (DATOS / "catalogo_ea.json").exists():  # sin el, casi nadie tendria nombre en la prensa
         raise SystemExit("Falta roleplay/datos/catalogo_ea.json: corre scripts/nombres_faltantes.py --catalogo-ea")
-    faltan = [r.name for r in DATOS.glob("*.json") if not (carpeta / "_internal" / "roleplay" / "datos" / r.name).exists()]
+    faltan = [r.name for r in DATOS.glob("*.json") if r.name != "configuradores_oficiales.json" and not (carpeta / "_internal" / "roleplay" / "datos" / r.name).exists()]
     if faltan:  # sin los corpus, la app no tendria que decir
         raise SystemExit(f"Faltan los datos del motor narrativo en el paquete: {faltan}")
     if (DATOS / "img_autos").exists() and not any((carpeta / "_internal" / "roleplay" / "datos" / "img_autos").glob("*")):
